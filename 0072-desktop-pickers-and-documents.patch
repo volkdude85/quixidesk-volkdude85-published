@@ -1,0 +1,157 @@
+The file dialog belongs to the desktop
+====================================
+
+"Choose my model folder" was calling `pick_folder`, which reached for `kdialog` — a KDE utility that is
+not the file manager and is not installed on most systems. On a box without it the button did nothing
+at all, which reads as a broken app rather than a missing tool. The multi-select pickers in the same
+file had already been going through the XDG desktop portal, which is the dialog the session itself
+uses; the single-pick pair just never got the same treatment.
+
+Both of them go through `org.freedesktop.portal.FileChooser` now, with `directory: true` for folders,
+and fall back to kdialog/zenity only if no portal answers. Verified on this machine: the portal returns
+a request handle, `xdg-desktop-portal-kde` draws the dialog, and what appears is the KDE chooser — Places
+sidebar, breadcrumbs, the same one Dolphin opens — not something the app drew itself.
+
+**The memory palace default moved to Documents.** `~/memory-palace` was the right instinct and the
+wrong folder: on Linux the desktop decides where Documents is, through
+`~/.config/user-dirs.dirs`, and it can be localised or moved to another mount. `paths::documents_dir()`
+reads that file now (`XDG_DOCUMENTS_DIR`, `$HOME` expanded, falling back to `~/Documents`) and the
+palace defaults to `Documents/memory-palace` — a folder that shows up in the person's file manager
+without them having to hunt for it.
+
+Preference order is unchanged: the folder chosen at setup, then `QUIXI_PALACE_DIR`, then this default.
+
+diff -Naur a/crates/quixi-engine/src/lib.rs b/crates/quixi-engine/src/lib.rs
+--- a72/crates/quixi-engine/src/lib.rs	2026-11-02 15:44:25.947882856 -0800
++++ b72/crates/quixi-engine/src/lib.rs	2026-11-02 15:44:25.967321829 -0800
+@@ -1217,7 +1217,7 @@
+         // the application's own folder is memory an uninstall can take with it, and a palace in /tmp
+         // is a palace that gets deleted — both are the opposite of the point. It gets its own named
+         // directory in the user's home.
+-        quixi_proto::paths::home_dir().join("memory-palace")
++        quixi_proto::paths::documents_dir().join("memory-palace")
+     }
+ 
+     /// What the palace actually holds, for the screen that asks where to put it. Counts rather than
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a72/crates/quixi-ipc/src/lib.rs	2026-11-02 15:44:25.949136591 -0800
++++ b72/crates/quixi-ipc/src/lib.rs	2026-11-02 15:44:25.968133204 -0800
+@@ -579,7 +579,7 @@
+                     );
+                     obj.insert(
+                         "defaultPath".into(),
+-                        json!(quixi_proto::paths::home_dir()
++                        json!(quixi_proto::paths::documents_dir()
+                             .join("memory-palace")
+                             .to_string_lossy()),
+                     );
+diff -Naur a/crates/quixi-platform/src/linux.rs b/crates/quixi-platform/src/linux.rs
+--- a72/crates/quixi-platform/src/linux.rs	2026-11-02 15:44:25.926768475 -0800
++++ b72/crates/quixi-platform/src/linux.rs	2026-11-02 15:44:25.965718285 -0800
+@@ -3080,7 +3080,25 @@
+     Vec::new()
+ }
+ 
++// Picking a file or a folder is the desktop's job, not this app's.
++//
++// The multi-select variants below have always gone through the XDG desktop portal first, which is the
++// dialog the desktop itself uses — Dolphin on KDE, Nautilus on GNOME, whatever the session runs. The
++// single-pick pair did not: they jumped straight to `kdialog`, a KDE utility that is not the file
++// manager and is not installed everywhere, so on a box without it the button appeared to do nothing at
++// all. The portal is the answer to "use the DE's default", and it is the same code path the multi-pick
++// functions already prove works.
+ pub fn pick_folder(prompt: Option<&str>) -> Option<String> {
++    let title = prompt.filter(|s| !s.trim().is_empty()).unwrap_or("Select folder");
++
++    if portal_available() {
++        // An empty list from the portal means the person cancelled. Do not fall through to another
++        // dialog after they have already said no.
++        if let Ok(paths) = portal_pick_uris(true, false, title) {
++            return paths.first().map(|p| p.display().to_string());
++        }
++    }
++
+     if have("kdialog") {
+         if let Some(p) = kdialog_pick(&["--getexistingdirectory"], prompt) {
+             return Some(p);
+@@ -3094,6 +3112,14 @@
+ }
+ 
+ pub fn pick_file(prompt: Option<&str>) -> Option<String> {
++    let title = prompt.filter(|s| !s.trim().is_empty()).unwrap_or("Select file");
++
++    if portal_available() {
++        if let Ok(paths) = portal_pick_uris(false, false, title) {
++            return paths.first().map(|p| p.display().to_string());
++        }
++    }
++
+     if have("kdialog") {
+         if let Some(p) = kdialog_pick(&["--getopenfilename"], prompt) {
+             return Some(p);
+diff -Naur a/crates/quixi-proto/src/paths.rs b/crates/quixi-proto/src/paths.rs
+--- a72/crates/quixi-proto/src/paths.rs	2026-10-31 11:49:06.000000000 -0700
++++ b72/crates/quixi-proto/src/paths.rs	2026-11-02 15:44:25.966486909 -0800
+@@ -66,6 +66,50 @@
+     std::env::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+ }
+ 
++/// The user's Documents folder, as the desktop defines it.
++///
++/// `~/.config/user-dirs.dirs` is how a Linux desktop says where Documents actually is — the folder can
++/// be localised (`~/Documenten`), moved to another mount, or renamed entirely, and the file is the only
++/// authority on which. Reading `~/Documents` blindly puts files in a folder the person never sees in
++/// their file manager, which is exactly the complaint a memory folder should not earn.
++pub fn documents_dir() -> PathBuf {
++    if let Some(path) = user_dir("XDG_DOCUMENTS_DIR") {
++        return path;
++    }
++    home_dir().join("Documents")
++}
++
++/// Any XDG user directory, expanded the way the spec says: `$HOME/...` and a bare path both work.
++pub fn user_dir(key: &str) -> Option<PathBuf> {
++    let config = std::env::var_os("XDG_CONFIG_HOME")
++        .map(PathBuf::from)
++        .unwrap_or_else(|| home_dir().join(".config"))
++        .join("user-dirs.dirs");
++    let text = std::fs::read_to_string(config).ok()?;
++    let prefix = format!("{key}=");
++    for line in text.lines() {
++        let line = line.trim();
++        if !line.starts_with(&prefix) {
++            continue;
++        }
++        let raw = line[prefix.len()..].trim().trim_matches('"');
++        if raw.is_empty() {
++            continue;
++        }
++        let expanded = if let Some(rest) = raw.strip_prefix("$HOME/") {
++            home_dir().join(rest)
++        } else if raw == "$HOME" {
++            home_dir()
++        } else {
++            PathBuf::from(raw)
++        };
++        if expanded.is_dir() {
++            return Some(expanded);
++        }
++    }
++    None
++}
++
+ /// Same as [`home_dir`], borrowed for `&'static str` call sites.
+ pub fn home_dir_str() -> &'static str {
+     static CACHE: OnceLock<String> = OnceLock::new();
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a72/resources/ui/app.js	2026-11-02 15:44:25.955233233 -0800
++++ b72/resources/ui/app.js	2026-11-02 15:44:25.968885968 -0800
+@@ -1089,7 +1089,7 @@
+   const keyInput = el("input", { type: "password", class: "first-run-key", placeholder: "Paste your API key", spellcheck: false });
+   const modelInput = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "model id" });
+   const browserSel = el("select", { class: "first-run-select" });
+-  const memoryPath = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "leave blank for the default" });
++  const memoryPath = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "leave blank for Documents/memory-palace" });
+   const memoryEnc = el("select", { class: "first-run-select" });
+   memoryEnc.append(
+     el("option", { value: "none" }, "No encryption — plain files"),
