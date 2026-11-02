@@ -1,0 +1,430 @@
+Visuals and Audio were empty pages, and the file dialog hid your drives
+====================================================================
+
+**Two settings tabs were broken and it was invisible.** `content.append(...visualsBlocks())` and the
+Audio section were called, but the functions that built them had gone missing — lost in a copy between
+trees, with the call sites surviving. A tab that throws a ReferenceError renders as an empty page, and
+nothing in the build or the tests says a word about it.
+
+Restored, and now carrying what was asked for:
+
+  * **Visuals** — appearance (theme, colours, fonts, sizes), surfaces, transparency with its opacity
+    slider, and background. This is the whole "how it looks" surface in one tab instead of scattered
+    through General.
+  * **Audio** — output device, microphone, and the two models that do the work: **transcription**
+    (Whisper on this machine, or cloud) and **voice** (Kokoro on this machine, or cloud). Local is the
+    default on both, because both are already here and a cloud default would send a recording of your
+    voice to a provider just to discover that.
+
+**And the drive dialog.** Choosing a folder opened KDE's dialog, which lists `Computer → /` and hides
+everything people actually keep models on — those are mounts, not removable media, so they do not
+appear. `LocalModels.mounts` reads `/proc/mounts` and lists the real filesystems (ext4, xfs, btrfs,
+exfat, ntfs3, fuseblk, vfat, zfs), skipping `/`, `/boot`, `/home` and the kernel's furniture. Each one
+is a button under the picker, so `/mnt/nvme4tb` and `/run/media/<user>/<disk>` are one click away
+instead of a navigation exercise.
+
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a65/crates/quixi-ipc/src/lib.rs	2026-11-02 15:03:08.283668795 -0800
++++ b65/crates/quixi-ipc/src/lib.rs	2026-11-02 15:03:08.295835462 -0800
+@@ -518,6 +518,38 @@
+                     Err(error) => json!({ "ok": false, "error": error }),
+                 }
+             }
++            // Where the drives actually are. The KDE dialog shows "Computer -> /" and hides the things
++            // people actually store models on, because they are mounted rather than removable. Reading
++            // /proc/mounts is the honest answer to "where are my other drives".
++            ("LocalModels", "mounts") | ("AppPreferences", "mountPoints") => {
++                let mut out: Vec<Value> = Vec::new();
++                if let Ok(text) = std::fs::read_to_string("/proc/mounts") {
++                    for line in text.lines() {
++                        let f: Vec<&str> = line.split_whitespace().collect();
++                        if f.len() < 3 {
++                            continue;
++                        }
++                        let (dev, mount, fstype) = (f[0], f[1], f[2]);
++                        // Real filesystems with capacity, not the kernel's furniture.
++                        if !matches!(fstype, "ext4" | "ext3" | "xfs" | "btrfs" | "exfat" | "ntfs3" | "fuseblk" | "vfat" | "zfs") {
++                            continue;
++                        }
++                        if mount.starts_with("/proc") || mount.starts_with("/sys") || mount.starts_with("/dev") {
++                            continue;
++                        }
++                        if ["/", "/boot", "/boot/efi", "/home", "/var", "/tmp", "/var/log", "/var/cache", "/nix"].contains(&mount) {
++                            continue;
++                        }
++                        out.push(json!({
++                            "device": dev,
++                            "path": mount.replace("\\040", " "),
++                            "fstype": fstype,
++                        }));
++                    }
++                }
++                out.sort_by(|a, b| a["path"].as_str().unwrap_or("").cmp(b["path"].as_str().unwrap_or("")));
++                json!({ "mounts": out })
++            }
+             // Picking where the weights live. A native picker — Dolphin on KDE, the portal elsewhere —
+             // because typing a path to a 20 GB file is a memory test, not a setup step. This one only
+             // returns the choice; it grants nothing.
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a65/resources/ui/app.css	2026-11-02 15:03:08.283998252 -0800
++++ b65/resources/ui/app.css	2026-11-02 15:03:08.297397820 -0800
+@@ -2682,3 +2682,7 @@
+ 
+ .first-run-getmodel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+ .first-run-getmodel p { font-size: 12px; margin: 0 0 8px; }
++
++.first-run-mounts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 0; }
++.first-run-mounts p { font-size: 12px; margin: 0 8px 0 0; }
++.first-run-mounts button { font-size: 11.5px; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a65/resources/ui/app.js	2026-11-02 15:03:08.284285259 -0800
++++ b65/resources/ui/app.js	2026-11-02 15:03:08.296571215 -0800
+@@ -1110,6 +1110,31 @@
+     "",
+   );
+ 
++  // A file dialog that shows "Computer -> /" and hides every drive people actually keep models on is
++  // not being awkward on purpose: those are mounts, not removable media. So the drives are listed.
++  rpc("LocalModels", "mounts").then((res) => {
++    const mounts = (res && res.mounts) || [];
++    if (!mounts.length) return;
++    const row = document.querySelector(".first-run-mounts");
++    if (!row) return;
++    for (const m of mounts) {
++      row.append(
++        button(
++          `${m.path}  (${m.fstype})`,
++          async () => {
++            const pick = await rpc("LocalModels", "pickFolder", [`Look inside ${m.path}`]).catch(() => null);
++            const chosenPath = (pick && pick.ok && pick.path) || m.path;
++            chosen.modelPath = chosenPath;
++            await rpc("AppPreferences", "setPreference", ["localModelPath", chosenPath]);
++            localStatus.textContent = "Models at:";
++            localStatus.append(el("code", { class: "first-run-cmd" }, chosenPath));
++          },
++          "quiet",
++        ),
++      );
++    }
++  }).catch(() => {});
++
+   // --- over the internet ------------------------------------------------------------------------
+   const cloudBody = el("div", { class: "first-run-cloud", hidden: true });
+   const providerSelect = el("select", { class: "first-run-select" });
+@@ -1535,6 +1560,11 @@
+             localStatus,
+             el(
+               "div",
++              { class: "first-run-mounts" },
++              el("p", { class: "muted" }, "Or pick a drive on this machine:"),
++            ),
++            el(
++              "div",
+               { class: "first-run-getmodel" },
+               el("p", { class: "muted" }, "No model on disk yet? Two routes, both fine:"),
+               el(
+@@ -3901,6 +3931,304 @@
+       });
+     return wrap;
+   }
++
++
++  // Everything that changes how it looks, in one place. This function was written when the settings were
++  // split and then lost in a copy between trees: the call site survived, so the tab rendered an empty
++  // page and threw a ReferenceError nothing surfaced. A list, so the caller can spread it.
++  function visualsBlocks() {
++    return [
++          el("h2", {}, "Appearance"),
++          el(
++            "p",
++            { class: "muted" },
++            "Choose a look that feels right for your workspace.",
++          ),
++          el(
++            "div",
++            { class: "theme-options", role: "group", "aria-label": "Theme" },
++            ...[
++              ["retro", "Retro"],
++              ["light", "Light"],
++              ["dark", "Dark"],
++              ["matrix", "Matrix"],
++              ["amber", "Amber"],
++              ["ice", "Ice"],
++              ["custom", "Custom"],
++              ["system", "System"],
++            ].map(([value, label]) => {
++              const choice = button(
++                [
++                  el(
++                    "span",
++                    { class: "theme-swatch " + value, "aria-hidden": "true" },
++                    el("span"),
++                    el("span"),
++                  ),
++                  el(
++                    "span",
++                    { class: "theme-label" },
++                    label,
++                    (localStorage.getItem("quixi.theme") || "dark") === value
++                      ? icon("check", 14)
++                      : null,
++                  ),
++                ],
++                () => {
++                  rememberPreference("theme", value);
++                  applyTheme();
++                  renderPage();
++                },
++                "theme-option" +
++                  ((localStorage.getItem("quixi.theme") || "dark") === value
++                    ? " selected"
++                    : ""),
++              );
++              choice.setAttribute("aria-label", "Use " + value + " theme");
++              choice.setAttribute(
++                "aria-pressed",
++                String((localStorage.getItem("quixi.theme") || "dark") === value),
++              );
++              return choice;
++            }),
++          ),
++          el(
++            "div",
++            { class: "font-grid" },
++            el(
++              "label",
++              {},
++              "Interface font",
++              select(
++                [
++                  ["", "Default"],
++                  ["system-ui, sans-serif", "System sans"],
++                  ["ui-monospace, SFMono-Regular, Menlo, monospace", "Monospace"],
++                  ["Georgia, 'Times New Roman', serif", "Serif"],
++                  ["Atkinson Hyperlegible, Verdana, sans-serif", "Hyperlegible"],
++                ],
++                localStorage.getItem("quixi.fontFamily") || "",
++                (v) => {
++                  v
++                    ? rememberPreference("fontFamily", v)
++                    : localStorage.removeItem("quixi.fontFamily");
++                  applyAppearance();
++                },
++              ),
++            ),
++            el(
++              "label",
++              {},
++              "Text size",
++              select(
++                [
++                  ["", "Default (14)"],
++                  ["12", "12"],
++                  ["13", "13"],
++                  ["15", "15"],
++                  ["16", "16"],
++                  ["18", "18"],
++                  ["20", "20"],
++                ],
++                localStorage.getItem("quixi.fontSize") || "",
++                (v) => {
++                  v
++                    ? rememberPreference("fontSize", v)
++                    : localStorage.removeItem("quixi.fontSize");
++                  applyAppearance();
++                },
++              ),
++            ),
++          ),
++          el(
++            "p",
++            { class: "muted", style: "margin-top:14px" },
++            "Custom theme overrides the base colours; leave a swatch alone to inherit the theme.",
++          ),
++          el(
++            "div",
++            { class: "swatch-row" },
++            colourControl("bg", "Background"),
++            colourControl("text", "Text"),
++            colourControl("accent", "Accent"),
++          ),
++          el("h2", { style: "margin-top:30px" }, "Surfaces"),
++          el(
++            "p",
++            { class: "muted" },
++            "Boxed surfaces give every panel a defined edge. Translucency blurs what is behind a panel where the compositor supports it; where it does not, the panel simply stays solid.",
++          ),
++          el(
++            "div",
++            { class: "toggle-row" },
++            el(
++              "label",
++              { class: "toggle" },
++              el("input", {
++                type: "checkbox",
++                checked: localStorage.getItem("quixi.boxing") !== "0",
++                onchange: (event) => {
++                  rememberPreference("boxing", event.target.checked ? "1" : "0");
++                  applyTheme();
++                },
++              }),
++              el("span", {}, "Boxed surfaces"),
++            ),
++            el(
++              "label",
++              { class: "toggle" },
++              el("input", {
++                type: "checkbox",
++                checked: localStorage.getItem("quixi.translucent") === "1",
++                onchange: (event) => {
++                  rememberPreference("translucent", event.target.checked ? "1" : "0");
++                  applyTheme();
++                },
++              }),
++              el("span", {}, "Translucent panels"),
++            ),
++          ),
++          el("h2", { style: "margin-top:30px" }, "Transparency"),
++          el(
++            "p",
++            { class: "muted" },
++            "How much of what is behind a panel shows through. 100% is solid; below about 60% the text starts to fight the desktop behind it.",
++          ),
++          el(
++            "label",
++            { class: "slider-row" },
++            el("span", {}, "Panel opacity"),
++            (() => {
++              const readout = el("span", { class: "slider-value" }, `${localStorage.getItem("quixi.panelOpacity") || "100"}%`);
++              const input = el("input", {
++                type: "range", min: 40, max: 100, step: 2,
++                value: localStorage.getItem("quixi.panelOpacity") || "100",
++                oninput: (event) => {
++                  const pct = event.target.value;
++                  document.documentElement.style.setProperty("--panel-alpha", (Number(pct) / 100).toFixed(2));
++                  readout.textContent = `${pct}%`;
++                  rememberPreferenceSoon("panelOpacity", pct);
++                },
++              });
++              return [input, readout];
++            })(),
++          ),
++          el("h2", { style: "margin-top:26px" }, "Background"),
++          el(
++            "p",
++            { class: "muted" },
++            "A slow drift behind the interface, drawn by the app rather than a wallpaper. Off by default; it costs a little GPU and some people hate it.",
++          ),
++          el(
++            "div",
++            { class: "toggle-row" },
++            el("label", { class: "toggle" },
++              el("input", {
++                type: "checkbox",
++                checked: localStorage.getItem("quixi.backgroundMotion") === "1",
++                onchange: (event) => { rememberPreference("backgroundMotion", event.target.checked ? "1" : "0"); applyTheme(); },
++              }),
++              el("span", {}, "Moving background")),
++            el("label", { class: "toggle" },
++              el("input", {
++                type: "checkbox",
++                checked: localStorage.getItem("quixi.backgroundGrid") === "1",
++                onchange: (event) => { rememberPreference("backgroundGrid", event.target.checked ? "1" : "0"); applyTheme(); },
++              }),
++              el("span", {}, "Grid overlay")),
++          ),
++    ];
++  }
++
++
++  // Audio: what the app speaks through, what it listens on, and which model does the listening and the
++  // talking. Local is the default because both are already here — Whisper on this machine and Kokoro on
++  // this machine — and a cloud default would send a recording of your voice somewhere to find that out.
++  function audioPageSections() {
++    const wrap = el("section", { class: "settings-section" });
++    const status = el("p", { class: "hint" }, "Reading the audio devices on this machine…");
++    const sinkSelect = el("select", { class: "first-run-select", "aria-label": "Output device" });
++    const sourceSelect = el("select", { class: "first-run-select", "aria-label": "Microphone" });
++    const sttSelect = el("select", { class: "first-run-select", "aria-label": "Transcription model" });
++    const ttsSelect = el("select", { class: "first-run-select", "aria-label": "Voice model" });
++    sttSelect.append(
++      el("option", { value: "local" }, "Local — Whisper on this machine (default)"),
++      el("option", { value: "cloud" }, "Cloud — send the recording to a provider"),
++    );
++    ttsSelect.append(
++      el("option", { value: "local" }, "Local — Kokoro on this machine (default)"),
++      el("option", { value: "cloud" }, "Cloud — a provider's voice"),
++    );
++    sttSelect.value = localStorage.getItem("quixi.sttModel") || "local";
++    ttsSelect.value = localStorage.getItem("quixi.ttsModel") || "local";
++    sttSelect.addEventListener("change", () => {
++      localStorage.setItem("quixi.sttModel", sttSelect.value);
++      rememberPreferenceSoon("sttModel", sttSelect.value);
++    });
++    ttsSelect.addEventListener("change", () => {
++      localStorage.setItem("quixi.ttsModel", ttsSelect.value);
++      rememberPreferenceSoon("ttsModel", ttsSelect.value);
++    });
++
++    wrap.append(
++      el("h2", {}, "Devices"),
++      el("p", { class: "muted" }, "Which devices the app speaks through and listens on. These are the app's own choices; the system defaults stay yours."),
++      el("label", { class: "settings-field" }, el("span", {}, "Output"), sinkSelect),
++      el("label", { class: "settings-field" }, el("span", {}, "Microphone"), sourceSelect),
++      el("h2", { style: "margin-top:28px" }, "Transcription"),
++      el("p", { class: "muted" }, "Whisper runs on this machine: a five-second clip takes a couple of seconds and nothing leaves the box. The cloud option sends the audio to whichever provider is configured."),
++      el("label", { class: "settings-field" }, el("span", {}, "Model"), sttSelect),
++      el("h2", { style: "margin-top:28px" }, "Voice"),
++      el("p", { class: "muted" }, "Kokoro synthesises speech locally. Local is the default here and there is no reason to change it unless you want a voice this machine does not have."),
++      el("label", { class: "settings-field" }, el("span", {}, "Model"), ttsSelect),
++      el("h2", { style: "margin-top:28px" }, "Dictation"),
++      el("label", { class: "settings-field" },
++        el("span", {}, "Push-to-talk"),
++        el("input", {
++          type: "text", class: "first-run-key", spellcheck: false,
++          value: localStorage.getItem("quixi.dictationHotkey") || "Control+B",
++          onchange: (e) => {
++            localStorage.setItem("quixi.dictationHotkey", e.target.value);
++            rememberPreferenceSoon("dictationHotkey", e.target.value);
++          },
++        }),
++      ),
++      status,
++    );
++
++    rpc("AudioDevices", "list")
++      .then((res) => {
++        const sinks = (res && res.sinks) || [];
++        const sources = ((res && res.sources) || []).filter((s) => !/\.monitor$/.test(s.name));
++        const savedSink = localStorage.getItem("quixi.audioOutput") || "";
++        const savedSource = localStorage.getItem("quixi.audioInput") || "";
++        const fill = (select, items, saved, fallbackLabel) => {
++          select.replaceChildren(
++            el("option", { value: "" }, fallbackLabel),
++            ...items.map((d) => {
++              const o = el("option", { value: d.name }, d.label || d.name);
++              if (d.name === saved) o.selected = true;
++              return o;
++            }),
++          );
++        };
++        fill(sinkSelect, sinks, savedSink, "System default");
++        fill(sourceSelect, sources, savedSource, "System default");
++        sinkSelect.addEventListener("change", () => {
++          localStorage.setItem("quixi.audioOutput", sinkSelect.value);
++          rememberPreferenceSoon("audioOutput", sinkSelect.value);
++        });
++        sourceSelect.addEventListener("change", () => {
++          localStorage.setItem("quixi.audioInput", sourceSelect.value);
++          rememberPreferenceSoon("audioInput", sourceSelect.value);
++        });
++        status.textContent = `${sinks.length} outputs, ${sources.length} inputs found${res && res.defaultSink ? ` · system default is ${res.defaultSink}` : ""}.`;
++      })
++      .catch(() => {
++        status.textContent = "Could not read the audio devices. PipeWire or PulseAudio was not reachable.";
++      });
++    return wrap;
++  }
+ 
+   function settingsPage(host) {
+     const tabs = [
