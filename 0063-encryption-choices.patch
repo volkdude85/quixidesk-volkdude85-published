@@ -1,0 +1,119 @@
+Encryption: three real choices, one honest refusal, and the command for each
+==========================================================================
+
+The setup screen offered "whole disk / archive / nothing" and explained none of them. Now it offers
+three specific things and a fourth that is just the truth:
+
+  * **LUKS — whole disk (recommended).** Protects everything on the disk, including files not yet
+    created. Decided before the system is installed, or by reinstalling. Strongest, most disruptive to
+    adopt later.
+  * **age — one key file, encrypted palace.** The palace becomes a single file you can move or back
+    up; one key file, modern defaults, no ceremony.
+  * **GPG — a key you already have.** Most compatible, fiddliest; unattended decryption puts the
+    secret on the box.
+  * **Nothing.** With the warning shown only when it applies: anyone who gets this disk, or any
+    account on this machine, reads every conversation in it. Reasonable on a desktop in a locked room,
+    a bad trade on a laptop.
+
+Each choice shows the actual command — `tar czf - palace/ | age -p -o palace.tar.gz.age`, and the GPG
+equivalent — because **this app does not encrypt anything itself**. A menu that implies otherwise is
+worse than the warning it replaced. Running those commands is the next piece of work, not this one.
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a63/resources/ui/app.css	2026-11-02 14:46:56.123484938 -0800
++++ b63/resources/ui/app.css	2026-11-02 14:46:56.024004416 -0800
+@@ -2667,3 +2667,12 @@
+   color: var(--muted); margin: 16px 0 6px; font-weight: 600;
+ }
+ .first-run-explain p { font-size: 13px; line-height: 1.55; margin: 0 0 8px; color: var(--text); }
++
++/* Encryption choices: what it protects, the command, and the warning only when it applies. */
++.first-run-enc { margin: 2px 0 10px; display: flex; flex-direction: column; gap: 6px; }
++.first-run-cmd {
++  display: block; font-family: ui-monospace, monospace; font-size: 11.5px;
++  background: var(--raised); border: 1px solid var(--line); border-radius: 6px;
++  padding: 7px 9px; overflow-x: auto; white-space: pre;
++}
++.first-run-warn { color: #d8a657; font-size: 12px; margin: 0; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a63/resources/ui/app.js	2026-11-02 14:46:56.123688014 -0800
++++ b63/resources/ui/app.js	2026-11-02 14:46:56.023272099 -0800
+@@ -1348,16 +1348,50 @@
+       el("option", { value: "sealed" }, "Sealed archive — append-only, nothing deletes"),
+       el("option", { value: "folder" }, "Ordinary folder — you can delete anything"),
+     );
+-    encSel.append(
+-      el("option", { value: "disk" }, "Whole disk (LUKS) — everything, always"),
+-      el("option", { value: "archive" }, "age/GPG archive — a backup you can move"),
+-      el("option", { value: "none" }, "Nothing — plain files on this disk"),
+-    );
+-    const warn = el(
+-      "p",
+-      { class: "first-run-status" },
+-      "Without encryption, anyone who gets this disk can read every conversation in it. That is a real choice on a desktop that stays in a locked room, and a bad one on a laptop.",
+-    );
++    // Three real choices and an honest fourth. Each says what it protects and what it costs, and
++    // shows the command, because this app does not do the encrypting — pretending otherwise would be
++    // worse than the warning.
++    const ENC = {
++      luks: {
++        label: "LUKS — whole disk (recommended)",
++        what: "Protects everything on the disk, including files you have not created yet. Decided before the system is installed, or by reinstalling — the strongest protection and the most disruptive to adopt later.",
++        how: "wiki.archlinux.org/title/Dm-crypt/Encrypting_an_entire_system",
++      },
++      age: {
++        label: "age — one key file, encrypted palace",
++        what: "Encrypts the palace into a single file you can move or back up. One key file, modern defaults, no GPG ceremony. Unlocks with a passphrase or a key you keep somewhere else.",
++        how: "tar czf - palace/ | age -p -o palace.tar.gz.age",
++      },
++      gpg: {
++        label: "GPG — a key you already have",
++        what: "Encrypts the palace to a key that already exists — yours, or one on a hardware token. The most compatible option and the fiddliest; unattended decryption means the secret is on the box.",
++        how: "tar czf - palace/ | gpg -e -r you@example.com > palace.tar.gz.gpg",
++      },
++      none: {
++        label: "Nothing — plain files on this disk",
++        what: "",
++        how: "",
++      },
++    };
++    encSel.append(...Object.entries(ENC).map(([v, o]) => el("option", { value: v }, o.label)));
++
++    const encNote = el("div", { class: "first-run-enc" });
++    const paintEnc = () => {
++      const chosen = ENC[encSel.value] || ENC.none;
++      encNote.replaceChildren(
++        chosen.what ? el("p", { class: "muted" }, chosen.what) : null,
++        chosen.how ? el("code", { class: "first-run-cmd" }, chosen.how) : null,
++        encSel.value === "none"
++          ? el(
++              "p",
++              { class: "first-run-warn" },
++              "Without encryption, anyone who gets this disk — or any account on this machine — can read every conversation in it. Reasonable on a desktop that stays in a locked room; a bad trade on a laptop.",
++            )
++          : null,
++      );
++    };
++    encSel.addEventListener("change", paintEnc);
++    const warn = el("span", {}, "");
+ 
+     rpc("Memory", "info").then((res) => {
+       const r = res || {};
+@@ -1365,7 +1399,8 @@
+       info.textContent = r.drawers
+         ? `${r.drawers} drawers in ${r.wings} wings, ${(Number(r.bytes || 0) / 1024).toFixed(0)} KB at ${r.path}.`
+         : `Nothing yet. It would start at ${r.path}.`;
+-      if (r.encrypted) encSel.value = r.encrypted;
++      if (r.encrypted && ENC[r.encrypted]) encSel.value = r.encrypted;
++      paintEnc();
+     }).catch(() => { info.textContent = "Could not read the palace."; });
+ 
+     const save = async () => {
+@@ -1428,6 +1463,7 @@
+         ),
+       ),
+       info,
++      encNote,
+       warn,
+       el("div", { class: "first-run-actions" },
+         button("Save and finish", save, "primary"),
