@@ -5,13 +5,16 @@ database, no index, no format of our own. If a person wants to rename, duplicate
 persona, they can do it in Dolphin, in `git`, or with `mv` — and the app will see the result because
 it reads the folder.
 
+The persona this edition ships is called **Nora for Github** — the same character as the one running
+on the machine that wrote it, named for the copy that ships rather than the copy in use.
+
 ## The layout
 
 ```
 ~/.quixi/
   persona.md                  the ACTIVE persona — what the app loads, unchanged
   personas/
-    nora.md                   the one this build ships
+    nora.md                   "Nora for Github" — the one this build ships
     pirate.md                 whatever the user writes
     work-mode.md
 ```
