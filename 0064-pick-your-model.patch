@@ -1,0 +1,139 @@
+"Use a local model" now asks where the model is, and says where to get one
+=======================================================================
+
+The local path in setup offered a button that detected a server and then either found one or did not.
+It never asked where the weights were, and it never told a person who has none where to get them.
+
+  * **Two native pickers** — a folder and a single file — through the platform layer, so KDE gets
+    kdialog (Dolphin's own dialog, not a lookalike), other desktops get the portal. The choice is
+    stored as `localModelPath`. These grant nothing: unlike the workspace picker, picking a model does
+    not add a directory to the trusted-folder list.
+  * **Two routes to a model**, both named in the card: Ollama for something that runs with one command
+    and no thinking, Hugging Face for GGUF files that llama.cpp, LM Studio and this app's own tooling
+    read directly. Both open through the browser preference, so they respect the choice made two
+    screens earlier.
+  * **And an honest state** — if a model was picked but no local server is answering, the card says so
+    instead of failing quietly.
+
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a64/crates/quixi-ipc/src/lib.rs	2026-11-02 14:54:11.910045365 -0800
++++ b64/crates/quixi-ipc/src/lib.rs	2026-11-02 14:54:11.923039137 -0800
+@@ -518,6 +518,23 @@
+                     Err(error) => json!({ "ok": false, "error": error }),
+                 }
+             }
++            // Picking where the weights live. A native picker — Dolphin on KDE, the portal elsewhere —
++            // because typing a path to a 20 GB file is a memory test, not a setup step. This one only
++            // returns the choice; it grants nothing.
++            ("LocalModels", "pickFolder") | ("AppPreferences", "pickModelFolder") => {
++                let prompt = args.first().and_then(|v| v.as_str()).unwrap_or("Where are your local models?");
++                match quixi_platform::ComputerUse::pick_folder(Some(prompt)) {
++                    Some(path) => json!({ "ok": true, "path": path }),
++                    None => json!({ "ok": false }),
++                }
++            }
++            ("LocalModels", "pickFile") | ("AppPreferences", "pickModelFile") => {
++                let prompt = args.first().and_then(|v| v.as_str()).unwrap_or("Choose a model file");
++                match quixi_platform::ComputerUse::pick_file(Some(prompt)) {
++                    Some(path) => json!({ "ok": true, "path": path }),
++                    None => json!({ "ok": false }),
++                }
++            }
+             // Where the memory palace lives and what is in it. The setup screen needs the real path
+             // and the real size — "your memory goes somewhere on disk" is not an answer a person can
+             // weigh against a backup drive.
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a64/resources/ui/app.css	2026-11-02 14:54:11.912565179 -0800
++++ b64/resources/ui/app.css	2026-11-02 14:54:11.924669435 -0800
+@@ -2676,3 +2676,9 @@
+   padding: 7px 9px; overflow-x: auto; white-space: pre;
+ }
+ .first-run-warn { color: #d8a657; font-size: 12px; margin: 0; }
++
++/* The chosen model path, shown as a path rather than buried in a sentence. */
++.first-run-status .first-run-cmd { margin-top: 6px; }
++
++.first-run-getmodel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
++.first-run-getmodel p { font-size: 12px; margin: 0 0 8px; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a64/resources/ui/app.js	2026-11-02 14:54:11.912636083 -0800
++++ b64/resources/ui/app.js	2026-11-02 14:54:11.923636479 -0800
+@@ -1089,6 +1089,10 @@
+         const list = (state.providers && state.providers.providers) || [];
+         const found = list.filter((p) => p.category === "local" && p.configured);
+         const pick = found[0] || list.find((p) => p.id === "ollama");
++        if (!found.length && chosen.modelPath) {
++          localStatus.textContent =
++            `You picked ${chosen.modelPath}, but no local model server is answering yet. Start one (Ollama, llama.cpp, LM Studio) and it will be detected next time.`;
++        }
+         if (!pick) throw new Error("No local provider entry found.");
+         const r = await api("/api/quixi/providers/complete-onboarding", {
+           activeProvider: pick.id,
+@@ -1494,7 +1498,66 @@
+         card(
+           "On this machine",
+           "Nothing leaves the computer and no account is needed. Requires a local model server — Ollama, LM Studio, llama.cpp or anything OpenAI-compatible.",
+-          el("div", { class: "first-run-actions" }, localBtn, localStatus),
++          el(
++            "div",
++            { class: "first-run-actions" },
++            localBtn,
++            button(
++              "Choose my model folder…",
++              async () => {
++                const res = await rpc("LocalModels", "pickFolder", ["Where are your local models?"]).catch(() => null);
++                if (res && res.ok && res.path) {
++                  chosen.modelPath = res.path;
++                  await rpc("AppPreferences", "setPreference", ["localModelPath", res.path]);
++                  localStatus.textContent = `Models at ${res.path} — ${res.path}`.replace(/ — .*$/, "");
++                  localStatus.append(el("code", { class: "first-run-cmd" }, res.path));
++                } else {
++                  localStatus.textContent = "No folder chosen. You can also set it later in Settings.";
++                }
++              },
++              "quiet",
++            ),
++            button(
++              "Choose a model file…",
++              async () => {
++                const res = await rpc("LocalModels", "pickFile", ["Choose a model file (.gguf)"]).catch(() => null);
++                if (res && res.ok && res.path) {
++                  chosen.modelPath = res.path;
++                  await rpc("AppPreferences", "setPreference", ["localModelPath", res.path]);
++                  localStatus.textContent = "Model file:";
++                  localStatus.append(el("code", { class: "first-run-cmd" }, res.path));
++                } else {
++                  localStatus.textContent = "No file chosen. You can also set it later in Settings.";
++                }
++              },
++              "quiet",
++            ),
++            localStatus,
++            el(
++              "div",
++              { class: "first-run-getmodel" },
++              el("p", { class: "muted" }, "No model on disk yet? Two routes, both fine:"),
++              el(
++                "div",
++                { class: "first-run-actions" },
++                button(
++                  "Ollama — pull a ready-made model",
++                  () => openExternal("https://ollama.com/library"),
++                  "quiet",
++                ),
++                button(
++                  "Hugging Face — search GGUF builds",
++                  () => openExternal("https://huggingface.co/models?library=gguf"),
++                  "quiet",
++                ),
++              ),
++              el(
++                "p",
++                { class: "muted" },
++                "Ollama gives you a model that runs with one command and no thinking. Hugging Face gives you the file itself, which is what llama.cpp, LM Studio and this app's own tooling read directly. Both land in a folder the picker above can see.",
++              ),
++            ),
++          ),
+         ),
+         card(
+           "Over the internet",
