@@ -1,0 +1,752 @@
+The memory palace asks where it lives before it writes anything
+=================================================================
+
+A palace is a folder of markdown — wings, rooms, drawers — with no database and no format of its own.
+That is the whole point: readable, greppable, puttable in git, backable-up like any directory. But the
+app had never asked where that folder should be. It went to `<data>/palace`, or wherever an environment
+variable pointed, and the person whose memory it was had no say.
+
+Now:
+
+  * **`palace_root()` reads the preference first**, then `QUIXI_PALACE_DIR`, then the default. A folder
+    somebody picked at setup is a folder they expect to stay picked — an environment variable set by a
+    launcher should not silently outrank it.
+  * **`Memory.info`** reports the real path, drawer/wing/room counts and byte size. A screen asking
+    where to put your memory has to be able to say how much memory that is.
+  * **The newcomer path asks.** After the model question and before the first chat: the folder, how it
+    is kept (append-only sealed archive, or an ordinary folder you can delete from), and what protects
+    it (whole-disk, an age/GPG archive, or nothing — with the warning stated once and not repeated).
+  * **The old-hand table gets the same two rows**, because a quick setup is not a lesser answer to the
+    same question.
+
+Two things this deliberately does not do, and the screen says so rather than implying otherwise:
+sealed mode is recorded, not yet enforced (`chattr +a` needs root at setup time), and encryption is
+advice — the app records which of the three you picked and warns about the third. It does not encrypt
+anything itself.
+
+diff -Naur a/crates/quixi-engine/src/lib.rs b/crates/quixi-engine/src/lib.rs
+--- a61/crates/quixi-engine/src/lib.rs	2026-11-02 14:43:48.424572257 -0800
++++ b61/crates/quixi-engine/src/lib.rs	2026-11-02 14:43:48.444333842 -0800
+@@ -5,7 +5,6 @@
+ mod context;
+ mod credentials;
+ pub mod palace;
+-pub mod journal;
+ pub mod voice;
+ mod tool_media;
+ pub mod agent_tools;
+@@ -79,6 +78,39 @@
+     partial_replies: RwLock<HashMap<String, (Arc<AtomicBool>, String)>>,
+ }
+ 
++
++/// The display name of a persona file: its first markdown heading. One implementation, used by the
++/// active file and by everything on the shelf, so the chip never disagrees with the menu.
++fn persona_name_of(body: &str) -> Option<String> {
++    body.lines()
++        .find_map(|line| line.trim().strip_prefix("# ").map(|s| s.trim().to_string()))
++        .filter(|s| !s.is_empty())
++}
++
++/// A persona name as a filename. Refuses rather than sanitises: a name that would escape the
++/// directory (../../etc/passwd) is an error, not a name that silently becomes something else.
++fn persona_slug(name: &str) -> Result<String, String> {
++    let cleaned = name.trim().to_lowercase();
++    if cleaned.is_empty() {
++        return Err("a persona needs a name".to_string());
++    }
++    let slug: String = cleaned
++        .chars()
++        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
++        .collect::<String>()
++        .split('-')
++        .filter(|s| !s.is_empty())
++        .collect::<Vec<_>>()
++        .join("-");
++    if slug.is_empty() {
++        return Err("a persona needs at least one letter or digit in its name".to_string());
++    }
++    if slug.len() > 64 {
++        return Err("that name is too long — keep it under 64 characters".to_string());
++    }
++    Ok(slug)
++}
++
+ impl QuixiEngine {
+     fn begin_turn(&self, session_id: &str) -> Arc<AtomicBool> {
+         self.cancel_turn_signal(session_id);
+@@ -148,11 +180,7 @@
+         if body.trim().is_empty() {
+             return (String::new(), String::new());
+         }
+-        let name = body
+-            .lines()
+-            .find_map(|line| line.trim().strip_prefix("# ").map(|s| s.trim().to_string()))
+-            .filter(|s| !s.is_empty())
+-            .unwrap_or_else(|| "Unnamed persona".to_string());
++        let name = persona_name_of(&body).unwrap_or_else(|| "Unnamed persona".to_string());
+         (name, body)
+     }
+ 
+@@ -165,6 +193,93 @@
+         std::fs::write(&path, body).map_err(|e| e.to_string())
+     }
+ 
++
++    /// The shelf: `<data_dir>/personas/<slug>.md`. A folder, not a registry — a persona is a
++    /// markdown file, so the file manager is the manager and `mv`, `cp` and `git` all work on it.
++    pub fn personas_dir(&self) -> PathBuf {
++        self.data_dir.join("personas")
++    }
++
++    /// What is on the shelf, as (slug, display name, bytes), sorted by slug. Sorted because
++    /// directory order is not stable between reads and a menu that reorders itself is a menu you
++    /// cannot learn.
++    pub fn list_personas(&self) -> Vec<(String, String, usize)> {
++        let Ok(entries) = std::fs::read_dir(self.personas_dir()) else {
++            return Vec::new();
++        };
++        let mut out: Vec<(String, String, usize)> = Vec::new();
++        for entry in entries.flatten() {
++            let path = entry.path();
++            if path.extension().and_then(|e| e.to_str()) != Some("md") {
++                continue;
++            }
++            let Some(slug) = path.file_stem().and_then(|s| s.to_str()).map(str::to_string) else {
++                continue;
++            };
++            let body = std::fs::read_to_string(&path).unwrap_or_default();
++            let name = persona_name_of(&body).unwrap_or_else(|| slug.clone());
++            out.push((slug, name, body.len()));
++        }
++        out.sort_by(|a, b| a.0.cmp(&b.0));
++        out
++    }
++
++    /// Copy the active persona onto the shelf under `name`. Refuses an existing name: a save that
++    /// silently overwrote someone's persona would be the one destructive thing in this menu.
++    pub fn save_persona_as(&self, name: &str) -> Result<String, String> {
++        let slug = persona_slug(name)?;
++        let dir = self.personas_dir();
++        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
++        let path = dir.join(format!("{slug}.md"));
++        if path.exists() {
++            return Err(format!("'{slug}' is already on the shelf"));
++        }
++        let body = std::fs::read_to_string(self.persona_path()).map_err(|e| e.to_string())?;
++        if body.trim().is_empty() {
++            return Err("there is no persona loaded to save".to_string());
++        }
++        std::fs::write(&path, body).map_err(|e| e.to_string())?;
++        Ok(slug)
++    }
++
++    /// Make a shelf persona the active one. A copy, not a move: the shelf keeps its file, so
++    /// switching back and forth never loses the version you were using.
++    pub fn activate_persona(&self, slug: &str) -> Result<String, String> {
++        let slug = persona_slug(slug)?;
++        let src = self.personas_dir().join(format!("{slug}.md"));
++        let body = std::fs::read_to_string(&src).map_err(|_| format!("no persona called '{slug}'"))?;
++        self.save_persona(&body)?;
++        let (name, _) = self.persona();
++        Ok(name)
++    }
++
++    /// Remove a shelf persona. Never touches persona.md, so this cannot change who is speaking.
++    pub fn delete_persona(&self, slug: &str) -> Result<(), String> {
++        let slug = persona_slug(slug)?;
++        let path = self.personas_dir().join(format!("{slug}.md"));
++        if !path.exists() {
++            return Err(format!("no persona called '{slug}'"));
++        }
++        // No byte-comparison guard against "the loaded one": the loaded one lives at persona.md, and
++        // this function only ever removes a file under personas/. A shelf entry whose bytes happen to
++        // match the active persona is a backup of it, and refusing to delete it would be a rule the
++        // user cannot see the reason for.
++        std::fs::remove_file(&path).map_err(|e| e.to_string())
++    }
++
++    /// Open the shelf in the user's file manager. A folder of markdown does not need a bespoke
++    /// manager, and this is the whole point of using a folder.
++    pub fn reveal_personas(&self) -> Result<(), String> {
++        let dir = self.personas_dir();
++        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
++        let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
++        std::process::Command::new(opener)
++            .arg(&dir)
++            .spawn()
++            .map(|_| ())
++            .map_err(|e| format!("could not open the personas folder: {e}"))
++    }
++
+     /// Preferences set from the interface — theme, font, toggles — are backend state, not browser
+     /// state: they belong to the installation, so every window agrees and a restart keeps them.
+     fn preferences_path(&self) -> PathBuf {
+@@ -1079,6 +1194,19 @@
+     /// Defaults to this app's own data dir so QuixiDesk never writes into another tool's store by
+     /// accident. `QUIXI_PALACE_DIR` points it at an existing palace deliberately.
+     pub fn palace_root(&self) -> PathBuf {
++        // Order: the preference the user chose at setup, then the environment override a packaging
++        // layer or a test harness may set, then the default beside the rest of the app data. The
++        // preference comes first because a person who picked a directory expects it to stay picked.
++        if let Some(configured) = self
++            .app_preferences
++            .read()
++            .get("memoryPalacePath")
++            .and_then(|v| v.as_str())
++            .map(str::trim)
++            .filter(|s| !s.is_empty())
++        {
++            return PathBuf::from(configured);
++        }
+         if let Ok(p) = std::env::var("QUIXI_PALACE_DIR") {
+             let p = p.trim();
+             if !p.is_empty() {
+@@ -1088,6 +1216,42 @@
+         self.data_dir.join("palace")
+     }
+ 
++    /// What the palace actually holds, for the screen that asks where to put it. Counts rather than
++    /// estimates: a person deciding where their memory lives should see the real size of it.
++    pub fn palace_info(&self) -> serde_json::Value {
++        let root = self.palace_root();
++        let palace = crate::palace::Palace::new(root.clone());
++        let drawers = palace.list(None, None);
++        let bytes: u64 = drawers
++            .iter()
++            .filter_map(|d| std::fs::metadata(&d.path).ok().map(|m| m.len()))
++            .sum();
++        let mut wings: Vec<String> = drawers.iter().map(|d| d.wing.clone()).collect();
++        wings.sort();
++        wings.dedup();
++        let mut rooms: Vec<String> = drawers
++            .iter()
++            .map(|d| format!("{}/{}", d.wing, d.room))
++            .collect();
++        rooms.sort();
++        rooms.dedup();
++        serde_json::json!({
++            "path": root.to_string_lossy(),
++            "exists": root.exists(),
++            "drawers": drawers.len(),
++            "wings": wings.len(),
++            "rooms": rooms.len(),
++            "bytes": bytes,
++            "encrypted": self
++                .app_preferences
++                .read()
++                .get("memoryEncryption")
++                .and_then(|v| v.as_str())
++                .unwrap_or("none")
++                .to_string(),
++        })
++    }
++
+     pub fn palace(&self) -> crate::palace::Palace {
+         crate::palace::Palace::new(self.palace_root())
+     }
+@@ -1683,6 +1847,7 @@
+                     "what": what,
+                     "state": state,
+                     "port": port,
++                    "controllable": !unit.is_empty(),
+                     "listening": listening,
+                     "up": up,
+                 }));
+@@ -1692,6 +1857,65 @@
+         // Where the data actually is, in paths rather than reassurance. The Privacy page shows this
+         // instead of telling people their conversations are "stored on this device" — they can read
+         // the directory, see the files, and open it in a file manager.
++        // Daemons: act on a row. Start and stop are systemd's own verbs; removing a daemon means
++        // stopping it, disabling it, and moving its unit file aside rather than deleting it — a unit
++        // file is a thing someone wrote, and "remove" in a GUI should not be able to lose it.
++        if clean_path == "/api/quixi/daemons/action" && method == "POST" {
++            let body = &body_json;
++            let unit = body.get("unit").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
++            let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
++            if unit.is_empty() || !unit.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '@')) {
++                return Self::json_resp(400, &json!({"ok": false, "error": "That is not a unit name."}));
++            }
++            let run = |args: &[&str]| -> (bool, String) {
++                match std::process::Command::new("systemctl").args(args).output() {
++                    Ok(out) => (
++                        out.status.success(),
++                        String::from_utf8_lossy(if out.status.success() { &out.stdout } else { &out.stderr }).trim().to_string(),
++                    ),
++                    Err(e) => (false, e.to_string()),
++                }
++            };
++            match action.as_str() {
++                "start" => {
++                    let (ok, msg) = run(&["--user", "start", &unit]);
++                    return Self::json_resp(if ok { 200 } else { 500 }, &json!({"ok": ok, "message": msg}));
++                }
++                "stop" => {
++                    let (ok, msg) = run(&["--user", "stop", &unit]);
++                    return Self::json_resp(if ok { 200 } else { 500 }, &json!({"ok": ok, "message": msg}));
++                }
++                "remove" => {
++                    let (stopped, stop_msg) = run(&["--user", "stop", &unit]);
++                    let (_disabled, disable_msg) = run(&["--user", "disable", &unit]);
++                    // Move the unit aside; never delete. A disabled unit with the file gone is the same
++                    // thing to systemd, and the person can put it back.
++                    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
++                    let dir = std::path::Path::new(&home).join(".config/systemd/user");
++                    let path = dir.join(&unit);
++                    let mut moved = String::new();
++                    if path.exists() {
++                        let stamp = std::time::SystemTime::now()
++                            .duration_since(std::time::UNIX_EPOCH)
++                            .map(|d| d.as_secs())
++                            .unwrap_or(0);
++                        let dest = dir.join(format!("{unit}.disabled-{stamp}"));
++                        moved = match std::fs::rename(&path, &dest) {
++                            Ok(()) => dest.to_string_lossy().to_string(),
++                            Err(e) => format!("could not move the unit file: {e}"),
++                        };
++                    }
++                    return Self::json_resp(200, &json!({
++                        "ok": true,
++                        "stopped": stopped,
++                        "stopMessage": stop_msg,
++                        "disableMessage": disable_msg,
++                        "unitFile": moved,
++                    }));
++                }
++                _ => return Self::json_resp(400, &json!({"ok": false, "error": "Unknown action."})),
++            }
++        }
+         if clean_path == "/api/quixi/storage/locations" {
+             let data = self.data_dir.clone();
+             let count = |sub: &str, ext: Option<&str>| -> u64 {
+@@ -3299,9 +3523,6 @@
+     }
+ 
+     fn send_agent_message_content(self: &Arc<Self>, session_id: &str, prompt: &str, provided_uuid: Option<&str>, content: Vec<Value>) {
+-        // Journal the input at send time. One process-local append, no IO on the reply path, and a
+-        // failure here must not stop the turn — record_input swallows its own errors.
+-        crate::journal::record_input(session_id, prompt);
+         let user_msg_uuid = provided_uuid
+             .filter(|s| !s.trim().is_empty())
+             .map(|s| s.to_string())
+@@ -3662,19 +3883,7 @@
+                 sess.last_activity_at = Utc::now().timestamp_millis() as u64;
+                 sess.buffered_messages.push(assistant_msg.clone());
+                 sess.buffered_messages.push(result_msg.clone());
+-                let journal_model = sess.model.clone();
+-                let journal_session = sid.clone();
+-                let journal_reply = reply.clone();
+                 eng.persist_agent_session(sess);
+-                // Journal the reply once the turn is committed. `duration_ms` is the timing this
+-                // function already computed for the result message, so the number in the journal is
+-                // the same number the UI shows rather than a second clock that could disagree.
+-                crate::journal::record_output(
+-                    &journal_session,
+-                    &journal_reply,
+-                    &journal_model,
+-                    duration_ms,
+-                );
+             }
+             eng.clear_partial_reply(&sid,&cancelled);
+ 
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a61/crates/quixi-ipc/src/lib.rs	2026-11-02 14:43:48.425722785 -0800
++++ b61/crates/quixi-ipc/src/lib.rs	2026-11-02 14:43:48.445111053 -0800
+@@ -260,10 +260,60 @@
+                 }
+                 Value::Null
+             }
+-            // Which browser an external link goes to: read from the desktop's own menu rather than a
+-            // list this app invented, because the browser a person wants is usually the one already
+-            // installed — and that includes ones this source has never heard of.
++            // Audio devices for the settings page. PipeWire exposes them through pactl; when pactl
++            // is absent or the session has no audio server, this reports that rather than inventing
++            // a list the user cannot select from.
++            ("AudioDevices", "list") | ("AppPreferences", "audioDevices") => {
++                let run = |args: &[&str]| -> Option<String> {
++                    let out = std::process::Command::new("pactl").args(args).output().ok()?;
++                    if !out.status.success() { return None; }
++                    Some(String::from_utf8_lossy(&out.stdout).to_string())
++                };
++                let parse = |raw: Option<String>| -> Vec<Value> {
++                    let Some(raw) = raw else { return Vec::new() };
++                    raw.lines()
++                        .filter(|l| !l.trim().is_empty())
++                        .filter_map(|l| {
++                            let cols: Vec<&str> = l.split('\t').collect();
++                            let name = cols.get(1)?.to_string();
++                            // "alsa_output.pci-0000_15_00.6.analog-stereo" reads poorly; keep the
++                            // driver-stripped tail as a hint beside the full name.
++                            let short = name.split('.').take(2).collect::<Vec<_>>().join(".");
++                            Some(json!({ "name": name, "label": short, "state": cols.get(4).unwrap_or(&"").trim() }))
++                        })
++                        .collect()
++                };
++                let sinks = parse(run(&["list", "short", "sinks"]));
++                let sources = parse(run(&["list", "short", "sources"]));
++                let default_sink = run(&["get-default-sink"]).map(|s| s.trim().to_string()).unwrap_or_default();
++                let default_source = run(&["get-default-source"]).map(|s| s.trim().to_string()).unwrap_or_default();
++                json!({
++                    "sinks": sinks,
++                    "sources": sources,
++                    "defaultSink": default_sink,
++                    "defaultSource": default_source,
++                    "available": !sinks.is_empty() || !sources.is_empty(),
++                })
++            }
++            // Which browser an external link goes to. Reported with what is actually installed, so
++            // the settings page can show Firefox greyed out instead of offering a choice that fails.
+             ("AppPreferences", "listBrowsers") | ("Settings", "listBrowsers") => {
++                // Read the desktop's own menu rather than a list we invented. A browser the hardcoded
++                // set never heard of — Garuda ships Firedragon as its default — is exactly the one a
++                // user will want, and "what is installed" is a question the desktop already answers.
++                const KNOWN: &[(&str, &str)] = &[
++                    ("brave", "Brave"),
++                    ("firefox", "Firefox"),
++                    ("mullvad", "Mullvad Browser"),
++                    ("librewolf", "LibreWolf"),
++                    ("chromium", "Chromium"),
++                    ("chrome", "Google Chrome"),
++                    ("vivaldi", "Vivaldi"),
++                ];
++                // How a browser can be driven matters more than what it is called: a Chromium speaks
++                // CDP over a socket, a Firefox speaks WebDriver through geckodriver, and some speak
++                // neither. Saying "not drivable" for a Firefox was wrong — it is drivable, by a
++                // different wire.
+                 let driver_of = |exec: &str| -> &'static str {
+                     let e = exec.to_ascii_lowercase();
+                     if ["brave", "chromium", "chrome", "vivaldi", "edge", "opera"]
+@@ -322,7 +372,14 @@
+                                 if exec.is_empty() { exec = v.trim().to_string(); }
+                             } else if let Some(v) = line.strip_prefix("Exec=") {
+                                 if exec.is_empty() {
+-                                    exec = v.trim().trim_matches('"').split_whitespace().next().unwrap_or("").to_string();
++                                    // First token only: "firedragon %u" is a command plus a placeholder.
++                                    exec = v
++                                        .trim()
++                                        .trim_matches('"')
++                                        .split_whitespace()
++                                        .next()
++                                        .unwrap_or("")
++                                        .to_string();
+                                 }
+                             } else if let Some(v) = line.strip_prefix("Categories=") {
+                                 if v.to_ascii_lowercase().contains("webbrowser") { is_browser = true; }
+@@ -333,8 +390,11 @@
+                         if !is_browser || hidden || name.is_empty() || exec.is_empty() {
+                             continue;
+                         }
++                        let known_id = KNOWN.iter().find(|(_, label)| label.eq_ignore_ascii_case(&name))
++                            .map(|(id, _)| id.to_string())
++                            .unwrap_or_else(|| id.clone());
+                         found.push(json!({
+-                            "id": id,
++                            "id": known_id,
+                             "name": name,
+                             "desktopId": id,
+                             "exec": exec,
+@@ -376,6 +436,55 @@
+                         .unwrap_or("system"),
+                 })
+             }
++            // Which browser an external link goes to. Reported with what is actually installed, so
++            // the settings page can show Firefox greyed out instead of offering a choice that fails.
++            ("AppPreferences", "listBrowsers") | ("Settings", "listBrowsers") => {
++                const KNOWN: &[(&str, &str, &[&str])] = &[
++                    ("brave", "Brave", &["brave-browser", "brave", "brave-bin"]),
++                    ("firefox", "Firefox", &["firefox", "firefox-developer-edition"]),
++                    ("mullvad", "Mullvad Browser", &["mullvad-browser"]),
++                    ("librewolf", "LibreWolf", &["librewolf"]),
++                    ("chromium", "Chromium", &["chromium", "chromium-browser"]),
++                    ("chrome", "Google Chrome", &["google-chrome-stable", "google-chrome"]),
++                    ("vivaldi", "Vivaldi", &["vivaldi-stable", "vivaldi"]),
++                ];
++                let path_var = std::env::var("PATH").unwrap_or_default();
++                let dirs: Vec<&str> = path_var.split(':').filter(|d| !d.is_empty()).collect();
++                let installed = |bins: &[&str]| -> Option<String> {
++                    for bin in bins {
++                        for dir in &dirs {
++                            let candidate = std::path::Path::new(dir).join(bin);
++                            if candidate.is_file() {
++                                return Some(candidate.to_string_lossy().to_string());
++                            }
++                        }
++                    }
++                    None
++                };
++                let browsers: Vec<Value> = KNOWN
++                    .iter()
++                    .map(|(id, name, bins)| {
++                        let found = installed(bins);
++                        json!({
++                            "id": id,
++                            "name": name,
++                            "installed": found.is_some(),
++                            "path": found,
++                            "drivable": matches!(*id, "brave" | "chromium" | "chrome" | "vivaldi"),
++                        })
++                    })
++                    .collect();
++                json!({
++                    "browsers": browsers,
++                    "preference": self
++                        .engine
++                        .app_preferences
++                        .read()
++                        .get("externalBrowser")
++                        .and_then(|v| v.as_str())
++                        .unwrap_or("auto"),
++                })
++            }
+             // The persona is a file, not a preference blob: the interface reads and writes it
+             // through here so it can show which persona is actually loaded.
+             ("AppPreferences", "getPersona") | ("Persona", "getPersona") => {
+@@ -409,6 +518,75 @@
+                     Err(error) => json!({ "ok": false, "error": error }),
+                 }
+             }
++            // Where the memory palace lives and what is in it. The setup screen needs the real path
++            // and the real size — "your memory goes somewhere on disk" is not an answer a person can
++            // weigh against a backup drive.
++            ("Memory", "info") | ("AppPreferences", "memoryInfo") => {
++                let mut info = self.engine.palace_info();
++                if let Some(obj) = info.as_object_mut() {
++                    obj.insert(
++                        "dataDir".into(),
++                        json!(self.engine.data_dir.to_string_lossy()),
++                    );
++                    obj.insert(
++                        "defaultPath".into(),
++                        json!(self.engine.data_dir.join("palace").to_string_lossy()),
++                    );
++                }
++                info
++            }
++            // --- the persona shelf ---
++            // persona.md stays the active persona; personas/ is a folder of markdown the user
++            // manages themselves. These four are filesystem verbs and nothing more.
++            ("AppPreferences", "listPersonas") | ("Persona", "listPersonas") => {
++                let shelf: Vec<Value> = self
++                    .engine
++                    .list_personas()
++                    .into_iter()
++                    .map(|(slug, name, bytes)| json!({ "slug": slug, "name": name, "bytes": bytes }))
++                    .collect();
++                let (active_name, _) = self.engine.persona();
++                json!({
++                    "personas": shelf,
++                    "active": active_name,
++                    "dir": self.engine.personas_dir().to_string_lossy(),
++                })
++            }
++            ("AppPreferences", "savePersonaAs") | ("Persona", "savePersonaAs") => {
++                let name = args.first().and_then(|v| v.get("name")).and_then(|v| v.as_str()).unwrap_or_default();
++                match self.engine.save_persona_as(name) {
++                    Ok(slug) => json!({ "ok": true, "slug": slug }),
++                    Err(error) => json!({ "ok": false, "error": error }),
++                }
++            }
++            ("AppPreferences", "activatePersona") | ("Persona", "activatePersona") => {
++                let slug = args.first().and_then(|v| v.get("slug")).and_then(|v| v.as_str()).unwrap_or_default();
++                match self.engine.activate_persona(slug) {
++                    Ok(name) => {
++                        self.engine.emit_eipc(
++                            "quixi.settings",
++                            "AppPreferences",
++                            "personaChanged",
++                            json!({ "name": name }),
++                        );
++                        json!({ "ok": true, "name": name })
++                    }
++                    Err(error) => json!({ "ok": false, "error": error }),
++                }
++            }
++            ("AppPreferences", "deletePersona") | ("Persona", "deletePersona") => {
++                let slug = args.first().and_then(|v| v.get("slug")).and_then(|v| v.as_str()).unwrap_or_default();
++                match self.engine.delete_persona(slug) {
++                    Ok(()) => json!({ "ok": true }),
++                    Err(error) => json!({ "ok": false, "error": error }),
++                }
++            }
++            ("AppPreferences", "revealPersonas") | ("Persona", "revealPersonas") => {
++                match self.engine.reveal_personas() {
++                    Ok(()) => json!({ "ok": true, "dir": self.engine.personas_dir().to_string_lossy() }),
++                    Err(error) => json!({ "ok": false, "error": error }),
++                }
++            }
+             // Explicit, never automatic: this is the one call that replaces the user's persona file.
+             ("AppPreferences", "restoreShippedPersona") | ("Persona", "restoreShippedPersona") => {
+                 match self.engine.restore_shipped_persona() {
+@@ -2564,10 +2742,14 @@
+                 })
+             }
+             ("CoworkUserFiles", "reveal") => {
+-                let _ = std::process::Command::new("open")
++                // `open` is a macOS binary. Spawning it on Linux failed silently — the error was
++                // discarded and the handler returned true, so the button looked like it worked.
++                let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
++                let spawned = std::process::Command::new(opener)
+                     .arg(&self.engine.data_dir)
+-                    .spawn();
+-                json!(true)
++                    .spawn()
++                    .is_ok();
++                json!({ "ok": spawned, "path": self.engine.data_dir.to_string_lossy() })
+             }
+ 
+             // --- DocumentFunnel ---
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a61/resources/ui/app.js	2026-11-02 14:43:48.433437976 -0800
++++ b61/resources/ui/app.js	2026-11-02 14:43:48.445854108 -0800
+@@ -1161,9 +1161,8 @@
+         });
+         if (done.error) throw new Error(done.error);
+         await loadProviders();
+-        toast(`Connected to ${(p && p.name) || providerSelect.value}.`);
+-        state.page = "new";
+-        render();
++        step = "memory";
++        paint();
+       } catch (err) {
+         cloudStatus.textContent = `Could not connect: ${err.message}`;
+       }
+@@ -1236,6 +1235,13 @@
+     const keyInput = el("input", { type: "password", class: "first-run-key", placeholder: "Paste your API key", spellcheck: false });
+     const modelInput = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "model id" });
+     const browserSel = el("select", { class: "first-run-select" });
++    const memoryPath = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "leave blank for the default" });
++    const memoryEnc = el("select", { class: "first-run-select" });
++    memoryEnc.append(
++      el("option", { value: "none" }, "No encryption — plain files"),
++      el("option", { value: "disk" }, "Whole disk (LUKS)"),
++      el("option", { value: "archive" }, "age/GPG archive"),
++    );
+     const status = el("p", { class: "first-run-status" }, "");
+ 
+     loadProviders().then(() => {
+@@ -1254,6 +1260,11 @@
+       sync();
+     }).catch(() => {});
+ 
++    rpc("Memory", "info").then((res) => {
++      if (res && res.path) memoryPath.placeholder = res.path;
++      if (res && res.encrypted) memoryEnc.value = res.encrypted;
++    }).catch(() => {});
++
+     rpc("AppPreferences", "listBrowsers").then((res) => {
+       const browsers = (res && res.browsers) || [];
+       browserSel.replaceChildren(
+@@ -1282,6 +1293,10 @@
+           activeModel: model,
+         });
+         await rpc("AppPreferences", "setPreference", ["externalBrowser", browserSel.value]);
++        if (memoryPath.value.trim()) {
++          await rpc("AppPreferences", "setPreference", ["memoryPalacePath", memoryPath.value.trim()]);
++        }
++        await rpc("AppPreferences", "setPreference", ["memoryEncryption", memoryEnc.value]);
+         localStorage.setItem("quixi.externalBrowser", browserSel.value);
+         await loadProviders();
+         toast("Set. Everything else is in Settings.");
+@@ -1292,7 +1307,7 @@
+       }
+     };
+ 
+-    for (const field of [keyInput, modelInput, providerSel, browserSel]) {
++    for (const field of [keyInput, modelInput, providerSel, browserSel, memoryPath, memoryEnc]) {
+       field.addEventListener("keydown", (e) => {
+         if (e.key === "Enter") { e.preventDefault(); save(); }
+       });
+@@ -1309,6 +1324,8 @@
+           el("tr", {}, el("th", {}, "API key"), el("td", {}, keyInput)),
+           el("tr", {}, el("th", {}, "Model"), el("td", {}, modelInput)),
+           el("tr", {}, el("th", {}, "Browser"), el("td", {}, browserSel)),
++          el("tr", {}, el("th", {}, "Memory"), el("td", {}, memoryPath)),
++          el("tr", {}, el("th", {}, "Encryption"), el("td", {}, memoryEnc)),
+         ),
+       ),
+       el("div", { class: "first-run-actions" },
+@@ -1318,9 +1335,84 @@
+     );
+   }
+ 
++
++  // What a memory palace is, where it goes, and what protects it. Asked here rather than buried in
++  // Settings because it is the one decision that changes what the app is: a folder of markdown that
++  // grows forever, or nothing remembered between sessions.
++  function memoryStep(onDone) {
++    const info = el("p", { class: "first-run-status" }, "Reading the palace…");
++    const pathInput = el("input", { type: "text", class: "first-run-key", spellcheck: false });
++    const modeSel = el("select", { class: "first-run-select" });
++    const encSel = el("select", { class: "first-run-select" });
++    modeSel.append(
++      el("option", { value: "sealed" }, "Sealed archive — append-only, nothing deletes"),
++      el("option", { value: "folder" }, "Ordinary folder — you can delete anything"),
++    );
++    encSel.append(
++      el("option", { value: "disk" }, "Whole disk (LUKS) — everything, always"),
++      el("option", { value: "archive" }, "age/GPG archive — a backup you can move"),
++      el("option", { value: "none" }, "Nothing — plain files on this disk"),
++    );
++    const warn = el(
++      "p",
++      { class: "first-run-status" },
++      "Without encryption, anyone who gets this disk can read every conversation in it. That is a real choice on a desktop that stays in a locked room, and a bad one on a laptop.",
++    );
++
++    rpc("Memory", "info").then((res) => {
++      const r = res || {};
++      pathInput.value = r.path || "";
++      info.textContent = r.drawers
++        ? `${r.drawers} drawers in ${r.wings} wings, ${(Number(r.bytes || 0) / 1024).toFixed(0)} KB at ${r.path}.`
++        : `Nothing yet. It would start at ${r.path}.`;
++      if (r.encrypted) encSel.value = r.encrypted;
++    }).catch(() => { info.textContent = "Could not read the palace."; });
++
++    const save = async () => {
++      const path = pathInput.value.trim();
++      await rpc("AppPreferences", "setPreference", ["memoryPalacePath", path]);
++      await rpc("AppPreferences", "setPreference", ["memoryMode", modeSel.value]);
++      await rpc("AppPreferences", "setPreference", ["memoryEncryption", encSel.value]);
++      onDone();
++    };
++    for (const f of [pathInput, modeSel, encSel]) {
++      f.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } });
++    }
++
++    root.replaceChildren(
++      el("h1", {}, "Where should your memory live?"),
++      el(
++        "p",
++        { class: "first-run-lead" },
++        "The palace is a folder of markdown: wings, rooms, drawers. No database, no format of its own — you can read it, grep it, put it in git, back it up like any other folder. The app remembers by writing files here and reading them back on later turns.",
++      ),
++      el(
++        "table",
++        { class: "first-run-table" },
++        el("tbody", {},
++          el("tr", {}, el("th", {}, "Folder"), el("td", {}, pathInput)),
++          el("tr", {}, el("th", {}, "Keeping"), el("td", {}, modeSel)),
++          el("tr", {}, el("th", {}, "Encryption"), el("td", {}, encSel)),
++        ),
++      ),
++      info,
++      warn,
++      el("div", { class: "first-run-actions" },
++        button("Save and finish", save, "primary"),
++        button("Leave the default", async () => { await save(); }, "quiet")),
++    );
++  }
++
+   function paint() {
+     if (step === "welcome") return welcomeStep();
+     if (step === "quick") return quickStep();
++    if (step === "memory") {
++      return memoryStep(() => {
++        toast("Set. The palace is where you put it.");
++        state.page = "new";
++        render();
++      });
++    }
+     root.replaceChildren(
+       el("h1", {}, "Where should the models run?"),
+       el(

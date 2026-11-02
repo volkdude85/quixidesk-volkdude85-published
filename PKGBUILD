@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=40
+pkgrel=41
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -142,6 +142,7 @@ source=(
   0058-first-contact.patch
   0059-newcomer-or-old-hand.patch
   0060-model-order-and-a-reachable-button.patch
+  0061-memory-palace-setup.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -206,6 +207,7 @@ sha256sums=(
   'f1e8845381fbce034781c6953e0f4b40d809fa3b382462b315e1b9a14212c1d3'
   '6b3a83a502f8a551a03e017427509a02db069d7b5da37d2178d09ccd95f03417'
   '5724ed0b2a6bf8edc4d0776347050aac8a4f44e3c37553a0e1b2cb06712ccb0d'
+  '9175793521febb93cf129483621debd74bb8f369bf3aefbe6ac65d9c6c8bfbb8'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -443,6 +445,7 @@ prepare() {
   patch -Np1 -i "${srcdir}/0058-first-contact.patch"
   patch -Np1 -i "${srcdir}/0059-newcomer-or-old-hand.patch"
   patch -Np1 -i "${srcdir}/0060-model-order-and-a-reachable-button.patch"
+  patch -Np1 -i "${srcdir}/0061-memory-palace-setup.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
