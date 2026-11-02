@@ -42,6 +42,22 @@ distrobox enter "$CONTAINER" -- sudo pacman -Syu --noconfirm --needed \
   gtk3 webkit2gtk-4.1 glib2 pango cairo gdk-pixbuf2 libsoup3 openssl \
   hicolor-icon-theme dbus libpulse bash ydotool wl-clipboard
 
+# The two editions install to different paths. Resolve it inside the container instead of assuming
+# one, so this script is the same script in both repositories.
+APPDIR="${QUIXI_APPDIR:-}"
+if [[ -z "$APPDIR" ]]; then
+  APPDIR=$(distrobox enter "$CONTAINER" -- bash -lc '
+    for d in /usr/lib/quixidesk /usr/lib/quixidesk-custom; do
+      [ -x "$d/QuixiDesk" ] && { echo "$d"; exit 0; }
+    done' 2>/dev/null | tail -1)
+fi
+if [[ -z "$APPDIR" ]]; then
+  echo "QuixiDesk is not installed in the container yet — pass a .pkg.tar.zst to install it." >&2
+  APPDIR="/usr/lib/quixidesk-custom"
+else
+  echo "app: $APPDIR"
+fi
+
 if [[ -n "$PKG" ]]; then
   [[ -f "$PKG" ]] || { echo "no such package: $PKG" >&2; exit 1; }
   say "installing $(basename "$PKG")"
@@ -60,7 +76,7 @@ cat > "$DESKTOP_DIR/quixidesk-distrobox.desktop" <<DESKTOP
 Type=Application
 Name=QuixiDesk (distrobox)
 Comment=QuixiDesk running inside the $CONTAINER container
-Exec=distrobox enter $CONTAINER -- /usr/lib/quixidesk-custom/QuixiDesk
+Exec=distrobox enter $CONTAINER -- $APPDIR/QuixiDesk
 Terminal=false
 Categories=Development;Utility;
 DESKTOP
@@ -69,7 +85,7 @@ echo "wrote $DESKTOP_DIR/quixidesk-distrobox.desktop"
 say "done"
 cat <<'NEXT'
 Start it from the application menu, or:
-    distrobox enter quixi -- /usr/lib/quixidesk-custom/QuixiDesk
+    distrobox enter quixi -- '<the app dir printed above>'/QuixiDesk
 
 Your data is in ~/.quixi on the Deck itself, shared with the container, so rebuilding
 the container does not lose chats, persona or settings.

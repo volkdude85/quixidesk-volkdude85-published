@@ -78,3 +78,35 @@ Worth being plain, because the name promises more than it delivers:
 
 If you want the real thing, the project is at <https://github.com/MemPalace/mempalace> and is worth
 looking at for the retrieval quality alone.
+
+---
+
+# What each edition actually ships
+
+Everything above is the shape of the two systems. This is the state of the three builds, which is the
+part a user needs before choosing one.
+
+| | **personal** | **volkdude85 (public)** | **typical Core (arch)** |
+|---|---|---|---|
+| **store** | palace, populated | palace, **empty on install** | upstream's single `MEMORY.md` |
+| **where** | `~/.mempalace/` | `~/.mempalace/` | `<data_dir>/memory/MEMORY.md` |
+| **retrieval** | ranked search over drawers | ranked search over drawers | injected into the prompt whole, no search |
+| **session journal** | yes, `~/.mempalace/journal` | yes, `~/.mempalace/journal` | yes, same default (`0053-journal`) |
+| **ships any content** | his own — this machine only | **none** | **none** |
+| **patch** | `0006-memory` + `0053-journal` | `0006-memory` + `0053-journal` | `0053-journal` only |
+
+Two things worth stating plainly, because they are the questions people actually ask:
+
+**The public edition ships the mechanism and no entries.** Installing it creates the wing/room/drawer
+layout and writes nothing into it — zero drawers are created on first run — so you start with an empty
+palace you fill yourself. The only personal file that travels with that edition is the default persona,
+`resources/persona/nora-public.md`, which is there to be replaced.
+
+**Core keeps upstream's memory untouched.** The single `MEMORY.md`, injected whole, no search — that is
+Eric's design and this edition does not change it. The one thing it adds is the session journal, which
+writes to `~/.mempalace/journal` and touches nothing else. If you want the palace on Core, it is not
+there; that difference is deliberate, not an oversight.
+
+**The trade, in one line each:** upstream's memory is simple and bounded by the context window; the
+palace is unbounded and searchable but has to be filled deliberately and grows forever. Neither is
+better in the abstract — one is right for a general product, the other for a machine you talk to daily.
