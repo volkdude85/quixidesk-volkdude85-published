@@ -14,6 +14,29 @@ What each release changes, and which patch does it. No narrative — the commits
   server in Tools & skills". It now renders only when a non-built-in server exists to browse, and
   its glyph is a link rather than a struck-through pencil that read as "disabled".
 
+## 3.6556.12-35
+
+**`0055-browser-choice`** — which browser an external link opens in is now a setting instead of a
+hardcoded word.
+
+- The catalogue is the desktop's own menu: every `.desktop` entry with `Categories=…WebBrowser…`,
+  read from `/usr/share/applications`, `/usr/local/share/applications`, `$XDG_DATA_HOME` and
+  `$XDG_DATA_DIRS`. A browser this source has never heard of appears because the desktop says it
+  exists, which is how FireDragon and Mullvad Browser get listed at all.
+- Each entry is labelled by how it can be driven: **CDP** for the Chromium family, **WebDriver** for
+  the Firefox family. "Not drivable" was the old answer for Firefox and it was wrong — different
+  wire, same capability.
+- Three kinds of answer in the picker, all legitimate: **system default** (what stock QuixiDesk does
+  — `xdg-open`), **ask each time** (a chooser per link, and dismissing it opens nothing), or a named
+  browser.
+- `open-external` accepts a `browser` in the request body, so the chooser's answer takes the same
+  path as the setting. A `.desktop` id launches through `gio` so the entry's own `Exec=` is used;
+  `system` short-circuits to `xdg-open`; a Chromium still gets `--app=` so the page arrives as its
+  own window rather than a tab in a session already open.
+
+The dropdown sits in the browser pane's header, where the panel used to hardcode a name in three
+places ("Open in Brave", "Pages open in Brave"), and in Settings → General → Browser.
+
 ## 3.6556.12-31
 
 Two things the tool was claiming about itself that were not true.

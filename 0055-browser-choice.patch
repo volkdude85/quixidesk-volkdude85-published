@@ -1,0 +1,521 @@
+diff -Naur a/crates/quixi-app/src/main.rs b/crates/quixi-app/src/main.rs
+--- a/crates/quixi-app/src/main.rs	2026-11-02 13:25:36.726727263 -0800
++++ b/crates/quixi-app/src/main.rs	2026-11-02 13:26:01.626154270 -0800
+@@ -727,6 +727,53 @@
+     }
+ }
+ 
++
++/// Which browser gets an external link is a setting, not an opinion baked into the build.
++///
++/// The privacy crowd runs Firefox; a Chromium-family browser is the only kind the agent tooling can
++/// drive over CDP; and plenty of people run one of each for different reasons. So the order is:
++/// `QUIXI_BROWSER` (developer override) -> the `externalBrowser` preference -> the stock behaviour.
++#[cfg(target_os = "linux")]
++fn external_browser_preference() -> String {
++    let path = quixi_proto::paths::data_dir().join("preferences.json");
++    let Ok(text) = std::fs::read_to_string(&path) else {
++        return "system".to_string();
++    };
++    let Ok(value) = serde_json::from_str::<Value>(&text) else {
++        return "system".to_string();
++    };
++    value
++        .get("externalBrowser")
++        .and_then(|v| v.as_str())
++        .map(|s| s.trim().to_ascii_lowercase())
++        .filter(|s| !s.is_empty())
++        .unwrap_or_else(|| "system".to_string())
++}
++
++/// The binaries to try for a chosen browser, and whether it is Chromium-family. The distinction
++/// matters: only a Chromium takes `--app=<url>`, which is what makes the link open as its own window
++/// instead of a tab inside a session the user already has open.
++#[cfg(target_os = "linux")]
++fn browser_candidates(preference: &str) -> (Vec<&'static str>, bool) {
++    match preference {
++        "brave" => (vec!["brave-browser", "brave", "brave-bin"], true),
++        "chromium" => (vec!["chromium", "chromium-browser"], true),
++        "chrome" => (vec!["google-chrome-stable", "google-chrome"], true),
++        "vivaldi" => (vec!["vivaldi-stable", "vivaldi"], true),
++        "firefox" => (vec!["firefox", "firefox-developer-edition"], false),
++        "librewolf" => (vec!["librewolf"], false),
++        "mullvad" => (vec!["mullvad-browser"], false),
++        _ => (
++            vec![
++                "brave-browser", "brave", "brave-bin", "chromium", "google-chrome-stable",
++                "google-chrome", "firefox", "firefox-developer-edition", "librewolf",
++                "mullvad-browser",
++            ],
++            true,
++        ),
++    }
++}
++
+ fn main() -> anyhow::Result<()> {
+     if std::env::args().nth(1).as_deref() == Some("--mcp-transport-worker") {
+         return quixi_mcp::transport_worker_main();
+@@ -917,20 +964,47 @@
+                         // CDP-capable browsers are the ones the agent tooling can actually drive, and
+                         // handing a link to an unknown default browser is how you end up debugging a
+                         // driver mismatch later. QUIXI_BROWSER overrides all of it.
+-                        let mut chosen: Option<std::process::Command> = None;
+-                        let mut chromium_family = false;
+-                        let mut candidates: Vec<String> = Vec::new();
+-                        if let Ok(explicit) = std::env::var("QUIXI_BROWSER") {
+-                            if !explicit.trim().is_empty() {
+-                                candidates.push(explicit);
+-                            }
++                        // The caller may name the browser: the interface asks "which one?" when the
++                        // preference says to ask, and passes the answer here. Otherwise the saved
++                        // preference decides, and `system` means whatever the desktop itself would do
++                        // — the same thing stock QuixiDesk does, which is the honest default.
++                        let override_browser = serde_json::from_slice::<Value>(request.body())
++                            .ok()
++                            .and_then(|b| b.get("browser").and_then(|v| v.as_str()).map(str::to_string))
++                            .map(|s| s.trim().to_string())
++                            .filter(|s| !s.is_empty() && s != "ask");
++                        let preference = override_browser
++                            .clone()
++                            .or_else(|| std::env::var("QUIXI_BROWSER").ok().filter(|s| !s.trim().is_empty()))
++                            .unwrap_or_else(external_browser_preference);
++
++                        // A .desktop id is launched through gio so the entry's own Exec line is used;
++                        // a plain binary name is run directly.
++                        if preference.ends_with(".desktop") {
++                            let launched = std::process::Command::new("gio")
++                                .arg("launch")
++                                .arg(&preference)
++                                .arg(url.as_str())
++                                .spawn();
++                            return match launched {
++                                Ok(_) => build_http_response(200, "application/json", b"{\"ok\":true,\"app_window\":false,\"via\":\"gio\"}".to_vec()),
++                                Err(_) => build_http_response(500, "application/json", b"{\"error\":\"Could not launch that browser\"}".to_vec()),
++                            };
+                         }
+-                        for name in ["brave-browser", "brave", "brave-bin", "chromium", "google-chrome-stable", "google-chrome"] {
+-                            candidates.push(name.to_string());
++                        if preference == "system" {
++                            let launched = std::process::Command::new("xdg-open").arg(url.as_str()).spawn();
++                            return match launched {
++                                Ok(_) => build_http_response(200, "application/json", b"{\"ok\":true,\"app_window\":false,\"via\":\"xdg-open\"}".to_vec()),
++                                Err(_) => build_http_response(500, "application/json", b"{\"error\":\"Could not open the system browser\"}".to_vec()),
++                            };
+                         }
++
++                        let (candidates, family_is_chromium) = browser_candidates(&preference);
++                        let mut chosen: Option<std::process::Command> = None;
++                        let mut chromium_family = false;
+                         for candidate in candidates {
+-                            if which(&candidate).is_some() {
+-                                chromium_family = true;
++                            if which(candidate).is_some() {
++                                chromium_family = family_is_chromium;
+                                 chosen = Some(std::process::Command::new(candidate));
+                                 break;
+                             }
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a/crates/quixi-ipc/src/lib.rs	2026-11-02 13:25:36.725435402 -0800
++++ b/crates/quixi-ipc/src/lib.rs	2026-11-02 13:26:01.625589474 -0800
+@@ -260,6 +260,122 @@
+                 }
+                 Value::Null
+             }
++            // Which browser an external link goes to: read from the desktop's own menu rather than a
++            // list this app invented, because the browser a person wants is usually the one already
++            // installed — and that includes ones this source has never heard of.
++            ("AppPreferences", "listBrowsers") | ("Settings", "listBrowsers") => {
++                let driver_of = |exec: &str| -> &'static str {
++                    let e = exec.to_ascii_lowercase();
++                    if ["brave", "chromium", "chrome", "vivaldi", "edge", "opera"]
++                        .iter()
++                        .any(|n| e.contains(n))
++                    {
++                        "cdp"
++                    } else if ["firefox", "firedragon", "librewolf", "mullvad", "waterfox", "tor-browser"]
++                        .iter()
++                        .any(|n| e.contains(n))
++                    {
++                        "webdriver"
++                    } else {
++                        ""
++                    }
++                };
++
++                let mut dirs: Vec<std::path::PathBuf> = vec![
++                    std::path::PathBuf::from("/usr/share/applications"),
++                    std::path::PathBuf::from("/usr/local/share/applications"),
++                ];
++                if let Ok(data_home) = std::env::var("XDG_DATA_HOME") {
++                    dirs.push(std::path::Path::new(&data_home).join("applications"));
++                } else if let Ok(home) = std::env::var("HOME") {
++                    dirs.push(std::path::Path::new(&home).join(".local/share/applications"));
++                }
++                if let Ok(data_dirs) = std::env::var("XDG_DATA_DIRS") {
++                    for d in data_dirs.split(':').filter(|d| !d.is_empty()) {
++                        dirs.push(std::path::Path::new(d).join("applications"));
++                    }
++                }
++
++                let mut found: Vec<Value> = Vec::new();
++                let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
++                for dir in &dirs {
++                    let Ok(entries) = std::fs::read_dir(dir) else { continue };
++                    for entry in entries.flatten() {
++                        let path = entry.path();
++                        if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
++                            continue;
++                        }
++                        let Some(id) = path.file_stem().and_then(|s| s.to_str()).map(str::to_string) else { continue };
++                        if !seen.insert(id.clone()) {
++                            continue;
++                        }
++                        let Ok(text) = std::fs::read_to_string(&path) else { continue };
++                        let mut name = String::new();
++                        let mut exec = String::new();
++                        let mut is_browser = false;
++                        let mut hidden = false;
++                        for line in text.lines() {
++                            let line = line.trim();
++                            if let Some(v) = line.strip_prefix("Name=") {
++                                if name.is_empty() { name = v.trim().to_string(); }
++                            } else if let Some(v) = line.strip_prefix("TryExec=") {
++                                if exec.is_empty() { exec = v.trim().to_string(); }
++                            } else if let Some(v) = line.strip_prefix("Exec=") {
++                                if exec.is_empty() {
++                                    exec = v.trim().trim_matches('"').split_whitespace().next().unwrap_or("").to_string();
++                                }
++                            } else if let Some(v) = line.strip_prefix("Categories=") {
++                                if v.to_ascii_lowercase().contains("webbrowser") { is_browser = true; }
++                            } else if line == "NoDisplay=true" {
++                                hidden = true;
++                            }
++                        }
++                        if !is_browser || hidden || name.is_empty() || exec.is_empty() {
++                            continue;
++                        }
++                        found.push(json!({
++                            "id": id,
++                            "name": name,
++                            "desktopId": id,
++                            "exec": exec,
++                            "installed": true,
++                            "drivable": !driver_of(&exec).is_empty(),
++                            "driver": driver_of(&exec),
++                        }));
++                    }
++                }
++                found.sort_by(|a, b| {
++                    a["name"].as_str().unwrap_or("").to_ascii_lowercase()
++                        .cmp(&b["name"].as_str().unwrap_or("").to_ascii_lowercase())
++                });
++                found.dedup_by(|a, b| a["name"] == b["name"] || a["exec"] == b["exec"]);
++
++                let stock = std::process::Command::new("xdg-settings")
++                    .args(["get", "default-web-browser"])
++                    .output()
++                    .ok()
++                    .filter(|o| o.status.success())
++                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
++                    .unwrap_or_default();
++                let stock_name = found
++                    .iter()
++                    .find(|b| b["desktopId"].as_str() == Some(stock.as_str()))
++                    .and_then(|b| b["name"].as_str())
++                    .map(str::to_string)
++                    .unwrap_or_else(|| stock.clone());
++
++                json!({
++                    "browsers": found,
++                    "stock": { "desktopId": stock, "name": stock_name },
++                    "preference": self
++                        .engine
++                        .app_preferences
++                        .read()
++                        .get("externalBrowser")
++                        .and_then(|v| v.as_str())
++                        .unwrap_or("system"),
++                })
++            }
+             // The persona is a file, not a preference blob: the interface reads and writes it
+             // through here so it can show which persona is actually loaded.
+             ("AppPreferences", "getPersona") | ("Persona", "getPersona") => {
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 13:25:36.726865907 -0800
++++ b/resources/ui/app.css	2026-11-02 13:26:20.369866542 -0800
+@@ -2472,3 +2472,23 @@
+   border: 1px dashed var(--line); background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%); }
+ .browser-handoff p { margin: 0; }
+ .browser-handoff .toolbar { margin-top: 8px; gap: 8px; }
++
++/* Browser dropdown in the panel header: the control that used to be a hardcoded word. */
++.browser-head .browser-pick {
++  margin-left: auto;
++  margin-right: 8px;
++  height: 24px;
++  max-width: 210px;
++  padding: 0 6px;
++  border-radius: 6px;
++  border: 1px solid var(--line);
++  background: var(--raised);
++  color: var(--text);
++  font: inherit;
++  font-size: 11.5px;
++}
++
++/* Browser chooser: one button per browser, full width, so the list reads like a menu. */
++.browser-chooser { display: flex; flex-direction: column; gap: 12px; min-width: 320px; }
++.browser-chooser-list { display: flex; flex-direction: column; gap: 6px; }
++.browser-chooser-list button { justify-content: flex-start; width: 100%; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 13:25:36.735975480 -0800
++++ b/resources/ui/app.js	2026-11-02 13:26:20.369866542 -0800
+@@ -3016,6 +3016,56 @@
+             el("td", {}, el("code", {}, f.path)),
+             el("td", {}, f.exists ? `${f.bytes} B` : el("span", { class: "muted" }, "not created yet"))))));
+   }
++
++  // Which browser an external link opens in. Three kinds of answer, all legitimate: whatever the
++  // desktop says (the stock behaviour, and the default), ask me each time, or a specific browser —
++  // and the specific list comes from the desktop's own menu rather than a set this app invented.
++  function browserPreferenceSection() {
++    const wrap = el("section", { class: "settings-section" });
++    const status = el("p", { class: "hint" }, "Reading the browsers this desktop knows about…");
++    const select = el("select", { class: "first-run-select", "aria-label": "Browser for external links" });
++    wrap.append(el("h2", {}, "Browser"), select, status);
++
++    rpc("AppPreferences", "listBrowsers")
++      .then((res) => {
++        const browsers = (res && res.browsers) || [];
++        const stock = (res && res.stock) || {};
++        const current = (res && res.preference) || "system";
++        const options = [
++          { id: "system", name: `System default${stock.name ? ` — ${stock.name}` : ""}` },
++          { id: "ask", name: "Ask me each time" },
++        ].concat(browsers.map((b) => ({ id: b.id, name: b.name })));
++        const savedDesktop = browsers.find((b) => b.desktopId === current || b.id === current);
++        select.replaceChildren(
++          ...options.map((o) => {
++            const opt = el("option", { value: o.id }, o.name);
++            if (o.id === current || (savedDesktop && o.id === savedDesktop.id)) opt.selected = true;
++            return opt;
++          }),
++        );
++        select.addEventListener("change", async () => {
++          const value = select.value;
++          localStorage.setItem("quixi.externalBrowser", value);
++          const target = browsers.find((b) => b.id === value);
++          await rpc("AppPreferences", "setPreference", ["externalBrowser", target ? (target.desktopId || value) : value]);
++          status.textContent =
++            value === "system"
++              ? `Links go to ${stock.name || "the desktop default"}.`
++              : value === "ask"
++                ? "Links will ask which browser, every time."
++                : `Links open in ${target ? target.name : value}.`;
++        });
++        status.textContent = [
++          browsers.length ? `${browsers.length} browsers on this desktop: ${browsers.map((b) => b.name).join(", ")}.` : "No browsers were found in the desktop menu.",
++          stock.name ? `System default is ${stock.name}.` : "",
++        ].filter(Boolean).join(" ");
++      })
++      .catch(() => {
++        status.textContent = "Could not read the installed browsers.";
++      });
++    return wrap;
++  }
++
+   function settingsPage(host) {
+     const tabs = [
+       ["general", "General"],
+@@ -3047,6 +3097,7 @@
+       ),
+     );
+     if (state.settingsTab === "general") {
++      content.append(browserPreferenceSection());
+       content.append(
+         el("h2", {}, "Appearance"),
+         el(
+@@ -3985,11 +4036,56 @@
+     }
+     draw();
+   }
+-  async function openExternal(url) {
++  async function openExternal(url, forceBrowser = null) {
+     const parsed = new URL(url);
+     if (!["https:", "http:"].includes(parsed.protocol))
+       throw new Error("Only HTTP and HTTPS links can be opened.");
+-    await api("/__eipc__/open-external", { url: parsed.href });
++    const pref = localStorage.getItem("quixi.externalBrowser") || "system";
++    if (!forceBrowser && pref === "ask") {
++      const choice = await askWhichBrowser();
++      if (!choice) return;                       // dismissed: no link opened, nothing silently guessed
++      return openExternal(url, choice);
++    }
++    await api("/__eipc__/open-external", {
++      url: parsed.href,
++      ...(forceBrowser ? { browser: forceBrowser } : {}),
++    });
++  }
++
++  // "Ask each time" is only a real option if there is something to ask with. The list is whatever
++  // the desktop menu declares, so a browser this app has never heard of still appears here.
++  async function askWhichBrowser() {
++    let info = null;
++    try {
++      info = await rpc("AppPreferences", "listBrowsers");
++    } catch {
++      return "system";
++    }
++    const browsers = (info && info.browsers) || [];
++    const stock = (info && info.stock) || {};
++    return new Promise((resolve) => {
++      let decided = false;
++      const pick = (value) => {
++        decided = true;
++        d.close();
++        resolve(value);
++      };
++      const d = dialog(
++        "Open in which browser?",
++        el(
++          "div",
++          { class: "browser-chooser" },
++          el("p", { class: "muted" }, "Remember the choice in Settings → General → Browser, or pick one now just for this link."),
++          el(
++            "div",
++            { class: "browser-chooser-list" },
++            button(`System default${stock.name ? ` (${stock.name})` : ""}`, () => pick("system"), ""),
++            ...browsers.map((b) => button(b.name, () => pick(b.desktopId || b.id), "")),
++          ),
++        ),
++      );
++      d.addEventListener("close", () => { if (!decided) resolve(null); });
++    });
+   }
+   async function toggleBrowser() {
+     state.browser = !state.browser;
+@@ -4006,8 +4102,94 @@
+     renderBrowser(host);
+   }
+   let browserRenderVersion = 0;
++
++  // Browsers this desktop declares, cached for the session. The panel header needs them synchronously
++  // — a dropdown that appears a second after the pane opens is a worse answer than a stale list.
++  let browserCatalogue = null;
++  function loadBrowserCatalogue() {
++    if (!browserCatalogue) {
++      browserCatalogue = rpc("AppPreferences", "listBrowsers")
++        .then((res) => ({
++          list: (res && res.browsers) || [],
++          stock: (res && res.stock) || {},
++          preference: (res && res.preference) || "system",
++        }))
++        .catch(() => ({ list: [], stock: {}, preference: "system" }));
++    }
++    return browserCatalogue;
++  }
++  // The order is deliberate: the families this build has tooling for first. A browser that cannot be
++  // driven is still a legitimate way to read a page.
++  function orderBrowsers(list) {
++    const rank = (b) => {
++      const n = `${b.name || ""} ${b.exec || ""}`.toLowerCase();
++      if (n.includes("brave")) return 0;
++      if (n.includes("firefox") || n.includes("firedragon") || n.includes("librewolf") || n.includes("mullvad")) return 1;
++      return 2;
++    };
++    return [...list].sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
++  }
++  function currentExternalBrowser() {
++    return localStorage.getItem("quixi.externalBrowser") || "system";
++  }
++  function currentExternalBrowserName(cat) {
++    const pref = currentExternalBrowser();
++    if (pref === "ask") return "your browser (asked each time)";
++    if (pref === "system") return (cat && cat.stock && cat.stock.name) || "the system default";
++    const hit = ((cat && cat.list) || []).find((b) => b.id === pref || b.desktopId === pref);
++    return hit ? hit.name : (cat && cat.stock && cat.stock.name) || "your browser";
++  }
++
++  // The dropdown sits where the panel has always said which browser gets the page. Before it, the
++  // name was hardcoded in three places ("Open in Brave", "Pages open in Brave") and changing it meant
++  // a rebuild; now it is one control that lists what this desktop actually has.
++  function browserPick() {
++    const select = el("select", { class: "browser-pick", "aria-label": "Browser for opened pages" });
++    const paint = (cat) => {
++      state.browserCat = cat;
++      const list = orderBrowsers(cat.list || []);
++      const pref = currentExternalBrowser();
++      const options = [
++        { id: "system", name: `System default${cat.stock && cat.stock.name ? ` — ${cat.stock.name}` : ""}` },
++        { id: "ask", name: "Ask each time" },
++        ...list.map((b) => ({ id: b.id, name: b.name })),
++      ];
++      select.replaceChildren(
++        ...options.map((o) => {
++          const opt = el("option", { value: o.id }, o.name);
++          if (o.id === pref) opt.selected = true;
++          return opt;
++        }),
++      );
++      for (const opt of select.options) {
++        const b = list.find((x) => x.id === opt.value);
++        if (b && opt.textContent === b.name) {
++          const how = b.driver === "cdp" ? "CDP" : b.driver === "webdriver" ? "WebDriver" : "";
++          opt.textContent = how ? `${b.name} · ${how}` : b.name;
++        }
++      }
++      select.title = list.length
++        ? `${list.length} browsers on this desktop`
++        : "No browsers were found in the desktop menu";
++    };
++    paint({ list: [], stock: {} });
++    loadBrowserCatalogue().then(paint);
++    select.addEventListener("change", async () => {
++      const value = select.value;
++      localStorage.setItem("quixi.externalBrowser", value);
++      const cat = await loadBrowserCatalogue();
++      const target = (cat.list || []).find((b) => b.id === value);
++      await rpc("AppPreferences", "setPreference", ["externalBrowser", target ? (target.desktopId || value) : value]);
++      toast(value === "ask" ? "Pages will ask which browser each time." : `Pages open in ${currentExternalBrowserName(cat)}.`);
++      renderPage();
++    });
++    return select;
++  }
++
+   async function renderBrowser(host) {
+     const version = ++browserRenderVersion;
++    // The header names the chosen browser, so the catalogue is fetched before the copy is built.
++    loadBrowserCatalogue().then((cat) => { state.browserCat = cat; });
+     const data = state.browserState || (await api("/api/quixi/browser"));
+     state.browserState = data;
+     const selected = (data.tabs || []).find(
+@@ -4036,17 +4218,17 @@
+     const frame = el(
+       "div",
+       { class: "browser-handoff", id: "browser-frame" },
+-      el("p", {}, "Pages open in Brave, in their own window."),
+-      el("p", { class: "muted" }, "Brave is Chromium; this pane is the system webview. Sending the page out is the only way to give you the real one."),
++      el("p", {}, `Pages open in ${currentExternalBrowserName(state.browserCat)}, in their own window.`),
++      el("p", { class: "muted" }, "This pane is the system webview, not a browser. Sending the page out is the only way to give you the real one."),
+       el(
+         "div",
+         { class: "toolbar" },
+-        button("Open in Brave", async () => {
++        button(`Open in ${currentExternalBrowserName(state.browserCat)}`, async () => {
+           const url = (address.value || selected?.url || "").trim();
+           if (!url) return toast("Enter an address first", true);
+           try {
+             await openExternal(url);
+-            toast("Opened in Brave");
++            toast(`Opened in ${currentExternalBrowserName(state.browserCat)}`);
+           } catch (error) {
+             toast(String(error && error.message ? error.message : error), true);
+           }
+@@ -4067,6 +4249,7 @@
+         { class: "browser-head" },
+         icon("browser", 16),
+         el("strong", {}, "QuixiDesk Browser"),
++        browserPick(),
+         ib("Close browser", "close", () => {
+           state.browser = false;
+           panel.remove();

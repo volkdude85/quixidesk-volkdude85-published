@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=34
+pkgrel=35
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -136,6 +136,7 @@ source=(
   "0051-with-skill.patch"
   "0052-tool-descriptions-know-the-platform.patch"
   "0056-home-headline.patch"
+  0055-browser-choice.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -194,6 +195,7 @@ sha256sums=(
   '9cb8e388cd141788e6f8e6df3c974ed10d2a776ef6ed9c5b04524b4dd9a1270b'
   'd8c81e161561e55950779153e7b2d9f0752b7da0e0c7f56caa663649647d1a87'
             'b7dfe7875519de48e4ab55f72008d6c53ed35cf8cdeb385414ea0e802de37d97'
+  '7c1b4f93e3e1a93892db2abfc78f5abcdf88b8359b320b8d7a2ea7b02e04f5f6'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -425,6 +427,7 @@ prepare() {
   # The line under the greeting, said the way it actually gets said.
   patch -Np1 -i "${srcdir}/0056-home-headline.patch"
 
+  patch -Np1 -i "${srcdir}/0055-browser-choice.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
