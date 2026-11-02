@@ -1,0 +1,76 @@
+Why the palace, said where somebody is actually deciding
+=======================================================
+
+The memory step asked where the folder goes and never said what it was for. A person answering that
+question deserves the argument, not just the form:
+
+  * **Where it came from** — the shape follows MemPalace (wings, rooms, drawers, ranked search over
+    plain files). Not invented here; implemented rather than re-invented.
+  * **Why not the Core edition's way** — Core keeps one MEMORY.md and pastes all of it into the prompt
+    every turn. Fine for a few pages, then everything you know competes with everything else for the
+    same budget, and something must be deleted before something else can be added. The file stops
+    being a record and becomes a summary of a record. The palace is a ranked search instead of a
+    paste: context holds what this conversation needed, the rest stays addressable on disk.
+  * **What it does not do** — no automatic capture, no summarisation, no embeddings in this
+    implementation, no sync. Stated in the screen, because each of those is something a person would
+    otherwise assume.
+  * **And that Core keeps upstream's behavior untouched**, which is a deliberate difference between
+    the editions rather than an oversight in either.
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a62/resources/ui/app.css	2026-11-02 14:45:56.382014973 -0800
++++ b62/resources/ui/app.css	2026-11-02 14:45:49.024301943 -0800
+@@ -2659,3 +2659,11 @@
+   .first-run { padding-inline: 14px; }
+   .first-run-grid { grid-template-columns: 1fr; }
+ }
++
++/* The explanation block in setup: readable prose, not a manual. */
++.first-run-explain { max-width: 62ch; margin: 4px 0 18px; }
++.first-run-explain h2 {
++  font-size: 12px; letter-spacing: .09em; text-transform: uppercase;
++  color: var(--muted); margin: 16px 0 6px; font-weight: 600;
++}
++.first-run-explain p { font-size: 13px; line-height: 1.55; margin: 0 0 8px; color: var(--text); }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a62/resources/ui/app.js	2026-11-02 14:45:56.384206064 -0800
++++ b62/resources/ui/app.js	2026-11-02 14:45:49.023609863 -0800
+@@ -1387,6 +1387,38 @@
+         "The palace is a folder of markdown: wings, rooms, drawers. No database, no format of its own — you can read it, grep it, put it in git, back it up like any other folder. The app remembers by writing files here and reading them back on later turns.",
+       ),
+       el(
++        "div",
++        { class: "first-run-explain" },
++        el("h2", {}, "Where it came from"),
++        el(
++          "p",
++          {},
++          "The shape is not invented here. It follows MemPalace — wings, rooms, drawers, ranked search over plain files — because the idea was already right and already public. This edition implements it rather than inventing a second one.",
++        ),
++        el("h2", {}, "Why this is not how Quixi Core does it"),
++        el(
++          "p",
++          {},
++          "Core keeps one file, MEMORY.md, and pastes the whole thing into the prompt on every turn. That works beautifully for a few pages and then stops: once it is full, everything you know competes with everything else for the same budget, and something has to be deleted before something else can be added. The file stops being a record and becomes a summary of a record.",
++        ),
++        el(
++          "p",
++          {},
++          "The palace is a ranked search instead of a paste. Context holds only what this conversation turned out to need; the rest stays on disk, addressable, unbounded, and yours to edit with any editor you already own.",
++        ),
++        el("h2", {}, "What it does not do, so you are not surprised"),
++        el(
++          "p",
++          {},
++          "No automatic capture — nothing writes itself; a fact is stored because something stored it. No summarisation — drawers are verbatim. No embedding index in this implementation; ranking is over the text. And no sync: it is a local folder, so putting it on two machines is yours to solve, not something this pretends to do.",
++        ),
++        el(
++          "p",
++          { class: "first-run-foot" },
++          "In Core, none of this exists and MEMORY.md stays exactly as upstream wrote it. That is a deliberate difference between the two editions, not an oversight in either.",
++        ),
++      ),
++      el(
+         "table",
+         { class: "first-run-table" },
+         el("tbody", {},
