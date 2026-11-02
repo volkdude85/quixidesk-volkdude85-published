@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=37
+pkgrel=38
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -139,6 +139,7 @@ source=(
   0055-browser-choice.patch
   0056-engine-tests-carry-their-own-weight.patch
   0057-ollama-cloud-and-first-run.patch
+  0058-first-contact.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -200,6 +201,7 @@ sha256sums=(
   'eaa1811e9b5cc3a2dad7b2e2a31f66bef47f79b73cda4ce4565189ca1820e58d'
   '506ca2739a04df26515b96f5e9b4a90d279f435ca83f316c984654726fd6f803'
   '92d88fa21948a6def843457b3e623a698feab43a8718ab76e49f702fcef204fb'
+  '16f527970591db82d1181ab5f048f397beb804085d6eceefe51bdaa349ab300b'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -434,6 +436,7 @@ prepare() {
   patch -Np1 -i "${srcdir}/0055-browser-choice.patch"
   patch -Np1 -i "${srcdir}/0056-engine-tests-carry-their-own-weight.patch"
   patch -Np1 -i "${srcdir}/0057-ollama-cloud-and-first-run.patch"
+  patch -Np1 -i "${srcdir}/0058-first-contact.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
