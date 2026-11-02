@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=52
+pkgrel=53
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -154,6 +154,7 @@ source=(
   0070-doors.patch
   0071-aide.patch
   0072-desktop-pickers-and-documents.patch
+  0073-cancel-is-not-a-choice.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -230,6 +231,7 @@ sha256sums=(
   '1d2e02a9dbd6e1edf61b0ac07f54967aa8018d021cd8830943d55e4433dd569d'
   '2a3b213bce9e1d30bbbbb6da84b175a5cb79c7f448fadcb76cf96b137345142c'
   'b013a82d1fc14e9e25577d9b80d2596baf112e5563cdb48105a03449d06c8c32'
+  'e01534de901f57622d7e9463789315a5d3accfaab968a334ff04d388526ec2c6'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -479,6 +481,7 @@ prepare() {
   patch -Np1 -i "${srcdir}/0070-doors.patch"
   patch -Np1 -i "${srcdir}/0071-aide.patch"
   patch -Np1 -i "${srcdir}/0072-desktop-pickers-and-documents.patch"
+  patch -Np1 -i "${srcdir}/0073-cancel-is-not-a-choice.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

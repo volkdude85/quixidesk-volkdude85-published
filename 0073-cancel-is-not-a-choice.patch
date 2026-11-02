@@ -1,0 +1,31 @@
+Cancel is not a choice
+====================
+
+`pick_folder` on Linux returned a path even when nothing was chosen: if the platform picker came back
+empty — no dialog available, or the person pressed Cancel — it fell through to a substituted default and
+handed that back. The caller could not tell the difference between "they picked this" and "they
+declined", so cancelling quietly set the model folder to the workspace.
+
+It returns `None` now, which is what an empty answer means. The macOS path is unchanged.
+
+diff -Naur a/crates/quixi-platform/src/lib.rs b/crates/quixi-platform/src/lib.rs
+--- a73/crates/quixi-platform/src/lib.rs	2026-11-02 15:47:20.632761052 -0800
++++ b73/crates/quixi-platform/src/lib.rs	2026-11-02 15:47:20.694079322 -0800
+@@ -919,10 +919,14 @@
+         }
+ 
+         #[cfg(target_os = "linux")]
+-        if let Some(picked) = crate::linux::pick_folder(prompt) {
+-            return Some(picked);
++        {
++            // None means "nothing was chosen" — either the desktop had no dialog to offer or the
++            // person cancelled. Both used to fall through to a substituted default, so pressing
++            // Cancel quietly picked the workspace folder as though it had been asked for. A cancel
++            // that returns a path is a lie the caller cannot detect.
++            return crate::linux::pick_folder(prompt);
+         }
+-        #[cfg(not(target_os = "macos"))]
++        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+         {
+             let _ = prompt;
+             Some(quixi_proto::paths::default_workspace_str().to_string())
