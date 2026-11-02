@@ -60,6 +60,7 @@ reverse-engineering skill.
 | Artix / OpenRC / dinit (non-systemd) | ❌ | ✅ patch + `ydotoold.openrc` | same |
 | Hyprland / Omarchy | ❌ | ✅ cursor position from the compositor socket, two detection bugs fixed | same |
 | browser-driving skill | ❌ | ✅ Brave/Chromium over CDP, Firefox over WebDriver BiDi, curl last | same |
+| which browser opens a link | fixed in the source | ✅ a setting: system default, ask each time, or any browser the desktop lists — labelled CDP or WebDriver | same |
 | test portability | tests assert the developer's machine | ✅ fixed — session type, screenshot size heuristic, "ten applications installed", "spectacle or grim" | same |
 | Arch package + CI | — | ✅ PKGBUILD, pristine-tarball CI, chain gate, tag → release | same |
 
