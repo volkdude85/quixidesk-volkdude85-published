@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=36
+pkgrel=37
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -138,6 +138,7 @@ source=(
   "0056-home-headline.patch"
   0055-browser-choice.patch
   0056-engine-tests-carry-their-own-weight.patch
+  0057-ollama-cloud-and-first-run.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -198,6 +199,7 @@ sha256sums=(
             'b7dfe7875519de48e4ab55f72008d6c53ed35cf8cdeb385414ea0e802de37d97'
   'eaa1811e9b5cc3a2dad7b2e2a31f66bef47f79b73cda4ce4565189ca1820e58d'
   '506ca2739a04df26515b96f5e9b4a90d279f435ca83f316c984654726fd6f803'
+  '92d88fa21948a6def843457b3e623a698feab43a8718ab76e49f702fcef204fb'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -431,11 +433,16 @@ prepare() {
 
   patch -Np1 -i "${srcdir}/0055-browser-choice.patch"
   patch -Np1 -i "${srcdir}/0056-engine-tests-carry-their-own-weight.patch"
+  patch -Np1 -i "${srcdir}/0057-ollama-cloud-and-first-run.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
 build() {
   cd "${srcdir}/QuixiDesk-${pkgver}"
+  # Which edition this is, compiled in and shown in the title bar. The published build is the one
+  # that must never be mistaken for a machine's local copy: it ships with no persona, no memory
+  # entries and no keys, and its name says which one it is.
+  export QUIXI_EDITION_LABEL="(VOLKDUDE85 GITHUB) "
   export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
   export CARGO_NET_OFFLINE=true
   # Keep the toolchain deterministic: gcc/bfd as the driver, and the same

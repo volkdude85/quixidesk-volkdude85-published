@@ -1,0 +1,1365 @@
+diff -Naur a/crates/quixi-app/src/main.rs b/crates/quixi-app/src/main.rs
+--- a/crates/quixi-app/src/main.rs	2026-11-02 13:58:30.905151140 -0800
++++ b/crates/quixi-app/src/main.rs	2026-11-02 14:00:28.572819123 -0800
+@@ -718,7 +718,17 @@
+     // 5. SPA fallback -> ui/index.html for all client routes (/new, /chat/*, /cowork*, /code*, /settings*, etc.)
+     let index_html = ui_dir.join("index.html");
+     match fs::read(&index_html) {
+-        Ok(bytes) => build_http_response(200, "text/html; charset=utf-8", bytes),
++        Ok(bytes) => {
++            // Tell the shell which build it is, so the brand line can carry the same label
++            // as the title bar. Injected at serve time because the HTML on disk is identical
++            // in every build — the label is the one thing that is not in the file.
++            let bootstrap = format!(
++                "<script>window.__QUIXI_EDITION__={label:?};</script>\n</head>",
++                label = edition_label(resources_dir),
++            );
++            let html = String::from_utf8_lossy(&bytes).replacen("</head>", &bootstrap, 1);
++            build_http_response(200, "text/html; charset=utf-8", html.into_bytes())
++        }
+         Err(err) => build_http_response(
+             500,
+             "text/plain; charset=utf-8",
+@@ -727,20 +737,50 @@
+     }
+ }
+ 
++/// Which build this is. The packaging sets QUIXI_EDITION_LABEL when it compiles, so a
++/// single source tree produces every edition: a personal build says so in the title bar,
++/// and a stock build keeps upstream's name with no prefix at all. Nothing here changes
++/// behaviour — it is the difference between two packages you cannot otherwise tell apart
++/// once they are both installed.
++const EDITION_LABEL: &str = match option_env!("QUIXI_EDITION_LABEL") {
++    Some(label) => label,
++    None => "",
++};
++
++/// The label this *running* copy goes by.
++///
++/// Compile-time is the right default — a package bakes in which edition it is — but a build tree is
++/// not a package, and two trees built by hand are otherwise indistinguishable on screen. A one-line
++/// file next to the resources wins over the constant when it exists, so "which window am I looking
++/// at" is answerable without a rebuild. The packaged editions ship that file; the compiler flag is
++/// the fallback.
++fn edition_label(resources_dir: &std::path::Path) -> String {
++    let raw = std::fs::read_to_string(resources_dir.join("edition.txt"))
++        .ok()
++        .unwrap_or_else(|| EDITION_LABEL.to_string());
++    // The label is a prefix: "(LOCAL) QuixiDesk". Normalise the separator here rather than trusting
++    // every edition.txt to end with a space, which is exactly the detail a hand-edited file loses.
++    let trimmed = raw.trim();
++    if trimmed.is_empty() {
++        String::new()
++    } else {
++        format!("{trimmed} ")
++    }
++}
+ 
+ /// Which browser gets an external link is a setting, not an opinion baked into the build.
+ ///
+ /// The privacy crowd runs Firefox; a Chromium-family browser is the only kind the agent tooling can
+ /// drive over CDP; and plenty of people run one of each for different reasons. So the order is:
+-/// `QUIXI_BROWSER` (developer override) -> the `externalBrowser` preference -> the stock behaviour.
++/// `QUIXI_BROWSER` (developer override) -> the `externalBrowser` preference -> the automatic chain.
+ #[cfg(target_os = "linux")]
+ fn external_browser_preference() -> String {
+     let path = quixi_proto::paths::data_dir().join("preferences.json");
+     let Ok(text) = std::fs::read_to_string(&path) else {
+-        return "system".to_string();
++        return "auto".to_string();
+     };
+     let Ok(value) = serde_json::from_str::<Value>(&text) else {
+-        return "system".to_string();
++        return "auto".to_string();
+     };
+     value
+         .get("externalBrowser")
+@@ -871,11 +911,25 @@
+     }));
+ 
+     // Build the native workspace window and titlebar inset.
++    let resolved_label = edition_label(&resources_dir);
++    let window_title = if test_profile.is_some() {
++        format!("{resolved_label}QuixiDesk — Test Profile")
++    } else {
++        format!("{resolved_label}QuixiDesk")
++    };
+     let mut win_builder = WindowBuilder::new()
+-        .with_title(if test_profile.is_some() { "QuixiDesk — Test Profile" } else { "QuixiDesk" })
++        .with_title(window_title)
+         .with_inner_size(LogicalSize::new(1280.0, 840.0))
+         .with_min_inner_size(LogicalSize::new(480.0, 360.0));
+ 
++    // Linux: a compositor only blends the desktop through this window if the window is declared
++    // capable of transparency. The UI then decides how much with --window-alpha, so "less opaque"
++    // is a stylesheet number rather than a recompile.
++    #[cfg(not(target_os = "macos"))]
++    {
++        win_builder = win_builder.with_transparent(true);
++    }
++
+     #[cfg(target_os = "macos")]
+     {
+         win_builder = win_builder
+diff -Naur a/crates/quixi-engine/src/providers.rs b/crates/quixi-engine/src/providers.rs
+--- a/crates/quixi-engine/src/providers.rs	2026-10-31 11:49:06.000000000 -0700
++++ b/crates/quixi-engine/src/providers.rs	2026-11-02 13:58:11.161551409 -0800
+@@ -735,7 +735,45 @@
+                 last_tested_ok: None,
+                 last_latency_ms: None,
+             },
+-            // 17. LM Studio (Local)
++            // 17. Ollama Cloud — the same service as Ollama (Local), reached over the internet with
++            // an account key. Its own row rather than a Custom Endpoint the user has to fill in:
++            // the base URL, the env var and the model list are all known, so asking someone to type
++            // them is asking them to make a mistake for no reason.
++            ProviderEntry {
++                id: "ollama-cloud".to_string(),
++                name: "Ollama Cloud".to_string(),
++                subtitle: "Ollama's hosted models — same API as local Ollama, no GPU required".to_string(),
++                badge: "Cloud · key required".to_string(),
++                category: "cloud".to_string(),
++                priority_rank: 17,
++                supports_oauth: false,
++                oauth_label: None,
++                auth_mode: "api_key".to_string(),
++                api_format: "openai".to_string(),
++                base_url: "https://ollama.com/v1".to_string(),
++                api_key_masked: String::new(),
++                api_key_raw: String::new(),
++                oauth_access_token: String::new(),
++                oauth_refresh_token: String::new(),
++                oauth_account_label: None,
++                oauth_expires_ms: None,
++                key_placeholder: "Paste your Ollama API key".to_string(),
++                env_var: "OLLAMA_API_KEY".to_string(),
++                docs_url: "https://ollama.com/settings/keys".to_string(),
++                configured: false,
++                selected_model: "deepseek-v4.1-flash".to_string(),
++                models: vec![
++                    Self::model("deepseek-v4.1-flash", "DeepSeek V4.1 Flash", 1_000_000, true, false),
++                    Self::model("qwen3.5-coder:480b", "Qwen 3.5 Coder 480B", 262_144, true, false),
++                    Self::model("kimi-k2:latest", "Kimi K2", 262_144, true, false),
++                    Self::model("gpt-oss:120b", "GPT-OSS 120B", 131_072, true, false),
++                ],
++                custom_models: vec![],
++                context_window: 1_000_000,
++                last_tested_ok: None,
++                last_latency_ms: None,
++            },
++            // 18. LM Studio (Local)
+             ProviderEntry {
+                 id: "lmstudio".to_string(),
+                 name: "LM Studio (Local)".to_string(),
+@@ -835,8 +873,11 @@
+ 
+         ProvidersStateFile {
+             onboarding_completed: false,
+-            active_provider: "openrouter".to_string(),
+-            active_model: "anthropic/claude-sonnet-4.6".to_string(),
++            // Local by default. Nothing leaves the machine until the person chooses otherwise, and a
++            // cloud provider with no key configured is a dead end on first run — which is exactly what
++            // a default should not be.
++            active_provider: "ollama".to_string(),
++            active_model: "qwen2.5-coder:32b".to_string(),
+             subagent_provider: String::new(),
+             subagent_model: String::new(),
+             providers,
+diff -Naur a/resources/edition.txt b/resources/edition.txt
+--- a/resources/edition.txt	1969-12-31 16:00:00.000000000 -0800
++++ b/resources/edition.txt	2026-11-02 13:58:04.215490358 -0800
+@@ -0,0 +1 @@
++(VOLKDUDE85 GITHUB) 
+\ No newline at end of file
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 13:58:30.905583744 -0800
++++ b/resources/ui/app.css	2026-11-02 13:55:25.090867518 -0800
+@@ -7,6 +7,10 @@
+   --raised: #2a3036;
+   --sidebar: #15181c;
+   --line: #343a41;
++  /* How much desktop shows through the window itself. 1 = opaque. Panels and text are NOT
++     affected — only the surfaces that sit directly on the desktop, which is why this can be turned
++     down without turning the interface into soup. */
++  --window-alpha: 0.9;
+   --text: #edf0f2;
+   --muted: #a2aab3;
+   --accent: #8bd5bd;
+@@ -271,6 +275,7 @@
+ }
+ .shell {
+   display: grid;
++  background: color-mix(in srgb, var(--bg) calc(var(--window-alpha) * 100%), transparent);
+   grid-template-columns: var(--sidebar-width, 228px) minmax(0, 1fr);
+   height: 100dvh;
+   overflow: hidden;
+@@ -2335,11 +2340,19 @@
+   :root[data-translucent="on"] .panel,
+   :root[data-translucent="on"] .settings-content,
+   :root[data-translucent="on"] .toolbar {
+-    background: color-mix(in srgb, var(--panel) calc(var(--panel-alpha, 1) * 100%), transparent);
+     -webkit-backdrop-filter: blur(10px);
+     backdrop-filter: blur(10px);
+   }
+ }
++
++/* Panel opacity is its own control, not a side effect of the translucency toggle. It used to live
++   inside the `data-translucent="on"` block, so with translucency off — the default — the slider
++   moved, saved, and changed nothing at all. */
++.panel,
++.settings-content,
++.toolbar {
++  background: color-mix(in srgb, var(--panel) calc(var(--panel-alpha, 1) * 100%), transparent);
++}
+ /* Boxing: everything that holds content gets a defined edge, so the page has structure instead of
+    floating text on a black field. */
+ :root[data-boxing="on"] .composer,
+@@ -2463,7 +2476,9 @@
+   border: 1px solid var(--line); background: var(--panel); margin-bottom: 6px; }
+ .daemon-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto;
+   background: var(--muted); box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 22%, transparent); }
+-.daemon-row.up .daemon-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent); }
++/* Green means "up", and it is the same green the button uses when it goes on. The dot is now a
++   control, so the colour has to mean one thing: running. */
++.daemon-row.up .daemon-dot { background: #59c07a; border-color: #59c07a; box-shadow: 0 0 0 3px color-mix(in srgb, #59c07a 24%, transparent); }
+ .daemon-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+ .daemon-meta code { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); background: var(--raised); padding: 1px 6px; border-radius: 5px; }
+ 
+@@ -2473,6 +2488,85 @@
+ .browser-handoff p { margin: 0; }
+ .browser-handoff .toolbar { margin-top: 8px; gap: 8px; }
+ 
++/* The edition label: bold and muted, in front of the product name, so a glance at the
++   sidebar answers "which build is this" without opening anything. */
++.brand .edition-label {
++  font-weight: 700;
++  opacity: 0.72;
++  margin-right: 0.35em;
++}
++
++/* ---- persona + model chips -------------------------------------------------
++   The top bar used to carry a bare persona name that navigated somewhere and did nothing else.
++   Two chips now, each in a visible box with a caret: who is speaking, and what is answering. */
++.topbar .chip-wrap { position: relative; -webkit-app-region: no-drag; margin-left: 6px; }
++.topbar .chip-menu-btn {
++  display: inline-flex; align-items: center; gap: 7px;
++  height: 30px; padding: 0 11px; border-radius: 7px;
++  border: 1px solid var(--line); background: var(--raised);
++  color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer;
++}
++.topbar .chip-menu-btn:hover { border-color: color-mix(in srgb, var(--accent), transparent 45%); }
++.topbar .chip-menu-btn[aria-expanded="true"] {
++  border-color: var(--accent);
++  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent), transparent 60%) inset;
++}
++.topbar .chip-glyph { color: var(--accent); font-size: 12px; line-height: 1; }
++.topbar .chip-label { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.topbar .chip-caret { color: var(--muted); font-size: 10px; }
++.topbar .chip-menu {
++  position: absolute; top: 36px; right: 0; z-index: 60;
++  min-width: 290px; padding: 6px;
++  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
++  box-shadow: 0 18px 48px var(--shadow, rgba(0,0,0,.55));
++}
++.topbar .chip-menu-item {
++  display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 8px;
++  width: 100%; padding: 8px 9px; border: 0; border-radius: 7px;
++  background: transparent; color: var(--text); font: inherit; font-size: 13px;
++  text-align: left; cursor: pointer;
++}
++.topbar .chip-menu-item:hover { background: var(--raised); }
++.topbar .chip-menu-item.checked { color: var(--accent); }
++.topbar .chip-menu-item.danger { color: var(--danger); }
++.topbar .chip-check { color: var(--accent); font-size: 11px; }
++.topbar .chip-menu-note { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
++.topbar .chip-menu-sep { height: 1px; margin: 5px 6px; background: var(--line); }
++
++/* ---- first run ---------------------------------------------------------------------------- */
++.first-run { max-width: 880px; margin: 8vh auto 0; padding: 0 24px; }
++.first-run h1 { font-size: 27px; font-weight: 600; margin: 0 0 10px; letter-spacing: -.01em; }
++.first-run-lead { color: var(--muted); font-size: 14px; max-width: 62ch; margin: 0 0 28px; line-height: 1.55; }
++.first-run-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
++@media (max-width: 820px) { .first-run-grid { grid-template-columns: 1fr; } }
++.first-run-card { border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--panel); }
++.first-run-card h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
++.first-run-blurb { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 16px; }
++.first-run-actions { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
++.first-run-status { color: var(--muted); font-size: 12.5px; margin: 0; min-height: 1em; }
++.first-run-cloud { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 6px; }
++.first-run-label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); width: 100%; }
++.first-run-select, .first-run-key {
++  width: 100%; height: 32px; padding: 0 9px; border-radius: 7px;
++  border: 1px solid var(--line); background: var(--raised); color: var(--text); font: inherit; font-size: 13px;
++}
++.first-run-foot { color: var(--muted); font-size: 12.5px; margin-top: 22px; line-height: 1.55; }
++
++/* The sidebar sits on the desktop too, so it carries the same alpha. Declared last so it wins the
++   cascade over the theme's opaque gradient — the gradient is a nicety, seeing through is the ask. */
++.sidebar {
++  background: color-mix(in srgb, var(--sidebar) calc(var(--window-alpha) * 100%), transparent);
++}
++
++/* Settings fields: one label per row, control beneath it. */
++.settings-field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 12.5px; color: var(--muted); }
++.settings-field > span { text-transform: uppercase; letter-spacing: .08em; font-size: 10.5px; }
++
++/* Browser chooser: one button per browser, full width, so the list reads like a menu. */
++.browser-chooser { display: flex; flex-direction: column; gap: 12px; min-width: 320px; }
++.browser-chooser-list { display: flex; flex-direction: column; gap: 6px; }
++.browser-chooser-list button { justify-content: flex-start; width: 100%; }
++
+ /* Browser dropdown in the panel header: the control that used to be a hardcoded word. */
+ .browser-head .browser-pick {
+   margin-left: auto;
+@@ -2488,7 +2582,19 @@
+   font-size: 11.5px;
+ }
+ 
+-/* Browser chooser: one button per browser, full width, so the list reads like a menu. */
+-.browser-chooser { display: flex; flex-direction: column; gap: 12px; min-width: 320px; }
+-.browser-chooser-list { display: flex; flex-direction: column; gap: 6px; }
+-.browser-chooser-list button { justify-content: flex-start; width: 100%; }
++/* The daemon dot is a control, not a decoration: it shows state and flips it. */
++.daemon-dot {
++  width: 10px; height: 10px; padding: 0; border-radius: 50%;
++  border: 1px solid var(--line); background: transparent; cursor: pointer; flex: none;
++}
++.daemon-dot.on { background: #59c07a; border-color: #59c07a; box-shadow: 0 0 6px #59c07a66; }
++.daemon-dot:hover { transform: scale(1.25); }
++.daemon-actions { display: flex; gap: 6px; flex: none; }
++.daemon-actions .danger { color: var(--danger, #e06c75); }
++.daemon-note { margin-top: 14px; }
++
++/* The published build says which one it is, in the sidebar, next to the name. */
++.edition-pill {
++  display: inline-block; font-size: 9.5px; letter-spacing: .1em; padding: 1px 5px;
++  border-radius: 3px; border: 1px solid var(--accent); color: var(--accent); font-weight: 700;
++}
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 13:58:30.905798644 -0800
++++ b/resources/ui/app.js	2026-11-02 13:58:21.782624575 -0800
+@@ -99,6 +99,14 @@
+         );
+     return n;
+   }
++
++  // Which build this is. The app sets it on the page before the shell loads; a stock
++  // build never sets it, so this is "" and every label below disappears.
++  const EDITION = window.__QUIXI_EDITION__ || "";
++  // Which of the two things is on screen. The local build carries the owner's persona, memory and
++  // keys; this one ships to GitHub and carries none of them. That difference is worth a badge, not
++  // just a subtle prefix, because the two windows look identical otherwise.
++  const PUBLISHED = /github/i.test(EDITION);
+   function button(label, fn, cls = "", name) {
+     return el(
+       "button",
+@@ -354,6 +362,220 @@
+       state.persona = { name: "None loaded", loaded: false, path: "", content: "", bytes: 0 };
+     }
+   }
++// ---- persona + providers chips -------------------------------------------------
++// The top bar carried a bare "Nora" that navigated somewhere and did nothing else. What it needs to
++// say instead: this IS the current persona, and here is what you can do about it.
++//
++// Two chips, each in a visible box with a caret, so it is obvious they are controls and obvious which
++// is which: PERSONA (who is speaking) and MODEL (what is answering). Everything here uses RPC members
++// that already exist — getPersona, setPersona, restoreShippedPersona, and the model picker — so this
++// is an interface over real behaviour rather than a stub.
++const PERSONA_GLYPH = "\u25D0"; // half-filled circle: a face, without a theatre mask in a dark UI
++const MODEL_GLYPH = "\u25C9";
++
++function chipMenu({ label, glyph, items = [], load, cls = "" }) {
++  const btn = el(
++    "button",
++    { class: `chip-menu-btn ${cls}`, "aria-haspopup": "menu", "aria-expanded": "false" },
++    el("span", { class: "chip-glyph", "aria-hidden": "true" }, glyph),
++    el("span", { class: "chip-label" }, label),
++    el("span", { class: "chip-caret", "aria-hidden": "true" }, "\u25BE"),
++  );
++  const menu = el("div", { class: "chip-menu", role: "menu", hidden: true });
++
++  function fill(rows) {
++    menu.replaceChildren();
++    for (const it of rows) {
++      if (it.sep) { menu.append(el("div", { class: "chip-menu-sep" })); continue; }
++      menu.append(
++        el(
++          "button",
++          {
++            class: "chip-menu-item" + (it.checked ? " checked" : "") + (it.danger ? " danger" : ""),
++            role: "menuitem",
++            onclick: () => { close(); it.run(); },
++          },
++          el("span", { class: "chip-check", "aria-hidden": "true" }, it.checked ? "\u2713" : ""),
++          el("span", { class: "chip-menu-text" }, it.label),
++          it.note ? el("span", { class: "chip-menu-note" }, it.note) : null,
++        ),
++      );
++    }
++  }
++  fill(items);
++  const onOutside = (e) => { if (!wrap.contains(e.target)) close(); };
++  function close() {
++    menu.hidden = true;
++    btn.setAttribute("aria-expanded", "false");
++    document.removeEventListener("click", onOutside, true);
++  }
++  btn.addEventListener("click", (e) => {
++    e.stopPropagation();
++    const open = menu.hidden;
++    menu.hidden = !open;
++    btn.setAttribute("aria-expanded", String(open));
++    if (open) {
++      document.addEventListener("click", onOutside, true);
++      if (load) {
++        load().then((rows) => { if (!menu.hidden) fill(rows); }).catch(() => {});
++      }
++    }
++  });
++  const wrap = el("div", { class: "chip-wrap" }, btn, menu);
++  return wrap;
++}
++
++// Deleting a persona is the one destructive thing in this menu, so it asks for the name rather than a
++// click: the file is the persona, and a mis-click should not be able to remove who is speaking.
++async function deletePersonaFlow() {
++  const p = state.persona || {};
++  if (!p.loaded) { toast("There is no persona loaded to delete.", true); return; }
++  formDialog(
++    `Delete persona \u201C${p.name}\u201D`,
++    [
++      { name: "confirm", label: `Type ${p.name} to confirm`, placeholder: p.name },
++      { name: "path", label: "File", value: p.path || "~/.quixi/persona.md", readonly: true },
++    ],
++    async (values) => {
++      if ((values.confirm || "").trim() !== p.name) {
++        throw new Error("The name did not match. Nothing was deleted.");
++      }
++      const res = await rpc("AppPreferences", "setPersona", [""]);
++      if (res && res.ok === false) throw new Error(res.error || "Could not delete the persona.");
++      await loadPersona();
++      render();
++      toast(`Deleted "${p.name}". The shipped persona can be restored from the persona page.`);
++    },
++    { submit: "Delete persona", wide: true },
++  );
++}
++
++async function restorePersonaFlow() {
++  const current = (state.persona && state.persona.bytes) || 0;
++  const ok = current === 0 || window.confirm(
++    `Replace ${(state.persona && state.persona.path) || "the persona file"} (${current} bytes) with the one this build ships?`,
++  );
++  if (!ok) return;
++  const res = await rpc("AppPreferences", "restoreShippedPersona", []).catch((e) => ({ ok: false, error: String(e) }));
++  if (res && res.ok) {
++    await loadPersona();
++    render();
++    toast(`Persona restored: ${res.name || "unnamed"}`);
++  } else {
++    toast(`Could not restore: ${(res && res.error) || "unknown error"}`, true);
++  }
++}
++
++async function savePersonaAsFlow() {
++  formDialog(
++    "Save this persona to the shelf",
++    [
++      { name: "name", label: "Name", placeholder: "work-mode" },
++      { name: "where", label: "Saves to", value: "~/.quixi/personas/<name>.md", readonly: true },
++    ],
++    async (values) => {
++      const res = await rpc("AppPreferences", "savePersonaAs", [{ name: values.name || "" }]);
++      if (!res || res.ok === false) throw new Error((res && res.error) || "Could not save the persona.");
++      toast(`Saved as "${res.slug}" — the shelf now holds a copy.`);
++      render();
++    },
++    { submit: "Save to shelf", wide: true },
++  );
++}
++
++async function activatePersonaFlow(slug, name) {
++  const res = await rpc("AppPreferences", "activatePersona", [{ slug }]);
++  if (res && res.ok) {
++    await loadPersona();
++    render();
++    toast(`Now speaking as "${res.name || name}"`);
++  } else {
++    toast(`Could not switch: ${(res && res.error) || "unknown error"}`, true);
++  }
++}
++
++async function deletePersonaFromShelf(slug, name) {
++  formDialog(
++    `Delete \u201C${name}\u201D from the shelf?`,
++    [
++      { name: "confirm", label: `Type ${slug} to confirm`, placeholder: slug },
++      { name: "note", label: "Removes", value: `~/.quixi/personas/${slug}.md`, readonly: true },
++    ],
++    async (values) => {
++      if ((values.confirm || "").trim().toLowerCase() !== slug) {
++        throw new Error("The name did not match. Nothing was deleted.");
++      }
++      const res = await rpc("AppPreferences", "deletePersona", [{ slug }]);
++      if (!res || res.ok === false) throw new Error((res && res.error) || "Could not delete.");
++      toast(`Deleted "${name}" from the shelf. Who is speaking has not changed.`);
++      render();
++    },
++    { submit: "Delete from shelf", wide: true },
++  );
++}
++
++function personaChip() {
++  const p = state.persona || {};
++  const name = p.loaded ? p.name : "No persona";
++  return chipMenu({
++    label: name,
++    glyph: PERSONA_GLYPH,
++    cls: "persona",
++    // Read the folder when the menu opens, so a file the user dropped in with Dolphin shows up
++    // without restarting the app.
++    load: async () => {
++      const shelf = await rpc("AppPreferences", "listPersonas").catch(() => null);
++      const rows = [
++        { label: `${name} — current persona`, checked: true, note: "who is speaking", run: () => navigate("persona") },
++        { sep: true },
++      ];
++      const others = ((shelf && shelf.personas) || []).filter(
++        (x) => x.name !== name || x.slug !== (p.slug || ""),
++      );
++      if (others.length === 0) {
++        rows.push({ label: "The shelf is empty", run: () => savePersonaAsFlow() });
++      }
++      for (const x of others) {
++        rows.push({
++          label: x.name,
++          note: `${x.slug} · ${x.bytes} B`,
++          run: () => activatePersonaFlow(x.slug, x.name),
++        });
++      }
++      rows.push(
++        { sep: true },
++        { label: "Save this one to the shelf…", note: "a copy you can switch back to", run: () => savePersonaAsFlow() },
++        { label: "Open the persona file", note: p.path || "~/.quixi/persona.md", run: () => navigate("persona") },
++        { label: "Open the personas folder", note: "Dolphin's problem now", run: () => rpc("AppPreferences", "revealPersonas") },
++        { label: "Use the shipped persona", note: "Nora", run: () => restorePersonaFlow() },
++        { sep: true },
++      );
++      for (const x of others) {
++        rows.push({ label: `Delete “${x.name}”…`, danger: true, note: "asks you to type it", run: () => deletePersonaFromShelf(x.slug, x.name) });
++      }
++      return rows;
++    },
++  });
++}
++
++function providersChip() {
++  const st = state.providers || {};
++  const list = st.providers || [];
++  const active = list.find((x) => x.id === st.activeProvider);
++  const label = active ? `${active.name}${st.activeModel ? " · " + st.activeModel : ""}` : "Choose model";
++  const items = [{ label: "Providers & models", note: "opens the picker", run: () => modelPicker() }, { sep: true }];
++  for (const p of list) {
++    const isActive = p.id === st.activeProvider;
++    items.push({
++      label: p.name,
++      checked: isActive,
++      note: isActive ? (st.activeModel || "") : (p.configured ? "configured" : "not configured"),
++      run: () => modelPicker(),
++    });
++  }
++  return chipMenu({ label, glyph: MODEL_GLYPH, cls: "model", items });
++}
++
+   function personaChipLabel() {
+     const p = state.persona;
+     if (!p) return "Persona…";
+@@ -441,10 +663,12 @@
+       }
+       return control;
+     };
++    // The shell is served by the app, which sets this before any script runs. A stock
++    // build leaves it empty, so the name reads exactly as upstream's.
+     document.title =
+       state.page === "chat"
+-        ? (session()?.title || "Task") + " · QuixiDesk"
+-        : "QuixiDesk";
++        ? (session()?.title || "Task") + " · " + EDITION + "QuixiDesk"
++        : EDITION + "QuixiDesk";
+     // Plural sections open. A list you cannot open is a label; a list you can open is a place.
+     const nav = [
+       ["search", "Search", "search"],
+@@ -538,8 +762,21 @@
+         el(
+           "span",
+           {},
++          EDITION ? el("strong", { class: "edition-label" }, EDITION) : null,
+           "QuixiDesk",
+-          el("span", { class: "brand-caption" }, "VolkDude's QuixiDesk"),
++          PUBLISHED
++            ? el(
++                "span",
++                { class: "brand-caption" },
++                "Published edition · ",
++                el("b", { class: "edition-pill" }, "GITHUB"),
++                " · no personal data, no keys",
++              )
++            : el(
++                "span",
++                { class: "brand-caption" },
++                EDITION ? "This machine's own build · not published" : "VolkDude's QuixiDesk",
++              ),
+         ),
+       ),
+       el(
+@@ -608,7 +845,8 @@
+       { class: "topbar" },
+       ib("Back", "back", () => history.back()),
+       el("div", { class: "crumb" }, el("strong", {}, crumb)),
+-      button(personaChipLabel(), () => navigate("persona"), "quiet persona-chip"),
++      personaChip(),
++      providersChip(),
+       ib("Toggle QuixiDesk Browser", "browser", () => toggleBrowser()),
+     );
+     root.replaceChildren(
+@@ -818,11 +1056,340 @@
+       }
+     },
+   };
++// ---- first run: local or cloud, and nothing assumed -------------------------------------------
++// The app used to land on OpenRouter with a model you do not have a key for. That is a dead end
++// dressed as a default. The first question is the only one that matters — where do the models run —
++// because everything after it differs: a local server needs detecting, a cloud provider needs a key,
++// and neither should be guessed on someone's behalf.
++function firstRunPage(host) {
++  host.replaceChildren();
++
++  const chosen = { mode: null, provider: "ollama-cloud", key: "" };
++
++  const card = (title, blurb, body) =>
++    el(
++      "section",
++      { class: "first-run-card" },
++      el("h2", {}, title),
++      el("p", { class: "first-run-blurb" }, blurb),
++      body,
++    );
++
++  // --- on this machine -------------------------------------------------------------------------
++  const localStatus = el("p", { class: "first-run-status" }, "Not checked yet.");
++  const localBtn = button(
++    "Use a local model",
++    async () => {
++      localStatus.textContent = "Looking for a model server on this machine…";
++      try {
++        await api("/api/quixi/providers/detect-local", {});
++        await loadProviders();
++        const list = (state.providers && state.providers.providers) || [];
++        const found = list.filter((p) => p.category === "local" && p.configured);
++        const pick = found[0] || list.find((p) => p.id === "ollama");
++        if (!pick) throw new Error("No local provider entry found.");
++        const r = await api("/api/quixi/providers/complete-onboarding", {
++          activeProvider: pick.id,
++          activeModel: pick.selectedModel || "",
++        });
++        if (r.error) throw new Error(r.error);
++        await loadProviders();
++        toast(found.length ? `Using ${pick.name} on this machine.` : `Set to ${pick.name} — start the service when you are ready.`);
++        state.page = "new";
++        render();
++      } catch (err) {
++        localStatus.textContent = `Could not finish: ${err.message}`;
++      }
++    },
++    "",
++  );
++
++  // --- over the internet ------------------------------------------------------------------------
++  const cloudBody = el("div", { class: "first-run-cloud", hidden: true });
++  const providerSelect = el("select", { class: "first-run-select" });
++  const keyInput = el("input", {
++    type: "password",
++    class: "first-run-key",
++    placeholder: "Paste your API key",
++    spellcheck: false,
++    autocapitalize: "off",
++  });
++  const cloudStatus = el("p", { class: "first-run-status" }, "");
++
++  function fillCloud() {
++    const list = (state.providers && state.providers.providers) || [];
++    const cloud = list.filter((p) => p.category !== "local");
++    providerSelect.replaceChildren(
++      ...cloud.map((p) => {
++        const o = el("option", { value: p.id }, p.name);
++        if (p.id === chosen.provider) o.selected = true;
++        return o;
++      }),
++    );
++    const active = cloud.find((p) => p.id === providerSelect.value) || cloud[0];
++    keyInput.placeholder = active ? active.keyPlaceholder || "Paste your API key" : "Paste your API key";
++    cloudStatus.textContent = active
++      ? `${active.name} · ${active.baseUrl} — get a key at ${active.docsUrl}`
++      : "";
++  }
++  providerSelect.addEventListener("change", () => {
++    chosen.provider = providerSelect.value;
++    fillCloud();
++  });
++
++  const cloudBtn = button(
++    "Connect and start",
++    async () => {
++      const key = keyInput.value.trim();
++      if (!key) { cloudStatus.textContent = "That provider needs a key before it can answer."; return; }
++      cloudStatus.textContent = "Saving and testing…";
++      try {
++        const list = (state.providers && state.providers.providers) || [];
++        const p = list.find((x) => x.id === providerSelect.value);
++        const saved = await api("/api/quixi/providers/save", {
++          providerId: providerSelect.value,
++          apiKey: key,
++          selectedModel: (p && p.selectedModel) || "",
++          setAsActive: true,
++        });
++        if (saved.error) throw new Error(saved.error);
++        const done = await api("/api/quixi/providers/complete-onboarding", {
++          activeProvider: providerSelect.value,
++          activeModel: (p && p.selectedModel) || "",
++        });
++        if (done.error) throw new Error(done.error);
++        await loadProviders();
++        toast(`Connected to ${(p && p.name) || providerSelect.value}.`);
++        state.page = "new";
++        render();
++      } catch (err) {
++        cloudStatus.textContent = `Could not connect: ${err.message}`;
++      }
++    },
++    "",
++  );
++
++  cloudBody.append(
++    el("label", { class: "first-run-label" }, "Provider", providerSelect),
++    el("label", { class: "first-run-label" }, "API key", keyInput),
++    cloudBtn,
++    cloudStatus,
++  );
++
++  const cloudBtnReveal = button(
++    "Use a cloud provider",
++    () => {
++      chosen.mode = "cloud";
++      cloudBody.hidden = false;
++      fillCloud();
++      keyInput.focus();
++    },
++    "quiet",
++  );
++
++  host.append(
++    el(
++      "div",
++      { class: "first-run" },
++      el("h1", {}, "Where should the models run?"),
++      el(
++        "p",
++        { class: "first-run-lead" },
++        "QuixiDesk does not assume. Both answers work; they need different things from you. You can change this later in Settings.",
++      ),
++      el(
++        "div",
++        { class: "first-run-grid" },
++        card(
++          "On this machine",
++          "Nothing leaves the computer and no account is needed. Requires a local model server — Ollama, LM Studio, llama.cpp or anything OpenAI-compatible.",
++          el("div", { class: "first-run-actions" }, localBtn, localStatus),
++        ),
++        card(
++          "Over the internet",
++          "A provider answers with your key: Ollama Cloud, OpenRouter, or any compatible endpoint. Nothing to install, and the model is not running on your hardware.",
++          el("div", { class: "first-run-actions" }, cloudBtnReveal, cloudBody),
++        ),
++      ),
++      el(
++        "p",
++        { class: "first-run-foot" },
++        "If you are not sure: choose local. It answers without an account, and a cloud provider can be added at any time from the provider list.",
++      ),
++    ),
++  );
++}
++
++// ---- first run: local or cloud, and nothing assumed -------------------------------------------
++// The app used to land on OpenRouter with a model you do not have a key for. That is a dead end
++// dressed as a default. The first question is the only one that matters — where do the models run —
++// because everything after it differs: a local server needs detecting, a cloud provider needs a key,
++// and neither should be guessed on someone's behalf.
++function firstRunPage(host) {
++  host.replaceChildren();
++
++  const chosen = { mode: null, provider: "ollama-cloud", key: "" };
++
++  const card = (title, blurb, body) =>
++    el(
++      "section",
++      { class: "first-run-card" },
++      el("h2", {}, title),
++      el("p", { class: "first-run-blurb" }, blurb),
++      body,
++    );
++
++  // --- on this machine -------------------------------------------------------------------------
++  const localStatus = el("p", { class: "first-run-status" }, "Not checked yet.");
++  const localBtn = button(
++    "Use a local model",
++    async () => {
++      localStatus.textContent = "Looking for a model server on this machine…";
++      try {
++        await api("/api/quixi/providers/detect-local", {});
++        await loadProviders();
++        const list = (state.providers && state.providers.providers) || [];
++        const found = list.filter((p) => p.category === "local" && p.configured);
++        const pick = found[0] || list.find((p) => p.id === "ollama");
++        if (!pick) throw new Error("No local provider entry found.");
++        const r = await api("/api/quixi/providers/complete-onboarding", {
++          activeProvider: pick.id,
++          activeModel: pick.selectedModel || "",
++        });
++        if (r.error) throw new Error(r.error);
++        await loadProviders();
++        toast(found.length ? `Using ${pick.name} on this machine.` : `Set to ${pick.name} — start the service when you are ready.`);
++        state.page = "new";
++        render();
++      } catch (err) {
++        localStatus.textContent = `Could not finish: ${err.message}`;
++      }
++    },
++    "",
++  );
++
++  // --- over the internet ------------------------------------------------------------------------
++  const cloudBody = el("div", { class: "first-run-cloud", hidden: true });
++  const providerSelect = el("select", { class: "first-run-select" });
++  const keyInput = el("input", {
++    type: "password",
++    class: "first-run-key",
++    placeholder: "Paste your API key",
++    spellcheck: false,
++    autocapitalize: "off",
++  });
++  const cloudStatus = el("p", { class: "first-run-status" }, "");
++
++  function fillCloud() {
++    const list = (state.providers && state.providers.providers) || [];
++    const cloud = list.filter((p) => p.category !== "local");
++    providerSelect.replaceChildren(
++      ...cloud.map((p) => {
++        const o = el("option", { value: p.id }, p.name);
++        if (p.id === chosen.provider) o.selected = true;
++        return o;
++      }),
++    );
++    const active = cloud.find((p) => p.id === providerSelect.value) || cloud[0];
++    keyInput.placeholder = active ? active.keyPlaceholder || "Paste your API key" : "Paste your API key";
++    cloudStatus.textContent = active
++      ? `${active.name} · ${active.baseUrl} — get a key at ${active.docsUrl}`
++      : "";
++  }
++  providerSelect.addEventListener("change", () => {
++    chosen.provider = providerSelect.value;
++    fillCloud();
++  });
++
++  const cloudBtn = button(
++    "Connect and start",
++    async () => {
++      const key = keyInput.value.trim();
++      if (!key) { cloudStatus.textContent = "That provider needs a key before it can answer."; return; }
++      cloudStatus.textContent = "Saving and testing…";
++      try {
++        const list = (state.providers && state.providers.providers) || [];
++        const p = list.find((x) => x.id === providerSelect.value);
++        const saved = await api("/api/quixi/providers/save", {
++          providerId: providerSelect.value,
++          apiKey: key,
++          selectedModel: (p && p.selectedModel) || "",
++          setAsActive: true,
++        });
++        if (saved.error) throw new Error(saved.error);
++        const done = await api("/api/quixi/providers/complete-onboarding", {
++          activeProvider: providerSelect.value,
++          activeModel: (p && p.selectedModel) || "",
++        });
++        if (done.error) throw new Error(done.error);
++        await loadProviders();
++        toast(`Connected to ${(p && p.name) || providerSelect.value}.`);
++        state.page = "new";
++        render();
++      } catch (err) {
++        cloudStatus.textContent = `Could not connect: ${err.message}`;
++      }
++    },
++    "",
++  );
++
++  cloudBody.append(
++    el("label", { class: "first-run-label" }, "Provider", providerSelect),
++    el("label", { class: "first-run-label" }, "API key", keyInput),
++    cloudBtn,
++    cloudStatus,
++  );
++
++  const cloudBtnReveal = button(
++    "Use a cloud provider",
++    () => {
++      chosen.mode = "cloud";
++      cloudBody.hidden = false;
++      fillCloud();
++      keyInput.focus();
++    },
++    "quiet",
++  );
++
++  host.append(
++    el(
++      "div",
++      { class: "first-run" },
++      el("h1", {}, "Where should the models run?"),
++      el(
++        "p",
++        { class: "first-run-lead" },
++        "QuixiDesk does not assume. Both answers work; they need different things from you. You can change this later in Settings.",
++      ),
++      el(
++        "div",
++        { class: "first-run-grid" },
++        card(
++          "On this machine",
++          "Nothing leaves the computer and no account is needed. Requires a local model server — Ollama, LM Studio, llama.cpp or anything OpenAI-compatible.",
++          el("div", { class: "first-run-actions" }, localBtn, localStatus),
++        ),
++        card(
++          "Over the internet",
++          "A provider answers with your key: Ollama Cloud, OpenRouter, or any compatible endpoint. Nothing to install, and the model is not running on your hardware.",
++          el("div", { class: "first-run-actions" }, cloudBtnReveal, cloudBody),
++        ),
++      ),
++      el(
++        "p",
++        { class: "first-run-foot" },
++        "If you are not sure: choose local. It answers without an account, and a cloud provider can be added at any time from the provider list.",
++      ),
++    ),
++  );
++}
++
+   function renderPage() {
+     const host = document.getElementById("page-host");
+     if (!host) return;
+     const handlers = {
+       new: chatPage,
++      onboarding: firstRunPage,
+       chat: chatPage,
+       search: workspaceUI.searchPage,
+       projects: workspaceUI.projectsPage,
+@@ -834,7 +1401,19 @@
+       settings: settingsPage,
+       persona: personaPage,
+     };
+-    handlers[state.page]?.(host);
++    // First run, unanswered: ask where the models run before showing a chat that cannot answer.
++    const unanswered = state.providers && state.providers.onboardingCompleted === false;
++    if (unanswered && (state.page === "new" || state.page === "chat")) {
++      firstRunPage(host);
++    } else {
++      // First run, unanswered: ask where the models run before showing a chat that cannot answer.
++    const unanswered = state.providers && state.providers.onboardingCompleted === false;
++    if (unanswered && (state.page === "new" || state.page === "chat")) {
++      firstRunPage(host);
++    } else {
++      handlers[state.page]?.(host);
++    }
++    }
+     if (state.browser) renderBrowser(host);
+   }
+   let conversationFind = null;
+@@ -2296,10 +2875,56 @@
+       body.replaceChildren(el("p", { class: "error-text" }, "Could not read the daemon list."));
+       return;
+     }
++    const act = async (d, action) => {
++      if (!d.controllable) return toast(`${d.name} is not a service this app can control.`, true);
++      if (action === "remove") {
++        // The app's own dialog, not window.confirm: a native confirm blocks the webview's event loop,
++        // which freezes the window behind a modal that the page cannot draw or dismiss.
++        const ok = await new Promise((resolve) => {
++          let answered = false;
++          const dlg = dialog(
++            `Remove ${d.name}?`,
++            el(
++              "div",
++              { class: "browser-chooser" },
++              el("p", {}, `That stops and disables ${d.unit}, and moves its unit file aside.`),
++              el("p", { class: "muted" }, "It is not deleted — the file is renamed and can be put back."),
++              el(
++                "div",
++                { class: "browser-chooser-list" },
++                button("Remove it", () => { answered = true; dlg.close(); resolve(true); }, "primary"),
++                button("Leave it alone", () => { answered = true; dlg.close(); resolve(false); }, "quiet"),
++              ),
++            ),
++          );
++          dlg.addEventListener("close", () => { if (!answered) resolve(false); });
++        });
++        if (!ok) return;
++      }
++      try {
++        const res = await api("/api/quixi/daemons/action", { unit: d.unit, action });
++        if (res && res.ok === false) throw new Error(res.error || "systemd refused");
++        if (action === "remove" && res && res.unitFile) {
++          toast(`${d.name} removed. The unit file is at ${res.unitFile}`);
++        } else {
++          toast(`${d.name}: ${action === "start" ? "starting" : "stopping"}…`);
++        }
++        await renderPage();
++      } catch (e) {
++        toast(String(e && e.message ? e.message : e), true);
++      }
++    };
++
+     body.replaceChildren(
+       ...data.daemons.map((d) =>
+         el("div", { class: "daemon-row" + (d.up ? " up" : "") },
+-          el("span", { class: "daemon-dot" }),
++          el("button", {
++            class: "daemon-dot" + (d.up ? " on" : ""),
++            title: d.up ? `Stop ${d.name}` : `Start ${d.name}`,
++            "aria-label": d.up ? `Stop ${d.name}` : `Start ${d.name}`,
++            "aria-pressed": d.up ? "true" : "false",
++            onclick: () => act(d, d.up ? "stop" : "start"),
++          }),
+           el("div", { class: "grow" },
+             el("strong", {}, d.name),
+             el("span", { class: "muted" }, " — " + d.what),
+@@ -2308,7 +2933,14 @@
+               d.port ? el("code", {}, ":" + d.port) : null,
+               el("span", { class: "tag" }, d.up ? "up" : "down"),
+               el("span", { class: "muted small" }, d.state || ""))),
++          d.controllable
++            ? el("div", { class: "daemon-actions" },
++                button(d.up ? "Stop" : "Start", () => act(d, d.up ? "stop" : "start"), "quiet"),
++                button("Remove", () => act(d, "remove"), "quiet danger"))
++            : null,
+         )),
++      el("p", { class: "muted small daemon-note" },
++        "To create a daemon, open a new instance and ask — this page shows what is running, it does not write units."),
+     );
+   }
+   function schedulesPage(host) {
+@@ -3019,6 +3651,9 @@
+             el("td", {}, f.exists ? `${f.bytes} B` : el("span", { class: "muted" }, "not created yet"))))));
+   }
+ 
++  // Which browser an external link opens in. The privacy crowd runs Firefox, this machine runs Brave,
++  // and a Chromium opens the link as its own app window while Firefox can only take a URL — so the
++  // list says which is which rather than pretending the choice is symmetric.
+   // Which browser an external link opens in. Three kinds of answer, all legitimate: whatever the
+   // desktop says (the stock behaviour, and the default), ask me each time, or a specific browser —
+   // and the specific list comes from the desktop's own menu rather than a set this app invented.
+@@ -3037,6 +3672,7 @@
+           { id: "system", name: `System default${stock.name ? ` — ${stock.name}` : ""}` },
+           { id: "ask", name: "Ask me each time" },
+         ].concat(browsers.map((b) => ({ id: b.id, name: b.name })));
++        // The saved value may be an id, a binary name or a .desktop id; match any of them.
+         const savedDesktop = browsers.find((b) => b.desktopId === current || b.id === current);
+         select.replaceChildren(
+           ...options.map((o) => {
+@@ -3045,6 +3681,11 @@
+             return opt;
+           }),
+         );
++        if (stock.desktopId && !options.some((o) => o.id === (savedDesktop && savedDesktop.id))) {
++          // A preference pointing at a browser that is no longer installed: say so rather than
++          // silently reverting to the default.
++          status.textContent = `Saved choice "${current}" is not installed any more — falling back to the system default.`;
++        }
+         select.addEventListener("change", async () => {
+           const value = select.value;
+           localStorage.setItem("quixi.externalBrowser", value);
+@@ -3078,6 +3719,8 @@
+   function settingsPage(host) {
+     const tabs = [
+       ["general", "General"],
++      ["visuals", "Visuals"],
++      ["audio", "Audio"],
+       ["providers", "Providers"],
+       ["privacy", "Privacy & data"],
+       ["about", "About"],
+@@ -3108,200 +3751,6 @@
+     if (state.settingsTab === "general") {
+       content.append(browserPreferenceSection());
+       content.append(
+-        el("h2", {}, "Appearance"),
+-        el(
+-          "p",
+-          { class: "muted" },
+-          "Choose a look that feels right for your workspace.",
+-        ),
+-        el(
+-          "div",
+-          { class: "theme-options", role: "group", "aria-label": "Theme" },
+-          ...[
+-            ["retro", "Retro"],
+-            ["light", "Light"],
+-            ["dark", "Dark"],
+-            ["matrix", "Matrix"],
+-            ["amber", "Amber"],
+-            ["ice", "Ice"],
+-            ["custom", "Custom"],
+-            ["system", "System"],
+-          ].map(([value, label]) => {
+-            const choice = button(
+-              [
+-                el(
+-                  "span",
+-                  { class: "theme-swatch " + value, "aria-hidden": "true" },
+-                  el("span"),
+-                  el("span"),
+-                ),
+-                el(
+-                  "span",
+-                  { class: "theme-label" },
+-                  label,
+-                  (localStorage.getItem("quixi.theme") || "dark") === value
+-                    ? icon("check", 14)
+-                    : null,
+-                ),
+-              ],
+-              () => {
+-                rememberPreference("theme", value);
+-                applyTheme();
+-                renderPage();
+-              },
+-              "theme-option" +
+-                ((localStorage.getItem("quixi.theme") || "dark") === value
+-                  ? " selected"
+-                  : ""),
+-            );
+-            choice.setAttribute("aria-label", "Use " + value + " theme");
+-            choice.setAttribute(
+-              "aria-pressed",
+-              String((localStorage.getItem("quixi.theme") || "dark") === value),
+-            );
+-            return choice;
+-          }),
+-        ),
+-        el(
+-          "div",
+-          { class: "font-grid" },
+-          el(
+-            "label",
+-            {},
+-            "Interface font",
+-            select(
+-              [
+-                ["", "Default"],
+-                ["system-ui, sans-serif", "System sans"],
+-                ["ui-monospace, SFMono-Regular, Menlo, monospace", "Monospace"],
+-                ["Georgia, 'Times New Roman', serif", "Serif"],
+-                ["Atkinson Hyperlegible, Verdana, sans-serif", "Hyperlegible"],
+-              ],
+-              localStorage.getItem("quixi.fontFamily") || "",
+-              (v) => {
+-                v
+-                  ? rememberPreference("fontFamily", v)
+-                  : localStorage.removeItem("quixi.fontFamily");
+-                applyAppearance();
+-              },
+-            ),
+-          ),
+-          el(
+-            "label",
+-            {},
+-            "Text size",
+-            select(
+-              [
+-                ["", "Default (14)"],
+-                ["12", "12"],
+-                ["13", "13"],
+-                ["15", "15"],
+-                ["16", "16"],
+-                ["18", "18"],
+-                ["20", "20"],
+-              ],
+-              localStorage.getItem("quixi.fontSize") || "",
+-              (v) => {
+-                v
+-                  ? rememberPreference("fontSize", v)
+-                  : localStorage.removeItem("quixi.fontSize");
+-                applyAppearance();
+-              },
+-            ),
+-          ),
+-        ),
+-        el(
+-          "p",
+-          { class: "muted", style: "margin-top:14px" },
+-          "Custom theme overrides the base colours; leave a swatch alone to inherit the theme.",
+-        ),
+-        el(
+-          "div",
+-          { class: "swatch-row" },
+-          colourControl("bg", "Background"),
+-          colourControl("text", "Text"),
+-          colourControl("accent", "Accent"),
+-        ),
+-        el("h2", { style: "margin-top:30px" }, "Surfaces"),
+-        el(
+-          "p",
+-          { class: "muted" },
+-          "Boxed surfaces give every panel a defined edge. Translucency blurs what is behind a panel where the compositor supports it; where it does not, the panel simply stays solid.",
+-        ),
+-        el(
+-          "div",
+-          { class: "toggle-row" },
+-          el(
+-            "label",
+-            { class: "toggle" },
+-            el("input", {
+-              type: "checkbox",
+-              checked: localStorage.getItem("quixi.boxing") !== "0",
+-              onchange: (event) => {
+-                rememberPreference("boxing", event.target.checked ? "1" : "0");
+-                applyTheme();
+-              },
+-            }),
+-            el("span", {}, "Boxed surfaces"),
+-          ),
+-          el(
+-            "label",
+-            { class: "toggle" },
+-            el("input", {
+-              type: "checkbox",
+-              checked: localStorage.getItem("quixi.translucent") === "1",
+-              onchange: (event) => {
+-                rememberPreference("translucent", event.target.checked ? "1" : "0");
+-                applyTheme();
+-              },
+-            }),
+-            el("span", {}, "Translucent panels"),
+-          ),
+-        ),
+-        el("h2", { style: "margin-top:30px" }, "Transparency"),
+-        el(
+-          "p",
+-          { class: "muted" },
+-          "How much of what is behind a panel shows through. 100% is solid; below about 60% the text starts to fight the desktop behind it.",
+-        ),
+-        el(
+-          "label",
+-          { class: "slider-row" },
+-          el("span", {}, "Panel opacity"),
+-          el("input", {
+-            type: "range", min: 40, max: 100, step: 2,
+-            value: localStorage.getItem("quixi.panelOpacity") || "100",
+-            oninput: (event) => {
+-              document.documentElement.style.setProperty("--panel-alpha", (Number(event.target.value) / 100).toFixed(2));
+-              rememberPreferenceSoon("panelOpacity", event.target.value);
+-            },
+-          }),
+-          el("span", { class: "slider-value" }, `${localStorage.getItem("quixi.panelOpacity") || "100"}%`),
+-        ),
+-        el("h2", { style: "margin-top:26px" }, "Background"),
+-        el(
+-          "p",
+-          { class: "muted" },
+-          "A slow drift behind the interface, drawn by the app rather than a wallpaper. Off by default; it costs a little GPU and some people hate it.",
+-        ),
+-        el(
+-          "div",
+-          { class: "toggle-row" },
+-          el("label", { class: "toggle" },
+-            el("input", {
+-              type: "checkbox",
+-              checked: localStorage.getItem("quixi.backgroundMotion") === "1",
+-              onchange: (event) => { rememberPreference("backgroundMotion", event.target.checked ? "1" : "0"); applyTheme(); },
+-            }),
+-            el("span", {}, "Moving background")),
+-          el("label", { class: "toggle" },
+-            el("input", {
+-              type: "checkbox",
+-              checked: localStorage.getItem("quixi.backgroundGrid") === "1",
+-              onchange: (event) => { rememberPreference("backgroundGrid", event.target.checked ? "1" : "0"); applyTheme(); },
+-            }),
+-            el("span", {}, "Grid overlay")),
+-        ),
+         el("h2", { style: "margin-top:30px" }, "New tasks"),
+         field(
+           "Default permission mode",
+@@ -3326,6 +3775,10 @@
+         ),
+       );
+       capabilityUI.renderDesktopStatus(content);
++    } else if (state.settingsTab === "visuals") {
++      content.append(...visualsBlocks());
++    } else if (state.settingsTab === "audio") {
++      content.append(audioPageSections());
+     } else if (state.settingsTab === "providers") {
+       content.append(
+         el("h2", {}, "Model providers"),
+@@ -4088,8 +4541,14 @@
+           el(
+             "div",
+             { class: "browser-chooser-list" },
+-            button(`System default${stock.name ? ` (${stock.name})` : ""}`, () => pick("system"), ""),
+-            ...browsers.map((b) => button(b.name, () => pick(b.desktopId || b.id), "")),
++            button(
++              `System default${stock.name ? ` (${stock.name})` : ""}`,
++              () => pick("system"),
++              "",
++            ),
++            ...browsers.map((b) =>
++              button(b.name, () => pick(b.desktopId || b.id), ""),
++            ),
+           ),
+         ),
+       );
+@@ -4127,8 +4586,12 @@
+     }
+     return browserCatalogue;
+   }
+-  // The order is deliberate: the families this build has tooling for first. A browser that cannot be
+-  // driven is still a legitimate way to read a page.
++  function refreshBrowserCatalogue() {
++    browserCatalogue = null;
++    return loadBrowserCatalogue();
++  }
++  // The order is deliberate: the two this build has tooling for first, then everything else the
++  // desktop offers. A browser that cannot be driven is still a legitimate way to read a page.
+   function orderBrowsers(list) {
+     const rank = (b) => {
+       const n = `${b.name || ""} ${b.exec || ""}`.toLowerCase();
+@@ -4149,6 +4612,7 @@
+     return hit ? hit.name : (cat && cat.stock && cat.stock.name) || "your browser";
+   }
+ 
++
+   // The dropdown sits where the panel has always said which browser gets the page. Before it, the
+   // name was hardcoded in three places ("Open in Brave", "Pages open in Brave") and changing it meant
+   // a rebuild; now it is one control that lists what this desktop actually has.
+@@ -4166,10 +4630,13 @@
+       select.replaceChildren(
+         ...options.map((o) => {
+           const opt = el("option", { value: o.id }, o.name);
+-          if (o.id === pref) opt.selected = true;
++          if (o.id === pref || (pref !== "system" && pref !== "ask" && list.find((b) => b.id === pref && b.desktopId === o.id))) {
++            opt.selected = true;
++          }
+           return opt;
+         }),
+       );
++      // Keep the two the tooling is built for at the top, and mark them so the list explains itself.
+       for (const opt of select.options) {
+         const b = list.find((x) => x.id === opt.value);
+         // Plain names in the list; the difference between the two ways of driving lives in the
