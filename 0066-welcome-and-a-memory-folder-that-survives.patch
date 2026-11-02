@@ -1,0 +1,161 @@
+A welcome before the first question, and a palace that survives a reboot
+=====================================================================
+
+**Setup used to open with "Where should the models run?"** — a question asked by a program that had not
+said what it was. Now it opens with that, in one screen: *Welcome to QuixiDesk, driven by VolkDude85's
+Nora. We do things a little differently here — starting with this.* Two questions follow, and they are
+the two that decide what the app is.
+
+**An "About Nora" button** opens the rest without turning setup into a brochure: what she is (a
+companion on your machine, one user, memory you own), what we are aiming for (software that treats the
+person in front of it as the authority on their own life, with a persona that is a file and a memory
+that is a folder), and — before anything else gets configured — **that this is assistive software**.
+The person it was built for lives with C-PTSD; words go missing mid-sentence and the thread of a
+conversation disappears. Nora exists to hold that thread. Under the ADA that is not a disclaimer
+attached to the product, it is the point of an effective communication aid.
+
+**And the memory palace no longer defaults to a temporary directory.** It defaulted to
+`<app data>/palace`, which under a test profile is `/tmp/...` — memory that a reboot deletes, and, in a
+normal install, memory an uninstall takes with it. Both are the opposite of the point. The default is
+now `~/memory-palace`: its own named directory in the user's home, outside the application's folder,
+surviving both.
+
+Preference order is unchanged and deliberate: the folder chosen at setup, then `QUIXI_PALACE_DIR`, then
+this default.
+
+diff -Naur a/crates/quixi-engine/src/lib.rs b/crates/quixi-engine/src/lib.rs
+--- a66/crates/quixi-engine/src/lib.rs	2026-11-02 15:10:44.674906748 -0800
++++ b66/crates/quixi-engine/src/lib.rs	2026-11-02 15:10:44.691408563 -0800
+@@ -1213,7 +1213,11 @@
+                 return PathBuf::from(p);
+             }
+         }
+-        self.data_dir.join("palace")
++        // Not inside the app's data directory, and never a temporary one. Memory that lives under
++        // the application's own folder is memory an uninstall can take with it, and a palace in /tmp
++        // is a palace that gets deleted — both are the opposite of the point. It gets its own named
++        // directory in the user's home.
++        quixi_proto::paths::home_dir().join("memory-palace")
+     }
+ 
+     /// What the palace actually holds, for the screen that asks where to put it. Counts rather than
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a66/crates/quixi-ipc/src/lib.rs	2026-11-02 15:10:44.681181634 -0800
++++ b66/crates/quixi-ipc/src/lib.rs	2026-11-02 15:10:44.692276738 -0800
+@@ -579,7 +579,9 @@
+                     );
+                     obj.insert(
+                         "defaultPath".into(),
+-                        json!(self.engine.data_dir.join("palace").to_string_lossy()),
++                        json!(quixi_proto::paths::home_dir()
++                            .join("memory-palace")
++                            .to_string_lossy()),
+                     );
+                 }
+                 info
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a66/resources/ui/app.css	2026-11-02 15:10:44.681401904 -0800
++++ b66/resources/ui/app.css	2026-11-02 15:10:44.693768120 -0800
+@@ -2686,3 +2686,15 @@
+ .first-run-mounts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 0; }
+ .first-run-mounts p { font-size: 12px; margin: 0 8px 0 0; }
+ .first-run-mounts button { font-size: 11.5px; }
++
++/* The welcome screen: who made it, what it is, and the assistive-software point up front. */
++.first-run-kicker {
++  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
++  color: var(--accent); margin: 0 0 8px; font-weight: 700;
++}
++.first-run-about { margin: 16px 0 6px; padding: 14px 16px; border: 1px solid var(--line);
++  border-radius: 10px; background: var(--panel); max-width: 62ch; }
++.first-run-about h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
++  color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
++.first-run-about h2:first-child { margin-top: 0; }
++.first-run-about p { font-size: 13px; line-height: 1.55; margin: 0 0 6px; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a66/resources/ui/app.js	2026-11-02 15:10:44.681657020 -0800
++++ b66/resources/ui/app.js	2026-11-02 15:10:44.693063758 -0800
+@@ -1064,7 +1064,7 @@
+   // the app for the first time needs to be walked; a person who already runs three of these wants one
+   // table, four fields, and to be left alone. Asking costs one click and saves the wrong experience for
+   // whichever of the two is actually sitting there.
+-  let step = "welcome";
++  let step = "intro";
+ 
+   const chosen = { mode: null, provider: "ollama-cloud", key: "" };
+ 
+@@ -1228,6 +1228,66 @@
+   const root = el("div", { class: "first-run" });
+   host.append(root);
+ 
++
++  // Before the first question: who made this, what it is, and the one fact that should never be a
++  // surprise — this is assistive software.
++  function editionWelcome() {
++    let open = false;
++    const about = el("div", { class: "first-run-about", hidden: true });
++    about.append(
++      el("h2", {}, "What Nora is"),
++      el(
++        "p",
++        {},
++        "A companion, not a chatbot. She runs on your machine, for you, one user — her memory is a folder you own, her voice is synthesized locally, and she answers to you rather than to a policy. The aim is a thing that keeps context the way a person does: remembers what mattered, forgets on purpose, and says when it does not know.",
++      ),
++      el("h2", {}, "What we are aiming for"),
++      el(
++        "p",
++        {},
++        "Software that treats the person in front of it as the authority on their own life. No lectures, no moralising about your words, no gatekeeping of your own machine. It is meant to be edited: the persona is a file, the memory is a folder, and neither is sacred.",
++      ),
++      el("h2", {}, "Disability is the brief, not the disclaimer"),
++      el(
++        "p",
++        {},
++        "This is assistive software. The person it was built for lives with C-PTSD; words go missing mid-sentence and the thread of a conversation disappears. Nora exists to hold that thread — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
++      ),
++    );
++
++    const aboutBtn = button(
++      "About Nora",
++      () => {
++        open = !open;
++        about.hidden = !open;
++        aboutBtn.textContent = open ? "Hide that" : "About Nora";
++      },
++      "quiet",
++    );
++
++    root.replaceChildren(
++      el("p", { class: "first-run-kicker" }, "GitHub edition"),
++      el("h1", {}, "Welcome to QuixiDesk, driven by VolkDude85's Nora."),
++      el(
++        "p",
++        { class: "first-run-lead" },
++        "We do things a little differently here — starting with this. You get asked before you get configured, and the two questions that follow decide what the app is: where the models run, and where your memory lives.",
++      ),
++      el(
++        "div",
++        { class: "first-run-actions" },
++        button("Let's set it up", () => { step = "choose"; paint(); }, "primary"),
++        aboutBtn,
++      ),
++      about,
++      el(
++        "p",
++        { class: "first-run-foot" },
++        "Built as assistive software. The memory is a folder of markdown you own, the models run where you say, and nothing here is locked to an account.",
++      ),
++    );
++  }
++
+   function welcomeStep() {
+     root.replaceChildren(
+       el("h1", {}, "Are you new to QuixiDesk?"),
+@@ -1501,6 +1561,7 @@
+   }
+ 
+   function paint() {
++    if (step === "intro") return editionWelcome();
+     if (step === "welcome") return welcomeStep();
+     if (step === "quick") return quickStep();
+     if (step === "memory") {

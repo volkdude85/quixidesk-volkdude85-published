@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=45
+pkgrel=46
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -147,6 +147,7 @@ source=(
   0063-encryption-choices.patch
   0064-pick-your-model.patch
   0065-visuals-audio-and-your-drives.patch
+  0066-welcome-and-a-memory-folder-that-survives.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -216,6 +217,7 @@ sha256sums=(
   'cc53a583ac6a6af203075c210d080abb7f95fb8e0e03d34bc8cf5561fbab5389'
   '7dfbd143f3cd6df00c7168b06efb7502d254212c1014fc76973c7a9ff29e5d9e'
   '1e1694eff9d175d636cd92a725742e16ccb62a16a2d10e136384f1d45bf5667c'
+  '1b46d0cfd5c5c02af273f3abbd289c0f6ad5765a4936feb5fcbb15055349bde8'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -458,6 +460,7 @@ prepare() {
   patch -Np1 -i "${srcdir}/0063-encryption-choices.patch"
   patch -Np1 -i "${srcdir}/0064-pick-your-model.patch"
   patch -Np1 -i "${srcdir}/0065-visuals-audio-and-your-drives.patch"
+  patch -Np1 -i "${srcdir}/0066-welcome-and-a-memory-folder-that-survives.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
