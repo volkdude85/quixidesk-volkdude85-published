@@ -1,3 +1,29 @@
+Which browser opens a link is a setting, not a hardcoded word
+==============================================================
+
+The browser pane said "Open in Brave" in three places and meant it as a constant. Upstream hands the
+URL to `xdg-open` — whatever the desktop says — so the honest default is the system default, and the
+honest way to change it is a control rather than a rebuild.
+
+**The list is the desktop's own menu.** Every `.desktop` entry with `Categories=…WebBrowser…`, read from
+`/usr/share/applications`, `/usr/local/share/applications`, `$XDG_DATA_HOME` and `$XDG_DATA_DIRS`. A
+browser this source has never heard of appears because the desktop says it exists — that is how
+FireDragon, Garuda's default, and Mullvad Browser get listed at all. Which one is the system default
+comes from `xdg-settings get default-web-browser`.
+
+**Three kinds of answer, all legitimate:** the system default (what stock QuixiDesk does), ask me each
+time (a chooser per link; dismissing it opens nothing), or a named browser.
+
+**The two ways of driving a browser are described rather than abbreviated.** Chromium-family browsers
+can be driven by the agent while the user keeps their own window open; Firefox-family browsers are
+started under a driver with their own profile. The picker says that in a sentence, because "CDP" and
+"WebDriver" are the implementation's words and not the reader's.
+
+**The wire follows the choice.** `open-external` accepts a `browser` in the request body, so the
+chooser's answer takes the same path as the saved setting. A `.desktop` id launches through `gio` so
+that entry's own `Exec=` is used; `system` short-circuits to `xdg-open`; a Chromium still gets `--app=`
+so the page arrives as its own window instead of a tab inside a session already open.
+
 diff -Naur a/crates/quixi-app/src/main.rs b/crates/quixi-app/src/main.rs
 --- a/crates/quixi-app/src/main.rs	2026-11-02 13:25:36.726727263 -0800
 +++ b/crates/quixi-app/src/main.rs	2026-11-02 13:26:01.626154270 -0800
@@ -269,8 +295,8 @@ diff -Naur a/resources/ui/app.css b/resources/ui/app.css
 +.browser-chooser-list button { justify-content: flex-start; width: 100%; }
 diff -Naur a/resources/ui/app.js b/resources/ui/app.js
 --- a/resources/ui/app.js	2026-11-02 13:25:36.735975480 -0800
-+++ b/resources/ui/app.js	2026-11-02 13:26:20.369866542 -0800
-@@ -3016,6 +3016,56 @@
++++ b/resources/ui/app.js	2026-11-02 13:44:49.617475105 -0800
+@@ -3016,6 +3016,63 @@
              el("td", {}, el("code", {}, f.path)),
              el("td", {}, f.exists ? `${f.bytes} B` : el("span", { class: "muted" }, "not created yet"))))));
    }
@@ -317,6 +343,13 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
 +          browsers.length ? `${browsers.length} browsers on this desktop: ${browsers.map((b) => b.name).join(", ")}.` : "No browsers were found in the desktop menu.",
 +          stock.name ? `System default is ${stock.name}.` : "",
 +        ].filter(Boolean).join(" ");
++        wrap.append(
++          el(
++            "p",
++            { class: "hint" },
++            "Chromium browsers — Brave, Chrome — can be driven by the agent while you keep using the one you have open. Firefox, FireDragon, Librewolf and Mullvad are driven the other way: the agent starts them under its own driver with a separate profile, so your session is untouched.",
++          ),
++        );
 +      })
 +      .catch(() => {
 +        status.textContent = "Could not read the installed browsers.";
@@ -327,7 +360,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
    function settingsPage(host) {
      const tabs = [
        ["general", "General"],
-@@ -3047,6 +3097,7 @@
+@@ -3047,6 +3104,7 @@
        ),
      );
      if (state.settingsTab === "general") {
@@ -335,7 +368,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
        content.append(
          el("h2", {}, "Appearance"),
          el(
-@@ -3985,11 +4036,56 @@
+@@ -3985,11 +4043,56 @@
      }
      draw();
    }
@@ -394,7 +427,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
    }
    async function toggleBrowser() {
      state.browser = !state.browser;
-@@ -4006,8 +4102,94 @@
+@@ -4006,8 +4109,95 @@
      renderBrowser(host);
    }
    let browserRenderVersion = 0;
@@ -459,13 +492,14 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
 +      );
 +      for (const opt of select.options) {
 +        const b = list.find((x) => x.id === opt.value);
-+        if (b && opt.textContent === b.name) {
-+          const how = b.driver === "cdp" ? "CDP" : b.driver === "webdriver" ? "WebDriver" : "";
-+          opt.textContent = how ? `${b.name} · ${how}` : b.name;
++        // Plain names in the list; the difference between the two ways of driving lives in the
++        // sentence underneath, because "CDP" and "WebDriver" are our words, not the reader's.
++        if (b && opt.textContent === b.name && !b.drivable) {
++          opt.textContent = `${b.name} — not scriptable`;
 +        }
 +      }
 +      select.title = list.length
-+        ? `${list.length} browsers on this desktop`
++        ? `${list.length} browsers on this desktop. Chromium ones (Brave, Chrome) can be driven while you keep using them; Firefox ones (Firefox, FireDragon, Mullvad) run in their own profile instead.`
 +        : "No browsers were found in the desktop menu";
 +    };
 +    paint({ list: [], stock: {} });
@@ -489,7 +523,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
      const data = state.browserState || (await api("/api/quixi/browser"));
      state.browserState = data;
      const selected = (data.tabs || []).find(
-@@ -4036,17 +4218,17 @@
+@@ -4036,17 +4226,17 @@
      const frame = el(
        "div",
        { class: "browser-handoff", id: "browser-frame" },
@@ -511,7 +545,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
            } catch (error) {
              toast(String(error && error.message ? error.message : error), true);
            }
-@@ -4067,6 +4249,7 @@
+@@ -4067,6 +4257,7 @@
          { class: "browser-head" },
          icon("browser", 16),
          el("strong", {}, "QuixiDesk Browser"),
