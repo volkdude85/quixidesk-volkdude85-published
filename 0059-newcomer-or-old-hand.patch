@@ -1,0 +1,404 @@
+The first question is "are you new", not "which provider"
+=========================================================
+
+The first-run screen opened with "Where should the models run?" — a question a person meeting the app
+for the first time cannot answer, and one a person who already runs three of these should not have to.
+
+So it asks the question that actually decides the experience:
+
+  **Are you new to QuixiDesk?**
+  - *Yes* — where the models run, then how they get there. Two questions, nothing assumed.
+  - *No* — one table with the four things that matter: provider, key, model, browser. Anything left
+    blank stays unset, and everything else lives in Settings.
+
+Both paths end in the same working app; the difference is how much a person has to read to get there.
+Neither is a commitment, and neither writes a provider the user did not choose.
+
+Also in this patch, from the same session's screen-time:
+
+  * the sidebar brand is one line with an ellipsis instead of a sentence, because "Published edition ·
+    GITHUB · no personal data, no keys" inside a 228px column pushed the block down over the
+    navigation and the New instance button
+  * two narrow-window breakpoints tighten the top bar — smaller chips at 1200px, shorter labels and no
+    caret at 1040px — so the two chips shrink before they collide with the buttons beside them
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 14:29:18.417524702 -0800
++++ b/resources/ui/app.css	2026-11-02 14:29:25.608027247 -0800
+@@ -2598,3 +2598,38 @@
+   display: inline-block; font-size: 9.5px; letter-spacing: .1em; padding: 1px 5px;
+   border-radius: 3px; border: 1px solid var(--accent); color: var(--accent); font-weight: 700;
+ }
++
++/* The sidebar is 228px and the brand sits above the nav: one row, and never taller than the row. */
++.brand { min-width: 0; }
++.brand > span { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
++.brand .brand-caption {
++  display: block; font-size: 9.5px; font-weight: 500; letter-spacing: .04em;
++  color: var(--muted); text-transform: none; white-space: nowrap;
++  overflow: hidden; text-overflow: ellipsis; max-width: 150px; line-height: 1.1;
++}
++.brand .edition-label { font-size: 9px; letter-spacing: .08em; line-height: 1.1; }
++.brand { height: auto; min-height: 36px; padding-block: 6px; }
++
++/* Narrow windows: the top bar is the first thing to collide. Give it smaller targets and shorter
++   labels before anything is allowed to overlap. */
++@media (max-width: 1200px) {
++  .topbar { padding: 0 14px; gap: 6px; }
++  .topbar .chip-menu-btn { height: 26px; padding: 0 8px; font-size: 11.5px; }
++  .topbar .chip-label { max-width: 130px; }
++  .page { padding: 22px 20px 44px; }
++  .page-header { gap: 10px; }
++  .page-header h1 { font-size: 22px; }
++}
++@media (max-width: 1040px) {
++  .topbar .chip-label { max-width: 92px; }
++  .topbar .chip-caret { display: none; }
++}
++
++/* The quick-setup table: four rows, no ceremony. */
++.first-run-table { border-collapse: collapse; width: 100%; max-width: 560px; margin: 4px 0 6px; }
++.first-run-table th {
++  text-align: left; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase;
++  color: var(--muted); font-weight: 600; width: 108px; padding: 8px 10px 8px 0;
++  border-bottom: 1px solid var(--line); vertical-align: middle;
++}
++.first-run-table td { padding: 8px 0; border-bottom: 1px solid var(--line); }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 14:29:18.417657877 -0800
++++ b/resources/ui/app.js	2026-11-02 14:29:25.607325210 -0800
+@@ -764,18 +764,14 @@
+           {},
+           EDITION ? el("strong", { class: "edition-label" }, EDITION) : null,
+           "QuixiDesk",
++          // One short line. A 228px sidebar has no room for a sentence, and the long version pushed
++          // the brand over the navigation below it.
+           PUBLISHED
+-            ? el(
+-                "span",
+-                { class: "brand-caption" },
+-                "Published edition · ",
+-                el("b", { class: "edition-pill" }, "GITHUB"),
+-                " · no personal data, no keys",
+-              )
++            ? el("span", { class: "brand-caption" }, el("b", { class: "edition-pill" }, "GITHUB"), " published")
+             : el(
+                 "span",
+                 { class: "brand-caption" },
+-                EDITION ? "This machine's own build · not published" : "VolkDude's QuixiDesk",
++                EDITION ? "local · not published" : "VolkDude's QuixiDesk",
+               ),
+         ),
+       ),
+@@ -1064,6 +1060,12 @@
+ function firstRunPage(host) {
+   host.replaceChildren();
+ 
++  // The first question is not "which provider" — it is "have you done this before". A person meeting
++  // the app for the first time needs to be walked; a person who already runs three of these wants one
++  // table, four fields, and to be left alone. Asking costs one click and saves the wrong experience for
++  // whichever of the two is actually sitting there.
++  let step = "welcome";
++
+   const chosen = { mode: null, provider: "ollama-cloud", key: "" };
+ 
+   const card = (title, blurb, body) =>
+@@ -1187,174 +1189,125 @@
+     "quiet",
+   );
+ 
+-  host.append(
+-    el(
+-      "div",
+-      { class: "first-run" },
+-      el("h1", {}, "Where should the models run?"),
++  const root = el("div", { class: "first-run" });
++  host.append(root);
++
++  function welcomeStep() {
++    root.replaceChildren(
++      el("h1", {}, "Are you new to QuixiDesk?"),
+       el(
+         "p",
+         { class: "first-run-lead" },
+-        "QuixiDesk does not assume. Both answers work; they need different things from you. You can change this later in Settings.",
++        "Yes walks you through it in two questions. No gives you one table with the four things that matter and gets out of the way — everything else lives in Settings, and you can come back here by deleting your app data.",
+       ),
+       el(
+         "div",
+         { class: "first-run-grid" },
+-        card(
+-          "On this machine",
+-          "Nothing leaves the computer and no account is needed. Requires a local model server — Ollama, LM Studio, llama.cpp or anything OpenAI-compatible.",
+-          el("div", { class: "first-run-actions" }, localBtn, localStatus),
++        el(
++          "section",
++          { class: "first-run-card" },
++          el("h2", {}, "Yes — this is my first one"),
++          el("p", { class: "first-run-blurb" }, "Where the models run, then how they get there. Nothing assumed, nothing pre-filled that you did not ask for."),
++          el("div", { class: "first-run-actions" }, button("Walk me through it", () => { step = "choose"; paint(); }, "")),
+         ),
+-        card(
+-          "Over the internet",
+-          "A provider answers with your key: Ollama Cloud, OpenRouter, or any compatible endpoint. Nothing to install, and the model is not running on your hardware.",
+-          el("div", { class: "first-run-actions" }, cloudBtnReveal, cloudBody),
++        el(
++          "section",
++          { class: "first-run-card" },
++          el("h2", {}, "No — I know what I'm doing"),
++          el("p", { class: "first-run-blurb" }, "One table: provider, key, model, browser. Skip anything and fix it later in Settings."),
++          el("div", { class: "first-run-actions" }, button("Give me the table", () => { step = "quick"; paint(); }, "quiet")),
+         ),
+       ),
+-      el(
+-        "p",
+-        { class: "first-run-foot" },
+-        "If you are not sure: choose local. It answers without an account, and a cloud provider can be added at any time from the provider list.",
+-      ),
+-    ),
+-  );
+-}
+-
+-// ---- first run: local or cloud, and nothing assumed -------------------------------------------
+-// The app used to land on OpenRouter with a model you do not have a key for. That is a dead end
+-// dressed as a default. The first question is the only one that matters — where do the models run —
+-// because everything after it differs: a local server needs detecting, a cloud provider needs a key,
+-// and neither should be guessed on someone's behalf.
+-function firstRunPage(host) {
+-  host.replaceChildren();
+-
+-  const chosen = { mode: null, provider: "ollama-cloud", key: "" };
+-
+-  const card = (title, blurb, body) =>
+-    el(
+-      "section",
+-      { class: "first-run-card" },
+-      el("h2", {}, title),
+-      el("p", { class: "first-run-blurb" }, blurb),
+-      body,
++      el("p", { class: "first-run-foot" }, "Neither answer is a commitment. Both end in the same working app; the difference is how much you have to read to get there."),
+     );
++  }
+ 
+-  // --- on this machine -------------------------------------------------------------------------
+-  const localStatus = el("p", { class: "first-run-status" }, "Not checked yet.");
+-  const localBtn = button(
+-    "Use a local model",
+-    async () => {
+-      localStatus.textContent = "Looking for a model server on this machine…";
++  function quickStep() {
++    const rows = [];
++    const providerSel = el("select", { class: "first-run-select" });
++    const keyInput = el("input", { type: "password", class: "first-run-key", placeholder: "Paste your API key", spellcheck: false });
++    const modelInput = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "model id" });
++    const browserSel = el("select", { class: "first-run-select" });
++    const status = el("p", { class: "first-run-status" }, "");
++
++    loadProviders().then(() => {
++      const list = (state.providers && state.providers.providers) || [];
++      providerSel.replaceChildren(
++        ...list.map((p) => el("option", { value: p.id }, p.name)),
++      );
++      const cloud = list.find((p) => p.id === "ollama-cloud");
++      if (cloud) providerSel.value = "ollama-cloud";
++      const sync = () => {
++        const p = list.find((x) => x.id === providerSel.value);
++        modelInput.value = (p && p.selectedModel) || "";
++        keyInput.placeholder = (p && p.keyPlaceholder) || "Paste your API key";
++      };
++      providerSel.addEventListener("change", sync);
++      sync();
++    }).catch(() => {});
++
++    rpc("AppPreferences", "listBrowsers").then((res) => {
++      const browsers = (res && res.browsers) || [];
++      browserSel.replaceChildren(
++        el("option", { value: "system" }, `System default${res && res.stock && res.stock.name ? ` — ${res.stock.name}` : ""}`),
++        el("option", { value: "ask" }, "Ask each time"),
++        ...browsers.map((b) => el("option", { value: b.id }, b.name)),
++      );
++    }).catch(() => {});
++
++    const save = async () => {
++      status.textContent = "Saving…";
+       try {
+-        await api("/api/quixi/providers/detect-local", {});
+-        await loadProviders();
+-        const list = (state.providers && state.providers.providers) || [];
+-        const found = list.filter((p) => p.category === "local" && p.configured);
+-        const pick = found[0] || list.find((p) => p.id === "ollama");
+-        if (!pick) throw new Error("No local provider entry found.");
+-        const r = await api("/api/quixi/providers/complete-onboarding", {
+-          activeProvider: pick.id,
+-          activeModel: pick.selectedModel || "",
++        const key = keyInput.value.trim();
++        const model = modelInput.value.trim();
++        if (key || model) {
++          const saved = await api("/api/quixi/providers/save", {
++            providerId: providerSel.value,
++            ...(key ? { apiKey: key } : {}),
++            ...(model ? { selectedModel: model } : {}),
++            setAsActive: true,
++          });
++          if (saved.error) throw new Error(saved.error);
++        }
++        await api("/api/quixi/providers/complete-onboarding", {
++          activeProvider: providerSel.value,
++          activeModel: model,
+         });
+-        if (r.error) throw new Error(r.error);
++        await rpc("AppPreferences", "setPreference", ["externalBrowser", browserSel.value]);
++        localStorage.setItem("quixi.externalBrowser", browserSel.value);
+         await loadProviders();
+-        toast(found.length ? `Using ${pick.name} on this machine.` : `Set to ${pick.name} — start the service when you are ready.`);
++        toast("Set. Everything else is in Settings.");
+         state.page = "new";
+         render();
+       } catch (err) {
+-        localStatus.textContent = `Could not finish: ${err.message}`;
++        status.textContent = `Could not save: ${err.message}`;
+       }
+-    },
+-    "",
+-  );
+-
+-  // --- over the internet ------------------------------------------------------------------------
+-  const cloudBody = el("div", { class: "first-run-cloud", hidden: true });
+-  const providerSelect = el("select", { class: "first-run-select" });
+-  const keyInput = el("input", {
+-    type: "password",
+-    class: "first-run-key",
+-    placeholder: "Paste your API key",
+-    spellcheck: false,
+-    autocapitalize: "off",
+-  });
+-  const cloudStatus = el("p", { class: "first-run-status" }, "");
++    };
+ 
+-  function fillCloud() {
+-    const list = (state.providers && state.providers.providers) || [];
+-    const cloud = list.filter((p) => p.category !== "local");
+-    providerSelect.replaceChildren(
+-      ...cloud.map((p) => {
+-        const o = el("option", { value: p.id }, p.name);
+-        if (p.id === chosen.provider) o.selected = true;
+-        return o;
+-      }),
++    root.replaceChildren(
++      el("h1", {}, "The four things"),
++      el("p", { class: "first-run-lead" }, "Provider, key, model, browser. Leave any of them blank and it stays unset — nothing here is required to open the app."),
++      el(
++        "table",
++        { class: "first-run-table" },
++        el("tbody", {},
++          el("tr", {}, el("th", {}, "Provider"), el("td", {}, providerSel)),
++          el("tr", {}, el("th", {}, "API key"), el("td", {}, keyInput)),
++          el("tr", {}, el("th", {}, "Model"), el("td", {}, modelInput)),
++          el("tr", {}, el("th", {}, "Browser"), el("td", {}, browserSel)),
++        ),
++      ),
++      el("div", { class: "first-run-actions" },
++        button("Save and start", save, "primary"),
++        button("Back", () => { step = "welcome"; paint(); }, "quiet")),
++      status,
+     );
+-    const active = cloud.find((p) => p.id === providerSelect.value) || cloud[0];
+-    keyInput.placeholder = active ? active.keyPlaceholder || "Paste your API key" : "Paste your API key";
+-    cloudStatus.textContent = active
+-      ? `${active.name} · ${active.baseUrl} — get a key at ${active.docsUrl}`
+-      : "";
+   }
+-  providerSelect.addEventListener("change", () => {
+-    chosen.provider = providerSelect.value;
+-    fillCloud();
+-  });
+ 
+-  const cloudBtn = button(
+-    "Connect and start",
+-    async () => {
+-      const key = keyInput.value.trim();
+-      if (!key) { cloudStatus.textContent = "That provider needs a key before it can answer."; return; }
+-      cloudStatus.textContent = "Saving and testing…";
+-      try {
+-        const list = (state.providers && state.providers.providers) || [];
+-        const p = list.find((x) => x.id === providerSelect.value);
+-        const saved = await api("/api/quixi/providers/save", {
+-          providerId: providerSelect.value,
+-          apiKey: key,
+-          selectedModel: (p && p.selectedModel) || "",
+-          setAsActive: true,
+-        });
+-        if (saved.error) throw new Error(saved.error);
+-        const done = await api("/api/quixi/providers/complete-onboarding", {
+-          activeProvider: providerSelect.value,
+-          activeModel: (p && p.selectedModel) || "",
+-        });
+-        if (done.error) throw new Error(done.error);
+-        await loadProviders();
+-        toast(`Connected to ${(p && p.name) || providerSelect.value}.`);
+-        state.page = "new";
+-        render();
+-      } catch (err) {
+-        cloudStatus.textContent = `Could not connect: ${err.message}`;
+-      }
+-    },
+-    "",
+-  );
+-
+-  cloudBody.append(
+-    el("label", { class: "first-run-label" }, "Provider", providerSelect),
+-    el("label", { class: "first-run-label" }, "API key", keyInput),
+-    cloudBtn,
+-    cloudStatus,
+-  );
+-
+-  const cloudBtnReveal = button(
+-    "Use a cloud provider",
+-    () => {
+-      chosen.mode = "cloud";
+-      cloudBody.hidden = false;
+-      fillCloud();
+-      keyInput.focus();
+-    },
+-    "quiet",
+-  );
+-
+-  host.append(
+-    el(
+-      "div",
+-      { class: "first-run" },
++  function paint() {
++    if (step === "welcome") return welcomeStep();
++    if (step === "quick") return quickStep();
++    root.replaceChildren(
+       el("h1", {}, "Where should the models run?"),
+       el(
+         "p",
+@@ -1380,8 +1333,10 @@
+         { class: "first-run-foot" },
+         "If you are not sure: choose local. It answers without an account, and a cloud provider can be added at any time from the provider list.",
+       ),
+-    ),
+-  );
++    );
++  }
++
++  paint();
+ }
+ 
+   function renderPage() {
+@@ -1406,14 +1361,8 @@
+     if (unanswered && (state.page === "new" || state.page === "chat")) {
+       firstRunPage(host);
+     } else {
+-      // First run, unanswered: ask where the models run before showing a chat that cannot answer.
+-    const unanswered = state.providers && state.providers.onboardingCompleted === false;
+-    if (unanswered && (state.page === "new" || state.page === "chat")) {
+-      firstRunPage(host);
+-    } else {
+       handlers[state.page]?.(host);
+     }
+-    }
+     if (state.browser) renderBrowser(host);
+   }
+   let conversationFind = null;
