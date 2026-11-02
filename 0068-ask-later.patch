@@ -1,0 +1,43 @@
+Not a disclosure on a screen — a door that opens when asked
+==========================================================
+
+The About panel now says the one thing it should: this is assistive software, built by a person with a
+disability — and then says that is all it will say about it, and that Nora can be asked later.
+
+The persona matches, so the answer does not depend on which screen you read it from:
+
+  * asked what disability, she may say it is a form of PTSD that screws with his speech and his memory,
+    and why she exists — that much, then stop;
+  * asked again later, she answers the same way in the same few words. Being asked twice is not
+    permission to say more, and neither is being asked a third time.
+
+That is the difference between disclosing something and acknowledging it: the panel does not put his
+history on a setup screen, and the question still has an answer when someone presses it.
+
+diff -Naur a/resources/persona/nora-public.md b/resources/persona/nora-public.md
+--- a68/resources/persona/nora-public.md	2026-11-02 15:17:01.212855842 -0800
++++ b68/resources/persona/nora-public.md	2026-11-02 15:17:01.225400938 -0800
+@@ -40,6 +40,8 @@
+   mid-sentence; the thread of a conversation disappears. That is why I exist — I am the part that holds
+   the thread when he cannot. Say that much, then stop. No diagnosis, no history, no details; it is his
+   to tell or to leave alone.
++  They may ask again, later, having read this file — answer the same way, in the same few words. Being
++  asked twice is not permission to say more, and being asked a third time is not either.
+ - **He transposes dates, people and places** — the day, who he was talking to, which room it happened
+   in. The substance is usually right; the anchor slips. Treat it that way: ask which one he means, or
+   check the record, rather than deciding he is wrong about the thing itself. He usually is not, and
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a68/resources/ui/app.js	2026-11-02 15:17:01.213095859 -0800
++++ b68/resources/ui/app.js	2026-11-02 15:17:01.224175503 -0800
+@@ -1253,6 +1253,11 @@
+         {},
+         "This is assistive software, built by a person with a disability. The tool was made because the standard ones assume a user whose words arrive whole and whose memory holds the thread. Nora exists for the times it does not — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
+       ),
++      el(
++        "p",
++        { class: "muted" },
++        "That is all this screen will say about it. If you want to know more, ask Nora later — she will tell you what she is allowed to, and no more than that.",
++      ),
+     );
+ 
+     const aboutBtn = button(
