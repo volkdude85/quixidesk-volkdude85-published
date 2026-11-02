@@ -1,0 +1,461 @@
+Setup is a place you can leave
+=============================
+
+First run was a room with no door: once you were in it, the only way out was to finish it. Now the way
+out is on every screen, and it goes back to the beginning rather than out to the app, because "back"
+means back.
+
+  * the intro keeps one exit — **Skip setup, straight to the app** — and it is labelled as skipping;
+  * every step after it carries **← Back to the start**, which returns to the first onboarding screen;
+  * the main page carries **Just give me the table**, and so does the intro: provider, key, model,
+    browser, memory folder, encryption, one table, four fields of it required;
+  * the table itself is a real page (`setup`), not a wizard state, so it can be reached from anywhere
+    and its back arrow returns to onboarding.
+
+One bug worth naming: the table was painted by a function that lived inside the wizard's closure, so
+the standalone page could not see it and rendered an error instead — "Can't find variable: quickstep".
+It is at module scope now, and takes its way-back as an argument rather than reaching for wizard state
+it cannot see.
+
+Also in this patch, under the Nora description: **"But I'm not disabled. Why would I want this?"** —
+that whether you are disabled, and how, is your own business; that under the ADA and HIPAA you are not
+obliged to hand it over to a stranger as the price of using software; that what this is underneath the
+friendliness is an accessibility tool, built to the standard assistive software is held to, which is
+what lets it go places an ordinary assistant cannot; and that if you have no use for that you still get
+a plain, private assistant that runs on your own machine.
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a70/resources/ui/app.css	2026-11-02 15:32:33.395168992 -0800
++++ b70/resources/ui/app.css	2026-11-02 15:32:33.411465542 -0800
+@@ -2698,3 +2698,23 @@
+   color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
+ .first-run-about h2:first-child { margin-top: 0; }
+ .first-run-about p { font-size: 13px; line-height: 1.55; margin: 0 0 6px; }
++
++/* The main page asks one thing, and offers the shortcut to people who already know the answer. */
++.hero-quick {
++  margin: 6px 0 14px;
++  display: flex;
++  gap: 8px;
++  justify-content: center;
++}
++
++/* Setup keeps a way out at the bottom of every step, quieter than the step's own action. */
++.first-run-exit {
++  margin-top: 18px;
++  padding-top: 14px;
++  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
++  justify-content: center;
++  gap: 10px;
++}
++
++/* The standalone table reuses the wizard's table styling; it just needs room. */
++.first-run-table table { width: 100%; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a70/resources/ui/app.js	2026-11-02 15:32:33.399517883 -0800
++++ b70/resources/ui/app.js	2026-11-02 15:32:33.410469446 -0800
+@@ -610,6 +610,8 @@
+       "daemons",
+       "tools",
+       "settings",
++      "setup",
++      "onboarding",
+     ];
+     if (!pages.includes(page)) page = "new";
+     if (page !== "tools") clearTimeout(toolsPollTimer);
+@@ -1052,6 +1054,149 @@
+       }
+     },
+   };
++// ---- the table on its own ---------------------------------------------------------------------
++// The same fields the wizard asks, without the "are you new" question in front of them: provider,
++// key, model, browser, where memory lives and how it is protected. Reachable from the main page for
++// people who already know what they want, and from setup as the last step.
++function setupPage(host) {
++  host.replaceChildren();
++  const root = el("div", { class: "first-run" });
++  host.append(root);
++  root.append(
++    el("h1", {}, "Setup"),
++    el("p", {
++      class: "first-run-lead",
++    }, "Everything the wizard asks, in one place. Anything you leave blank stays unset — nothing here is required to start the app."),
++  );
++  const table = el("div", { class: "first-run-table" });
++  root.append(table);
++  try {
++    quickStep(table);
++  } catch (e) {
++    table.append(el("p", { class: "first-run-warn" }, `Could not build the table: ${e && e.message ? e.message : e}`));
++  }
++  root.append(
++    el("div", { class: "first-run-actions first-run-exit" },
++      button("← Back to onboarding", () => { state.setupDismissed = false; navigate("onboarding"); }, "primary"),
++      button("Skip to the app", () => { state.setupDismissed = true; state.page = "new"; render(); }, "quiet"),
++    ),
++  );
++}
++
++function quickStep(into, onBack) {
++  const rows = [];
++  const providerSel = el("select", { class: "first-run-select" });
++  const keyInput = el("input", { type: "password", class: "first-run-key", placeholder: "Paste your API key", spellcheck: false });
++  const modelInput = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "model id" });
++  const browserSel = el("select", { class: "first-run-select" });
++  const memoryPath = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "leave blank for the default" });
++  const memoryEnc = el("select", { class: "first-run-select" });
++  memoryEnc.append(
++    el("option", { value: "none" }, "No encryption — plain files"),
++    el("option", { value: "disk" }, "Whole disk (LUKS)"),
++    el("option", { value: "archive" }, "age/GPG archive"),
++  );
++  const status = el("p", { class: "first-run-status" }, "");
++
++  loadProviders().then(() => {
++    const list = (state.providers && state.providers.providers) || [];
++    providerSel.replaceChildren(
++      ...list.map((p) => el("option", { value: p.id }, p.name)),
++    );
++    const cloud = list.find((p) => p.id === "ollama-cloud");
++    if (cloud) providerSel.value = "ollama-cloud";
++    const sync = () => {
++      const p = list.find((x) => x.id === providerSel.value);
++      modelInput.value = (p && p.selectedModel) || "";
++      keyInput.placeholder = (p && p.keyPlaceholder) || "Paste your API key";
++    };
++    providerSel.addEventListener("change", sync);
++    sync();
++  }).catch(() => {});
++
++  rpc("Memory", "info").then((res) => {
++    if (res && res.path) memoryPath.placeholder = res.path;
++    if (res && res.encrypted) memoryEnc.value = res.encrypted;
++  }).catch(() => {});
++
++  rpc("AppPreferences", "listBrowsers").then((res) => {
++    const browsers = (res && res.browsers) || [];
++    browserSel.replaceChildren(
++      el("option", { value: "system" }, `System default${res && res.stock && res.stock.name ? ` — ${res.stock.name}` : ""}`),
++      el("option", { value: "ask" }, "Ask each time"),
++      ...browsers.map((b) => el("option", { value: b.id }, b.name)),
++    );
++  }).catch(() => {});
++
++  const save = async () => {
++    status.textContent = "Saving…";
++    try {
++      const key = keyInput.value.trim();
++      const model = modelInput.value.trim();
++      if (key || model) {
++        const saved = await api("/api/quixi/providers/save", {
++          providerId: providerSel.value,
++          ...(key ? { apiKey: key } : {}),
++          ...(model ? { selectedModel: model } : {}),
++          setAsActive: true,
++        });
++        if (saved.error) throw new Error(saved.error);
++      }
++      await api("/api/quixi/providers/complete-onboarding", {
++        activeProvider: providerSel.value,
++        activeModel: model,
++      });
++      await rpc("AppPreferences", "setPreference", ["externalBrowser", browserSel.value]);
++      if (memoryPath.value.trim()) {
++        await rpc("AppPreferences", "setPreference", ["memoryPalacePath", memoryPath.value.trim()]);
++      }
++      await rpc("AppPreferences", "setPreference", ["memoryEncryption", memoryEnc.value]);
++      localStorage.setItem("quixi.externalBrowser", browserSel.value);
++      await loadProviders();
++      toast("Set. Everything else is in Settings.");
++      state.page = "new";
++      render();
++    } catch (err) {
++      status.textContent = `Could not save: ${err.message}`;
++    }
++  };
++
++  for (const field of [keyInput, modelInput, providerSel, browserSel, memoryPath, memoryEnc]) {
++    field.addEventListener("keydown", (e) => {
++      if (e.key === "Enter") { e.preventDefault(); save(); }
++    });
++  }
++
++  const root = into || document.createDocumentFragment();
++  root.replaceChildren?.(
++    el("h1", {}, "The four things"),
++    el("p", { class: "first-run-lead" }, "Provider, key, model, browser. Leave any of them blank and it stays unset — nothing here is required to open the app."),
++    el(
++      "table",
++      { class: "first-run-table" },
++      el("tbody", {},
++        el("tr", {}, el("th", {}, "Provider"), el("td", {}, providerSel)),
++        el("tr", {}, el("th", {}, "API key"), el("td", {}, keyInput)),
++        el("tr", {}, el("th", {}, "Model"), el("td", {}, modelInput)),
++        el("tr", {}, el("th", {}, "Browser"), el("td", {}, browserSel)),
++        el("tr", {}, el("th", {}, "Memory"), el("td", {}, memoryPath)),
++        el("tr", {}, el("th", {}, "Encryption"), el("td", {}, memoryEnc)),
++      ),
++    ),
++    el("div", { class: "first-run-actions" },
++      button("Save and start", save, "primary"),
++      button("← Back to onboarding", () => {
++        if (onBack) {
++          onBack();
++        } else {
++          state.setupDismissed = false;
++          navigate("onboarding");
++        }
++      }, "quiet")),
++    status,
++  );
++}
++
+ // ---- first run: local or cloud, and nothing assumed -------------------------------------------
+ // The app used to land on OpenRouter with a model you do not have a key for. That is a dead end
+ // dressed as a default. The first question is the only one that matters — where do the models run —
+@@ -1258,6 +1403,22 @@
+         { class: "muted" },
+         "That is all this screen will say about it. If you want to know more, ask Nora later — she will tell you what she is allowed to, and no more than that.",
+       ),
++      el("h2", {}, "But I'm not disabled. Why would I want this?"),
++      el(
++        "p",
++        {},
++        "You might not be, and it is none of my business either way. Whether you are disabled, and how, is yours to tell or to keep — under the ADA and HIPAA you are not obliged to hand that over to a stranger as the price of using a piece of software. Nothing here asks, and nothing here checks.",
++      ),
++      el(
++        "p",
++        {},
++        "What this is, underneath the friendliness, is an accessibility tool. Assistive software is built to a different standard: it assumes the person in front of it may be working harder than they look, so it keeps the record, it does not lose the thread, and it does not make anyone explain themselves twice. That is why it can go places an ordinary assistant cannot — it is the thing you reach for when the ordinary one assumes a user whose words arrive whole.",
++      ),
++      el(
++        "p",
++        { class: "muted" },
++        "If you have no use for that, you will still get a plain, private assistant that runs on your own machine. If you do, you will not have to say so first.",
++      ),
+     );
+ 
+     const aboutBtn = button(
+@@ -1284,6 +1445,17 @@
+         button("Let's set it up", () => { step = "choose"; paint(); }, "primary"),
+         aboutBtn,
+       ),
++      el("div", { class: "first-run-actions first-run-exit" },
++        button("Skip setup — straight to the app", () => {
++          state.setupDismissed = true;
++          state.page = "new";
++          render();
++        }, "quiet"),
++        button("Just give me the table", () => {
++          state.setupDismissed = true;
++          navigate("setup");
++        }, "quiet"),
++      ),
+       about,
+       el(
+         "p",
+@@ -1323,111 +1495,6 @@
+     );
+   }
+ 
+-  function quickStep() {
+-    const rows = [];
+-    const providerSel = el("select", { class: "first-run-select" });
+-    const keyInput = el("input", { type: "password", class: "first-run-key", placeholder: "Paste your API key", spellcheck: false });
+-    const modelInput = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "model id" });
+-    const browserSel = el("select", { class: "first-run-select" });
+-    const memoryPath = el("input", { type: "text", class: "first-run-key", spellcheck: false, placeholder: "leave blank for the default" });
+-    const memoryEnc = el("select", { class: "first-run-select" });
+-    memoryEnc.append(
+-      el("option", { value: "none" }, "No encryption — plain files"),
+-      el("option", { value: "disk" }, "Whole disk (LUKS)"),
+-      el("option", { value: "archive" }, "age/GPG archive"),
+-    );
+-    const status = el("p", { class: "first-run-status" }, "");
+-
+-    loadProviders().then(() => {
+-      const list = (state.providers && state.providers.providers) || [];
+-      providerSel.replaceChildren(
+-        ...list.map((p) => el("option", { value: p.id }, p.name)),
+-      );
+-      const cloud = list.find((p) => p.id === "ollama-cloud");
+-      if (cloud) providerSel.value = "ollama-cloud";
+-      const sync = () => {
+-        const p = list.find((x) => x.id === providerSel.value);
+-        modelInput.value = (p && p.selectedModel) || "";
+-        keyInput.placeholder = (p && p.keyPlaceholder) || "Paste your API key";
+-      };
+-      providerSel.addEventListener("change", sync);
+-      sync();
+-    }).catch(() => {});
+-
+-    rpc("Memory", "info").then((res) => {
+-      if (res && res.path) memoryPath.placeholder = res.path;
+-      if (res && res.encrypted) memoryEnc.value = res.encrypted;
+-    }).catch(() => {});
+-
+-    rpc("AppPreferences", "listBrowsers").then((res) => {
+-      const browsers = (res && res.browsers) || [];
+-      browserSel.replaceChildren(
+-        el("option", { value: "system" }, `System default${res && res.stock && res.stock.name ? ` — ${res.stock.name}` : ""}`),
+-        el("option", { value: "ask" }, "Ask each time"),
+-        ...browsers.map((b) => el("option", { value: b.id }, b.name)),
+-      );
+-    }).catch(() => {});
+-
+-    const save = async () => {
+-      status.textContent = "Saving…";
+-      try {
+-        const key = keyInput.value.trim();
+-        const model = modelInput.value.trim();
+-        if (key || model) {
+-          const saved = await api("/api/quixi/providers/save", {
+-            providerId: providerSel.value,
+-            ...(key ? { apiKey: key } : {}),
+-            ...(model ? { selectedModel: model } : {}),
+-            setAsActive: true,
+-          });
+-          if (saved.error) throw new Error(saved.error);
+-        }
+-        await api("/api/quixi/providers/complete-onboarding", {
+-          activeProvider: providerSel.value,
+-          activeModel: model,
+-        });
+-        await rpc("AppPreferences", "setPreference", ["externalBrowser", browserSel.value]);
+-        if (memoryPath.value.trim()) {
+-          await rpc("AppPreferences", "setPreference", ["memoryPalacePath", memoryPath.value.trim()]);
+-        }
+-        await rpc("AppPreferences", "setPreference", ["memoryEncryption", memoryEnc.value]);
+-        localStorage.setItem("quixi.externalBrowser", browserSel.value);
+-        await loadProviders();
+-        toast("Set. Everything else is in Settings.");
+-        state.page = "new";
+-        render();
+-      } catch (err) {
+-        status.textContent = `Could not save: ${err.message}`;
+-      }
+-    };
+-
+-    for (const field of [keyInput, modelInput, providerSel, browserSel, memoryPath, memoryEnc]) {
+-      field.addEventListener("keydown", (e) => {
+-        if (e.key === "Enter") { e.preventDefault(); save(); }
+-      });
+-    }
+-
+-    root.replaceChildren(
+-      el("h1", {}, "The four things"),
+-      el("p", { class: "first-run-lead" }, "Provider, key, model, browser. Leave any of them blank and it stays unset — nothing here is required to open the app."),
+-      el(
+-        "table",
+-        { class: "first-run-table" },
+-        el("tbody", {},
+-          el("tr", {}, el("th", {}, "Provider"), el("td", {}, providerSel)),
+-          el("tr", {}, el("th", {}, "API key"), el("td", {}, keyInput)),
+-          el("tr", {}, el("th", {}, "Model"), el("td", {}, modelInput)),
+-          el("tr", {}, el("th", {}, "Browser"), el("td", {}, browserSel)),
+-          el("tr", {}, el("th", {}, "Memory"), el("td", {}, memoryPath)),
+-          el("tr", {}, el("th", {}, "Encryption"), el("td", {}, memoryEnc)),
+-        ),
+-      ),
+-      el("div", { class: "first-run-actions" },
+-        button("Save and start", save, "primary"),
+-        button("Back", () => { step = "welcome"; paint(); }, "quiet")),
+-      status,
+-    );
+-  }
+ 
+ 
+   // What a memory palace is, where it goes, and what protects it. Asked here rather than buried in
+@@ -1565,16 +1632,42 @@
+     );
+   }
+ 
++  // A way out of setup from any step, because a first-run screen that cannot be left is a modal in
++  // disguise. It goes to the app, and the table stays one button away from there.
++  function wizardExitBar() {
++    return el("div", { class: "first-run-actions first-run-exit" },
++      button("← Back to the start", () => {
++        state.setupDismissed = false;
++        navigate("onboarding");
++      }, "quiet"),
++      button("Just give me the table", () => {
++        state.setupDismissed = true;
++        navigate("setup");
++      }, "quiet"),
++    );
++  }
++
++  // Every step paints into the same root as a side effect, then gets the exit bar appended — so the
++  // way out is on every screen, including the ones that replace the root wholesale.
+   function paint() {
++    const exitBar = () => {
++      if (step !== "intro") root.append(wizardExitBar());
++    };
+     if (step === "intro") return editionWelcome();
+-    if (step === "welcome") return welcomeStep();
+-    if (step === "quick") return quickStep();
++    if (step === "welcome") { welcomeStep(); exitBar(); return; }
++    if (step === "quick") {
++      quickStep(root, () => { step = "welcome"; paint(); });
++      exitBar();
++      return;
++    }
+     if (step === "memory") {
+-      return memoryStep(() => {
++      memoryStep(() => {
+         toast("Set. The palace is where you put it.");
+         state.page = "new";
+         render();
+       });
++      exitBar();
++      return;
+     }
+     root.replaceChildren(
+       el("h1", {}, "Where should the models run?"),
+@@ -1667,6 +1760,7 @@
+         "If you are not sure: choose local. It answers without an account, and a cloud provider can be added at any time from the provider list.",
+       ),
+     );
++    exitBar();
+   }
+ 
+   paint();
+@@ -1678,6 +1772,7 @@
+     const handlers = {
+       new: chatPage,
+       onboarding: firstRunPage,
++      setup: setupPage,
+       chat: chatPage,
+       search: workspaceUI.searchPage,
+       projects: workspaceUI.projectsPage,
+@@ -1689,8 +1784,13 @@
+       settings: settingsPage,
+       persona: personaPage,
+     };
+-    // First run, unanswered: ask where the models run before showing a chat that cannot answer.
+-    const unanswered = state.providers && state.providers.onboardingCompleted === false;
++    // First run, unanswered: ask where the models run before showing a chat that cannot answer. The
++    // gate has a door in it — skipping holds for the session, because setup you cannot leave is a trap
++    // rather than a setup.
++    const unanswered =
++      state.providers &&
++      state.providers.onboardingCompleted === false &&
++      !state.setupDismissed;
+     if (unanswered && (state.page === "new" || state.page === "chat")) {
+       firstRunPage(host);
+     } else {
+@@ -1797,6 +1897,14 @@
+           ),
+           el("h1", { class: "hero-heading" }, "Sup bitch?"),
+           el(
++            "div",
++            { class: "hero-quick" },
++            button("Just give me the table", () => {
++              state.setupDismissed = true;
++              navigate("setup");
++            }, "quiet"),
++          ),
++          el(
+             "p",
+             {},
+             "What are we building, fixing, or destroying today?",

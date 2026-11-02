@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=49
+pkgrel=50
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -151,6 +151,7 @@ source=(
   0067-stt-tts-conversation.patch
   0068-ask-later.patch
   0069-lowercase.patch
+  0070-doors.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -224,6 +225,7 @@ sha256sums=(
   '1d26534b0a5642e7aa4f3776a7a41be53904ea5772dde9f478615a76d13e9d37'
   '869711499fb97de268cc7c38d2960ef16295543ee0a6964dbad1010a83e9f88c'
   '226b80cb43a8049d3b8b731e7959dbabb71f661a058d784f4bc0b12fc24990af'
+  '1d2e02a9dbd6e1edf61b0ac07f54967aa8018d021cd8830943d55e4433dd569d'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -470,6 +472,7 @@ prepare() {
   patch -Np1 -i "${srcdir}/0067-stt-tts-conversation.patch"
   patch -Np1 -i "${srcdir}/0068-ask-later.patch"
   patch -Np1 -i "${srcdir}/0069-lowercase.patch"
+  patch -Np1 -i "${srcdir}/0070-doors.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
