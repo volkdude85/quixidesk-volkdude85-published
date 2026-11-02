@@ -1,0 +1,13 @@
+--- a/crates/quixi-platform/tests/compat_desktops.rs
++++ b/crates/quixi-platform/tests/compat_desktops.rs
+@@ -145,6 +145,10 @@
+     make_tool(&d, "spectacle", false); // present, always fails
+     make_tool(&d, "import", true); // the same session's next option, works
+     isolate(&d, "KDE");
++    // Pin this scenario to X11 KDE. `import` is ImageMagick — an X11 tool — so it is only in the chain
++    // for an X11 session. Left to inherit the session type it passed on a Wayland box and failed
++    // elsewhere, because on Wayland KDE the next option after a failing spectacle is not `import`.
++    std::env::remove_var("WAYLAND_DISPLAY");
+     let out = d.join("shot.png");
+     let r = quixi_platform::linux::capture_fallback_to(&out, None);
+     let bytes = std::fs::read(&out).unwrap_or_default();

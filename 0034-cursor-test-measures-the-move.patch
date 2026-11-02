@@ -1,0 +1,72 @@
+The cursor test was measuring the machine, not the code
+=====================================================
+
+`cursor_position_is_not_claimed_until_known` asked `capabilities().input_synthesis` whether input was
+possible, then asserted that a move which supposedly could not happen left the cursor unknown. On this
+machine those two disagreed and the test failed on correct code:
+
+  * `capabilities()` reports a known *backend* — a ydotool daemon on its standard socket
+  * `mouse_move()` tries what it actually has: a direct uinput device, a ydotool socket on a custom
+    path, xdotool
+
+With a working ydotool on a non-standard path, the move succeeds while the capability still says no,
+and the assertion "the position must not be claimed" fires even though claiming it was correct.
+
+`mouse_move` now returns whether the injection happened, and the test asserts the contract that
+actually matters, in any environment:
+
+    cursor knowledge exists if and only if the move succeeded
+
+Callers that ignore the return value are unaffected.
+diff -Naur /tmp/mk33/a34/crates/quixi-platform/src/lib.rs /tmp/mk33/b/crates/quixi-platform/src/lib.rs
+--- a/crates/quixi-platform/src/lib.rs
++++ b/crates/quixi-platform/src/lib.rs
+@@ -670,7 +670,7 @@
+     }
+ 
+     /// Moves the OS mouse cursor to `(x, y)` via CoreGraphics `CGEventCreateMouseEvent`.
+-    pub fn mouse_move(x: f64, y: f64) {
++    pub fn mouse_move(x: f64, y: f64) -> bool {
+         // Dead reckoning: if the injection succeeded, the pointer IS at (x,y), so the position
+         // is known even on Wayland, where it cannot be read back. Only claim that on success.
+         #[cfg(target_os = "linux")]
+@@ -694,6 +694,7 @@
+                 CFRelease(ev);
+             }
+         }
++        moved
+     }
+ 
+     /// Performs a mouse click (`"left"`, `"right"`, `"middle"`) with `click_count` (1, 2, 3) at `(x, y)`.
+@@ -2198,18 +2199,19 @@
+         // same defect as the other portability fixes in this suite: the test was measuring the
+         // environment it happened to run in.
+         CuSessionState::default();
+-        ComputerUse::mouse_move(123.0, 456.0);
+-        if crate::linux::capabilities().input_synthesis {
+-            assert!(
+-                ComputerUse::cursor_position_available(),
+-                "after a move that succeeded, the position is known"
+-            );
+-        } else {
+-            assert!(
+-                !ComputerUse::cursor_position_available(),
+-                "with no input backend the move cannot happen, so the position must not be claimed"
+-            );
+-        }
++        // Assert against what the move ACTUALLY did, not against a capability report.
++        //
++        // The capability report asks "is there a known input backend", while mouse_move tries the
++        // backends it has: a direct uinput device, a ydotool socket on a custom path, xdotool. Those
++        // can disagree, and when they did this test failed on a machine where input worked fine.
++        // Measuring the move itself is environment-independent and tests the contract that matters:
++        // knowledge of the cursor position exists if and only if the move happened.
++        let moved = ComputerUse::mouse_move(123.0, 456.0);
++        assert_eq!(
++            ComputerUse::cursor_position_available(),
++            moved,
++            "cursor knowledge must match whether the move succeeded"
++        );
+         // Deliberately NOT asserting the exact coordinate here.
+         //
+         // `get_cursor_position()` reads the OS when a display is present, and on XWayland that

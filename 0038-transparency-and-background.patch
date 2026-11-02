@@ -1,0 +1,140 @@
+Transparency you can dial, and a background that is not a wallpaper
+=================================================================
+
+Two things were asked for and both are settings now rather than a look I picked.
+
+**Transparency.** There was a translucent-panels switch and nothing to control the degree of it. There
+is a Panel opacity slider (100% solid down to 40%), stored as a preference, applied through a
+`--panel-alpha` custom property that the translucent surfaces read. At the default of 100% nothing
+changes; nothing is translucent behind your back.
+
+**Background.** Two optional layers drawn by the app itself, not a wallpaper and not a video:
+
+  * a slow radial drift in the accent colour, 38 seconds, alternating — off by default
+  * an optional grid overlay, masked to a soft circle, for the people who like the drafting-table look
+
+Both are `body::before` / `body::after` with `pointer-events: none` and the app's surfaces lifted above
+them, so they cannot swallow a click. `prefers-reduced-motion` disables the animation rather than the
+whole effect.
+diff -Naur /tmp/mk35/a38/resources/ui/app.css /tmp/mk35/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2312,7 +2312,7 @@
+   :root[data-translucent="on"] .panel,
+   :root[data-translucent="on"] .settings-content,
+   :root[data-translucent="on"] .toolbar {
+-    background: color-mix(in srgb, var(--panel) 86%, transparent);
++    background: color-mix(in srgb, var(--panel) calc(var(--panel-alpha, 1) * 100%), transparent);
+     -webkit-backdrop-filter: blur(10px);
+     backdrop-filter: blur(10px);
+   }
+@@ -2391,3 +2391,45 @@
+ .storage-files td { padding: 4px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+ .storage-files td:first-child { color: var(--muted); white-space: nowrap; }
+ .storage-files code { font-family: ui-monospace, monospace; font-size: 11px; }
++
++/* Background: drawn by the app, off unless asked for. A slow drift plus an optional grid, both
++   sitting behind everything and excluded from hit-testing. */
++body::before, body::after {
++  content: "";
++  position: fixed;
++  inset: -20%;
++  pointer-events: none;
++  z-index: 0;
++  opacity: 0;
++  transition: opacity .6s ease;
++}
++:root[data-background-motion="on"] body::before {
++  opacity: 1;
++  background:
++    radial-gradient(46% 38% at 18% 28%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
++    radial-gradient(52% 44% at 82% 72%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 72%);
++  animation: drift 38s ease-in-out infinite alternate;
++}
++:root[data-background-grid="on"] body::after {
++  opacity: 1;
++  background-image:
++    linear-gradient(to right, color-mix(in srgb, var(--accent) 8%, transparent) 1px, transparent 1px),
++    linear-gradient(to bottom, color-mix(in srgb, var(--accent) 8%, transparent) 1px, transparent 1px);
++  background-size: 44px 44px;
++  mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
++  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
++}
++@keyframes drift {
++  from { transform: translate3d(-3%, -2%, 0) scale(1); }
++  to   { transform: translate3d(4%, 3%, 0) scale(1.08); }
++}
++@media (prefers-reduced-motion: reduce) {
++  :root[data-background-motion="on"] body::before { animation: none; }
++}
++/* the app's own surfaces sit above the backdrop */
++.shell { position: relative; z-index: 1; }
++
++/* settings rows */
++.slider-row { display: grid; grid-template-columns: 130px 1fr 54px; align-items: center; gap: 12px; margin: 8px 0 4px; font-size: 13px; }
++.slider-row input[type="range"] { width: 100%; accent-color: var(--accent); }
++.slider-value { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); text-align: right; }
+diff -Naur /tmp/mk35/a38/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -3013,6 +3013,50 @@
+             el("span", {}, "Translucent panels"),
+           ),
+         ),
++        el("h2", { style: "margin-top:30px" }, "Transparency"),
++        el(
++          "p",
++          { class: "muted" },
++          "How much of what is behind a panel shows through. 100% is solid; below about 60% the text starts to fight the desktop behind it.",
++        ),
++        el(
++          "label",
++          { class: "slider-row" },
++          el("span", {}, "Panel opacity"),
++          el("input", {
++            type: "range", min: 40, max: 100, step: 2,
++            value: localStorage.getItem("quixi.panelOpacity") || "100",
++            oninput: (event) => {
++              document.documentElement.style.setProperty("--panel-alpha", (Number(event.target.value) / 100).toFixed(2));
++              rememberPreferenceSoon("panelOpacity", event.target.value);
++            },
++          }),
++          el("span", { class: "slider-value" }, `${localStorage.getItem("quixi.panelOpacity") || "100"}%`),
++        ),
++        el("h2", { style: "margin-top:26px" }, "Background"),
++        el(
++          "p",
++          { class: "muted" },
++          "A slow drift behind the interface, drawn by the app rather than a wallpaper. Off by default; it costs a little GPU and some people hate it.",
++        ),
++        el(
++          "div",
++          { class: "toggle-row" },
++          el("label", { class: "toggle" },
++            el("input", {
++              type: "checkbox",
++              checked: localStorage.getItem("quixi.backgroundMotion") === "1",
++              onchange: (event) => { rememberPreference("backgroundMotion", event.target.checked ? "1" : "0"); applyTheme(); },
++            }),
++            el("span", {}, "Moving background")),
++          el("label", { class: "toggle" },
++            el("input", {
++              type: "checkbox",
++              checked: localStorage.getItem("quixi.backgroundGrid") === "1",
++              onchange: (event) => { rememberPreference("backgroundGrid", event.target.checked ? "1" : "0"); applyTheme(); },
++            }),
++            el("span", {}, "Grid overlay")),
++        ),
+         el("h2", { style: "margin-top:30px" }, "New tasks"),
+         field(
+           "Default permission mode",
+@@ -3248,6 +3292,9 @@
+     const custom = theme === "custom";
+     // Two surface options that are pure CSS flags on :root, so the stylesheet owns the look.
+     root.dataset.translucent = localStorage.getItem("quixi.translucent") === "1" ? "on" : "off";
++    root.style.setProperty("--panel-alpha", ((Number(localStorage.getItem("quixi.panelOpacity") || 100)) / 100).toFixed(2));
++    root.dataset.backgroundMotion = localStorage.getItem("quixi.backgroundMotion") === "1" ? "on" : "off";
++    root.dataset.backgroundGrid = localStorage.getItem("quixi.backgroundGrid") === "1" ? "on" : "off";
+     root.dataset.boxing = localStorage.getItem("quixi.boxing") === "0" ? "off" : "on";
+     for (const key of ["bg", "text", "accent"]) {
+       const value = custom ? localStorage.getItem("quixi.custom." + key) : null;

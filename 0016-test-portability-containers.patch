@@ -1,0 +1,62 @@
+Two tests that still assert the host instead of the contract
+================================================================
+
+Both of these passed on a desktop and failed in the Arch CI image. Neither failure was a bug in
+the platform layer: the tests were asking whether the machine looked like a developer's machine,
+which is the exact defect 0011 removed everywhere else.
+
+1. `installed_apps_are_well_formed` asserted "more than ten applications". A container ships no
+   .desktop files at all, so the suite was unpassable there for no product reason. The contract is
+   that whatever is found parses and carries a usable Exec line; an empty menu is a real
+   environment, and it now says so and returns.
+
+2. `a_bare_session_reports_every_backend_it_tried` asserted the error names spectacle or grim. On a
+   host with neither installed the error names the backends that ARE present, so the test failed
+   exactly where the layer was working correctly. It now accepts any backend name the layer can
+   try, which is what it was always trying to say.
+
+Neither test is weakened: on a normal desktop they still validate every entry and still require an
+error that names what was attempted.
+
+--- a/crates/quixi-platform/tests/compat_desktops.rs
++++ b/crates/quixi-platform/tests/compat_desktops.rs
+@@ -189,8 +189,16 @@
+     // `which` falls back to the standard bin directories, so a tool that is installed
+     // on the host is still attempted here — what matters is that the failure names
+     // what was tried instead of returning a bare "capture failed".
++    // Any of these may be the one this host actually has. What the contract requires is that the
++    // error names what was tried instead of a bare "capture failed" — naming only spectacle/grim
++    // made this pass on a desktop and fail in a container, which is the same host assumption the
++    // rest of this patch exists to remove.
++    const TRIED: [&str; 9] = [
++        "kwin-screenshot2", "portal", "gnome-shell-screenshot", "spectacle", "grim",
++        "xfce4-screenshooter", "cinnamon-screenshot", "gnome-screenshot", "import",
++    ];
+     assert!(
+-        err.contains("capture") && (err.contains("spectacle") || err.contains("grim")),
++        err.contains("capture") && TRIED.iter().any(|b| err.contains(b)),
+         "the error should name the backends it tried; got: {err}"
+     );
+ }
+--- a/crates/quixi-platform/tests/linux_computer_use.rs
++++ b/crates/quixi-platform/tests/linux_computer_use.rs
+@@ -131,11 +131,14 @@
+ fn installed_apps_are_well_formed() {
+     let apps = linux::installed_apps();
+     println!("{} applications found", apps.len());
+-    assert!(
+-        apps.len() > 10,
+-        "expected a populated application menu, got {}",
+-        apps.len()
+-    );
++    // A container that ships no .desktop files is a real environment, not a failure. This used to
++    // assert "more than ten apps", which is the host talking rather than the contract; the contract
++    // is that whatever is found parses and deduplicates. Measured: the Arch CI image has none, so
++    // the old assertion made the suite unpassable there for no product reason.
++    if apps.is_empty() {
++        println!("no .desktop entries on this host — nothing to validate");
++        return;
++    }
+     for (name, exec, path) in &apps {
+         assert!(!name.is_empty(), "app name must not be empty");
+         assert!(!exec.is_empty(), "exec line must not be empty for {name}");

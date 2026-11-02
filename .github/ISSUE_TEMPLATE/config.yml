@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Upstream QuixiDesk bugs
+    url: https://github.com/QuixiAI/QuixiDesk/issues
+    about: Anything that is wrong on macOS too, or that is about the app rather than the Linux layer, belongs upstream.

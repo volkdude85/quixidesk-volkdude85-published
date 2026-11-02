@@ -1,0 +1,27 @@
+navigate() only knew nine pages
+==============================
+
+The Daemons page existed, had a nav entry, had a group and an icon, and clicking it did nothing. The
+router holds a hardcoded allow-list:
+
+    let pages = ["new", "chat", "search", "projects", "project", "artifacts",
+                 "schedules", "tools", "settings"];
+    if (!pages.includes(page)) page = "new";
+
+`daemons` was never in it, so every navigation fell through to the composer with no error anywhere —
+the click landed, the handler ran, and the page quietly reset. Added.
+
+This is the second time this session that a feature looked broken because a list elsewhere never heard
+about it (the first was the automation bridge that nothing defined). A page is not wired until the
+router knows its name.
+diff -Naur -x target -x '*.rlib' -x '*.rmeta' /tmp/mk35/a46/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -380,6 +380,7 @@
+       "project",
+       "artifacts",
+       "schedules",
++      "daemons",
+       "tools",
+       "settings",
+     ];

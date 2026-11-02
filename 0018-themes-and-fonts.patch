@@ -1,0 +1,248 @@
+Themes, fonts and custom colours
+================================
+
+Upstream already has the machinery — app.css defines eleven colour variables on :root and app.js has
+applyTheme() switching a data-theme attribute, with a Light/Dark/System picker. It just only ever
+defines two looks. So this adds looks rather than a new mechanism:
+
+- **matrix** — green on near-black, for screens that should look like a terminal
+- **amber** — the same shape at a warm hue
+- **ice** — the same shape cold
+- **custom** — inherits the dark base, with --bg / --text / --accent set inline on :root from colour
+  pickers, so a custom look layers over a theme instead of replacing it
+
+The font family and text size were hard-coded on :root; both are variables now (--ui-font,
+--ui-font-size) with pickers, applied as inline properties so they also layer over any theme.
+
+Nothing here touches the Rust side: it is app.css and app.js, which the package already ships.
+
+Verified in a real browser, not by reading the diff:
+  dark   #191c20 / #edf0f2 / #8bd5bd
+  matrix #05080a / #7dffa8 / #00ff88
+  amber  #0b0803 / #ffcf8b / #ffb020
+  ice    #060a0f / #cfe9ff / #4fc3f7
+  custom inherits, and an inline --bg override lands; setting --ui-font-size: 18px puts the document
+  body at 18px.
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -1,6 +1,6 @@
+ /* Copyright (c) 2026 QuixiAI. MIT license. Original QuixiDesk interface. */
+ :root {
+-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
++  font-family: var(--ui-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+   color-scheme: dark;
+   --bg: #191c20;
+   --panel: #202429;
+@@ -13,7 +13,7 @@
+   --ink: #142c25;
+   --danger: #f29a9d;
+   --shadow: 0 24px 80px #0006, 0 2px 8px #0003;
+-  font-size: 14px;
++  font-size: var(--ui-font-size, 14px);
+   -webkit-font-smoothing: antialiased;
+ }
+ :root[data-theme="light"] {
+@@ -30,6 +30,53 @@
+   --danger: #b5454e;
+   --shadow: 0 24px 80px #1d342519, 0 2px 8px #1d34250d;
+ }
++
++/* Extra themes. Same variable set as light/dark, so nothing else in the stylesheet has to know they
++   exist: matrix is green on near-black, amber and ice are the same shape at different hues. */
++:root[data-theme="matrix"] {
++  color-scheme: dark;
++  --bg: #05080a;
++  --panel: #08120c;
++  --raised: #0c1a12;
++  --sidebar: #030605;
++  --line: #12301c;
++  --text: #7dffa8;
++  --muted: #3f8f5f;
++  --accent: #00ff88;
++  --ink: #02150b;
++  --danger: #ff5f6d;
++  --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
++}
++:root[data-theme="amber"] {
++  color-scheme: dark;
++  --bg: #0b0803;
++  --panel: #14100a;
++  --raised: #1c1610;
++  --sidebar: #08060a;
++  --line: #33261a;
++  --text: #ffcf8b;
++  --muted: #9c7a4d;
++  --accent: #ffb020;
++  --ink: #1a1000;
++  --danger: #ff7a6b;
++  --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
++}
++:root[data-theme="ice"] {
++  color-scheme: dark;
++  --bg: #060a0f;
++  --panel: #0b121a;
++  --raised: #101a24;
++  --sidebar: #04070b;
++  --line: #1b2c3d;
++  --text: #cfe9ff;
++  --muted: #6d8ea8;
++  --accent: #4fc3f7;
++  --ink: #001018;
++  --danger: #ff6b81;
++  --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
++}
++/* Custom inherits the dark base; the user's own --bg/--text/--accent are set inline on :root. */
++:root[data-theme="custom"] { color-scheme: dark; }
+ * {
+   box-sizing: border-box;
+ }
+@@ -1601,6 +1648,25 @@
+ .theme-swatch.system > span:last-child {
+   background: linear-gradient(90deg, #e6ebe5 36%, #343a41 36%);
+ }
++
++.theme-swatch.matrix { background: #05080a; border-color: #12301c; }
++.theme-swatch.matrix > span:first-child { background: #0c1a12; }
++.theme-swatch.matrix > span:last-child { background: #00ff88; }
++.theme-swatch.amber { background: #0b0803; border-color: #33261a; }
++.theme-swatch.amber > span:first-child { background: #1c1610; }
++.theme-swatch.amber > span:last-child { background: #ffb020; }
++.theme-swatch.ice { background: #060a0f; border-color: #1b2c3d; }
++.theme-swatch.ice > span:first-child { background: #101a24; }
++.theme-swatch.ice > span:last-child { background: #4fc3f7; }
++.theme-swatch.custom { background: #191c20; border-color: #343a41; }
++.theme-swatch.custom > span:first-child { background: #2a3036; }
++.theme-swatch.custom > span:last-child { background: #8bd5bd; }
++.font-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
++.font-grid > label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
++.font-grid select, .font-grid input { min-width: 130px; }
++.swatch-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
++.swatch-row > label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
++.swatch-row input[type="color"] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--line); background: none; border-radius: 4px; }
+ .theme-label {
+   display: flex;
+   align-items: center;
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -2642,6 +2642,10 @@
+           ...[
+             ["light", "Light"],
+             ["dark", "Dark"],
++            ["matrix", "Matrix"],
++            ["amber", "Amber"],
++            ["ice", "Ice"],
++            ["custom", "Custom"],
+             ["system", "System"],
+           ].map(([value, label]) => {
+             const choice = button(
+@@ -2679,6 +2683,84 @@
+             return choice;
+           }),
+         ),
++        el(
++          "div",
++          { class: "font-grid" },
++          el(
++            "label",
++            {},
++            "Interface font",
++            select(
++              [
++                ["", "Default"],
++                ["system-ui, sans-serif", "System sans"],
++                ["ui-monospace, SFMono-Regular, Menlo, monospace", "Monospace"],
++                ["Georgia, 'Times New Roman', serif", "Serif"],
++                ["Atkinson Hyperlegible, Verdana, sans-serif", "Hyperlegible"],
++              ],
++              localStorage.getItem("quixi.fontFamily") || "",
++              (v) => {
++                v
++                  ? localStorage.setItem("quixi.fontFamily", v)
++                  : localStorage.removeItem("quixi.fontFamily");
++                applyAppearance();
++              },
++            ),
++          ),
++          el(
++            "label",
++            {},
++            "Text size",
++            select(
++              [
++                ["", "Default (14)"],
++                ["12", "12"],
++                ["13", "13"],
++                ["15", "15"],
++                ["16", "16"],
++                ["18", "18"],
++                ["20", "20"],
++              ],
++              localStorage.getItem("quixi.fontSize") || "",
++              (v) => {
++                v
++                  ? localStorage.setItem("quixi.fontSize", v)
++                  : localStorage.removeItem("quixi.fontSize");
++                applyAppearance();
++              },
++            ),
++          ),
++        ),
++        el(
++          "p",
++          { class: "muted", style: "margin-top:14px" },
++          "Custom theme overrides the base colours; leave a swatch alone to inherit the theme.",
++        ),
++        el(
++          "div",
++          { class: "swatch-row" },
++          ...[
++            ["bg", "Background"],
++            ["text", "Text"],
++            ["accent", "Accent"],
++          ].map(([key, label]) =>
++            el(
++              "label",
++              {},
++              label,
++              el("input", {
++                type: "color",
++                value: localStorage.getItem("quixi.custom." + key) || "#191c20",
++                onchange: (event) => {
++                  localStorage.setItem("quixi.custom." + key, event.target.value);
++                  localStorage.setItem("quixi.theme", "custom");
++                  applyTheme();
++                  renderPage();
++                },
++              }),
++            ),
++          ),
++        ),
+         el("h2", { style: "margin-top:30px" }, "New tasks"),
+         field(
+           "Default permission mode",
+@@ -2796,6 +2878,22 @@
+           ? "dark"
+           : "light"
+         : choice;
++    applyAppearance();
++  }
++  // Font and custom colours are applied as inline variables on :root, so they layer over whichever
++  // theme is selected instead of replacing it. Clearing a value falls back to the stylesheet.
++  function applyAppearance() {
++    const root = document.documentElement;
++    const size = localStorage.getItem("quixi.fontSize");
++    size ? root.style.setProperty("--ui-font-size", size + "px") : root.style.removeProperty("--ui-font-size");
++    const font = localStorage.getItem("quixi.fontFamily");
++    font ? root.style.setProperty("--ui-font", font) : root.style.removeProperty("--ui-font");
++    for (const key of ["bg", "text", "accent"]) {
++      const value = localStorage.getItem("quixi.custom." + key);
++      value
++        ? root.style.setProperty("--" + key, value)
++        : root.style.removeProperty("--" + key);
++    }
+   }
+   async function providerDirectory() {
+     await loadProviders();

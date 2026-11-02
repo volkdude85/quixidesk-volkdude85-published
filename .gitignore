@@ -1,0 +1,18 @@
+# makepkg working directories — never commit these
+/src/
+/pkg/
+
+# build output
+*.pkg.tar.zst
+*.pkg.tar.xz
+
+# upstream source tarballs are fetched by the PKGBUILD, not vendored
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.zip
+
+# local backups
+*.bak-*
+*.orig
+*.rej

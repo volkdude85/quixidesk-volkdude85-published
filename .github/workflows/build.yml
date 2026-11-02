@@ -1,0 +1,107 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# The container job needs no secrets and touches nothing outside the checkout.
+permissions:
+  contents: read
+
+jobs:
+  # Fast gate: does the published patch chain still apply to a pristine upstream tarball?
+  # This is the failure this project actually suffers from — an upstream release moves a file
+  # and a hunk stops applying — so it gets its own job and reports in about a minute.
+  chain:
+    name: patch chain
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install git, patch and makepkg's dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Su --noconfirm --needed base-devel git patch sudo
+
+      - uses: actions/checkout@v7
+
+      - name: Apply the chain to a pristine tarball
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          sudo -u builder ./ci/ci.sh "$GITHUB_WORKSPACE" --chain-only
+
+  # Full gate: build the workspace from the patched tree, run every unattended suite,
+  # then package it. Produces a real .pkg.tar.zst as a workflow artifact.
+  build:
+    name: build, test, package
+    needs: chain
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    timeout-minutes: 120
+    steps:
+      - name: Install build and test dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Su --noconfirm --needed \
+            base-devel git patch sudo rust cargo pkgconf librsvg \
+            gtk3 webkit2gtk-4.1 glib2 pango cairo gdk-pixbuf2 libsoup3 openssl \
+            hicolor-icon-theme dbus libpulse \
+            xorg-server-xvfb xorg-xrandr xdotool imagemagick \
+            wl-clipboard xclip xsel kdialog zenity
+
+      - uses: actions/checkout@v7
+
+      - name: Build, test, package
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          # Without this the shipped package records "Unknown Packager" in .PKGINFO.
+          sudo -u builder env HOME=/home/builder \
+            PACKAGER='volkdude85 <volkdude85@users.noreply.github.com>' \
+            ./ci/ci.sh "$GITHUB_WORKSPACE"
+
+      - name: Show the test summary
+        if: always()
+        run: |
+          for f in /tmp/ci-test.log /tmp/ci-compat.log /tmp/ci-compat_desktops.log \
+                   /tmp/ci-capture_modes.log /tmp/ci-linux_computer_use.log /tmp/ci-launch.log; do
+            [ -f "$f" ] && echo "--- $(basename "$f") ---" && grep -E 'test result|FAILED|panicked' "$f" | head -5
+          done
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: quixidesk-pkg
+          path: |
+            *.pkg.tar.zst
+            !*debug*
+          if-no-files-found: error
+          retention-days: 30
+
+  # On a tag, publish the built package as a GitHub Release so there is a download for a
+  # version someone can actually name.
+  release:
+    name: attach package to the release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: quixidesk-pkg
+      - name: Publish
+        uses: softprops/action-gh-release@v3
+        with:
+          files: '*.pkg.tar.zst'
+          fail_on_unmatched_files: true
+          generate_release_notes: true

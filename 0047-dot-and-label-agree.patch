@@ -1,0 +1,49 @@
+The dot and the label disagreed
+==============================
+
+A daemons row computed its light and its label from two different things: `up` came from the port probe
+when there was a port, and the label printed the systemd state. So a service whose port was open but
+whose unit had exited showed a lit row reading "inactive", and a service with no port and a dead unit
+showed a dark row reading the same word.
+
+One decision now: port present → the light follows the port; no port → the light follows the unit. The
+label follows the light. The raw unit state is still shown, as dim text beside it, so nothing is lost —
+it just stops contradicting the light.
+diff -Naur -x target -x '*.rlib' -x '*.rmeta' /tmp/mk35/a47/crates/quixi-engine/src/lib.rs /tmp/mk35/b/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs
++++ b/crates/quixi-engine/src/lib.rs
+@@ -1670,6 +1670,12 @@
+             ] {
+                 let state = if unit.is_empty() { "n/a".to_string() } else { unit_state(unit) };
+                 let listening = port.map(port_open);
++                // One decision, used by both the dot and the label. They used to be computed
++                // separately, so a row could read "inactive" with its light on.
++                let up = match listening {
++                    Some(open) => open,
++                    None => state == "active",
++                };
+                 list.push(json!({
+                     "name": name,
+                     "unit": unit,
+@@ -1677,7 +1683,7 @@
+                     "state": state,
+                     "port": port,
+                     "listening": listening,
+-                    "up": listening.unwrap_or(state == "active"),
++                    "up": up,
+                 }));
+             }
+             return Self::json_resp(200, &json!({ "daemons": list }));
+diff -Naur -x target -x '*.rlib' -x '*.rmeta' /tmp/mk35/a47/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -2268,7 +2268,8 @@
+             el("div", { class: "daemon-meta" },
+               el("code", {}, d.unit || "no unit"),
+               d.port ? el("code", {}, ":" + d.port) : null,
+-              el("span", { class: "tag" }, d.up ? "up" : (d.state || "down")))),
++              el("span", { class: "tag" }, d.up ? "up" : "down"),
++              el("span", { class: "muted small" }, d.state || ""))),
+         )),
+     );
+   }

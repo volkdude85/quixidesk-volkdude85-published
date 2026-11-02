@@ -1,0 +1,62 @@
+The left side stops being an unstyled list
+=========================================
+
+The sidebar was a flex column with a gap and a background. Every row the same weight, no rail, no
+section rhythm, and the brand sitting at the top like a label.
+
+  * a faint accent wash down the top of the rail, fading into the sidebar colour by 180px
+  * the mark carries the accent and a soft glow; the caption goes to small uppercase muted, so
+    "VolkDude's QuixiDesk" reads as a subtitle rather than competing with the name
+  * every nav row is the same 34px height, 8px radius, and the active one gets an accent rail on its
+    left edge plus a tinted background
+  * "New instance" stays the loudest control: accent-tinted fill and a ring, regardless of hover
+  * section labels (RECENT) get air above them and proper letter-spacing
+  * the rail scrolls on its own instead of clipping, with a thin scrollbar
+
+No new markup: this is the existing rows, given a rhythm.
+diff -Naur /tmp/mk35/a40/resources/ui/app.css /tmp/mk35/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -295,15 +295,38 @@
+   grid-template-columns: 68px minmax(0, 1fr);
+ }
+ .sidebar {
+-  background: var(--sidebar);
++  background: linear-gradient(180deg, color-mix(in srgb, var(--sidebar) 92%, var(--accent) 8%), var(--sidebar) 180px);
+   border-right: 1px solid var(--line);
+   display: flex;
+   flex-direction: column;
+-  gap: 22px;
+-  padding: 20px 12px 12px;
++  gap: 14px;
++  padding: 16px 10px 12px;
+   min-width: 0;
+-  overflow: hidden;
++  overflow: hidden auto;
++  scrollbar-width: thin;
+ }
++/* Brand block: the mark carries the accent, the words stay quiet. */
++.sidebar .brand { padding: 2px 6px 8px; gap: 10px; align-items: center; }
++.sidebar .brand img { width: 22px; height: 22px; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 45%, transparent)); }
++.sidebar .brand span { font-weight: 650; letter-spacing: .01em; }
++.sidebar .brand-caption { display: block; margin-top: 2px; font-size: 10.5px; letter-spacing: .09em;
++  text-transform: uppercase; color: var(--muted); font-weight: 500; }
++/* Nav rhythm: every row the same height, an accent rail on the active one. */
++.sidebar nav { display: flex; flex-direction: column; gap: 2px; }
++.sidebar nav > * { border-radius: 8px; }
++.sidebar nav button { min-height: 34px; }
++.sidebar nav button.active, .sidebar nav button[aria-current="page"] {
++  background: color-mix(in srgb, var(--accent) 15%, transparent);
++  color: var(--text);
++  box-shadow: inset 2px 0 0 var(--accent);
++}
++/* New instance stays the loudest thing in the rail. */
++.sidebar .new-task,
++.sidebar nav button.new-task { background: color-mix(in srgb, var(--accent) 18%, transparent);
++  color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent); }
++/* RECENT gets a label with air above it, and rows that do not shout. */
++.sidebar h3, .sidebar .sidebar-section-title { margin: 14px 6px 4px; font-size: 10px; letter-spacing: .12em;
++  text-transform: uppercase; color: var(--muted); font-weight: 600; }
+ .brand {
+   display: flex;
+   gap: 9px;

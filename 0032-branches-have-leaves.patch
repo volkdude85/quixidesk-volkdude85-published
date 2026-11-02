@@ -1,0 +1,53 @@
+A branch that opens onto nothing reads as broken
+==============================================
+
+Clicking Projects opened the row and showed an empty space, because there were no projects stored —
+the same failure as Tools & skills before it listed connections. An expansion has to resolve to
+something or the control is lying about what it does.
+
+Every group now yields at least one row. With nothing stored it says so and takes you to the page that
+creates one: "No projects yet", "No artifacts yet", "No cron jobs yet", "No connections yet". Tools &
+skills keeps listing configured connections first, because those exist by the time the sidebar draws
+while the skill index does not.
+
+diff -Naur /tmp/mk31/a32/resources/ui/app.js /tmp/mk31/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -437,17 +437,30 @@
+       ["schedules", "Cron jobs", "schedule"],
+       ["tools", "Tools & skills", "tools"],
+     ];
++    // Every branch must have leaves. An expansion that opens onto nothing reads as broken, so each
++    // group always carries at least one real row — the workspace for projects, the page itself for
++    // the others — and says plainly when there is nothing stored yet.
+     const GROUP_ITEMS = {
+-      projects: () => (state.projects || []).slice(0, 6).map((p) => [p.name, () => { state.project = p.id || p.name; navigate("project"); }]),
+-      artifacts: () => (state.artifacts || []).slice(0, 6).map((a) => [a.name || a.title, () => navigate("artifacts")]),
+-      schedules: () => (state.schedules || []).filter((s) => s.status !== "deleted").slice(0, 6)
+-        .map((s) => [s.displayName || s.name, () => navigate("schedules")]),
++      projects: () => {
++        const rows = [[state.project ? "This workspace" : "QuixiDesk workspace", () => navigate("projects")]];
++        const projects = (state.projects || []).slice(0, 6).map((p) => [p.name, () => { state.project = p.id || p.name; navigate("project"); }]);
++        return projects.length ? [...projects] : [...rows, ["No projects yet", () => navigate("projects")]];
++      },
++      artifacts: () => {
++        const items = (state.artifacts || []).slice(0, 6).map((a) => [a.name || a.title, () => navigate("artifacts")]);
++        return items.length ? items : [["No artifacts yet", () => navigate("artifacts")]];
++      },
++      schedules: () => {
++        const items = (state.schedules || []).filter((s) => s.status !== "deleted").slice(0, 6)
++          .map((s) => [s.displayName || s.name, () => navigate("schedules")]);
++        return items.length ? items : [["No cron jobs yet", () => navigate("schedules")]];
++      },
+       tools: () => {
+-        // Connections exist by the time the sidebar draws; the skill index arrives later, which is
+-        // why this section opened to nothing.
++        // Connections exist by the time the sidebar draws; the skill index arrives later.
+         const servers = (toolsData.servers || []).map((s) => [s.name, () => navigate("tools")]);
+         const skills = (toolsData.skills || []).map((s) => [s.displayName || s.name, () => navigate("tools")]);
+-        return [...servers, ...skills].slice(0, 8);
++        const all = [...servers, ...skills].slice(0, 8);
++        return all.length ? all : [["No connections yet", () => navigate("tools")]];
+       },
+     };
+     const groupOpen = (page) => {

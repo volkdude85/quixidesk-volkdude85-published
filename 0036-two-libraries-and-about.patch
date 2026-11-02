@@ -1,0 +1,173 @@
+Two libraries, two searches — and it is his edition on the About page
+=====================================================================
+
+Tools & skills had one search over one undifferentiated pile. The app discovers the Hermes profiles on
+this machine by convention, so that "pile" is the app's handful of bundled skills plus the agent's
+whole procedural library — hundreds of entries — and one search over both made the smaller set look
+like the whole thing.
+
+Now there are two panels, each with its own search:
+
+  * **QuixiDesk tools & skills** — what ships with the app and what is in your data directory
+  * **Hermes** — the agent's library, discovered from ~/.hermes/profiles/*/skills, grouped by area
+    (the `area/name` prefix), with area chips to narrow it and a live "N of M" count
+
+A skill's chip also appears on its card, so a result tells you which library it came from without a
+label saying so.
+
+About stops describing someone else's product:
+
+  - "An independent native AI workspace built with Rust."
+  + VolkDude
+  + VolkDude's QuixiDesk
+  + "A Linux desktop for running an agent against your own machine: your files, your models, your
+     storage."
+
+It also stops claiming independence it does not have, and says what it needs instead: GTK and the
+system webview, and that it reports what is missing rather than pretending.
+diff -Naur /tmp/mk35/a36/resources/ui/app.css /tmp/mk35/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2366,3 +2366,15 @@
+   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .nav-child:hover, .nav-child:focus-visible { color: var(--text); background: var(--raised); outline: none; }
+ .nav-child:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
++
++/* About: whose edition this is, said before anything else. */
++.about-by { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 18px 0 0; }
++
++/* Two skill libraries, two searches. */
++.skill-libraries { display: flex; flex-direction: column; gap: 28px; }
++.skill-library { display: flex; flex-direction: column; gap: 8px; }
++.skill-library input[type="search"] { max-width: 420px; }
++.area-bar { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 6px; }
++.area-bar button.active, .toolbar button.active { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
++.skill-card .tag { align-self: flex-start; margin-bottom: 4px; }
++.skill-file { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 11px; max-height: 320px; overflow: auto; }
+diff -Naur /tmp/mk35/a36/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -3078,17 +3078,18 @@
+           width: 58,
+           height: 58,
+         }),
+-        el("h2", { style: "margin-top:20px" }, "QuixiDesk"),
++        el("p", { class: "about-by" }, "VolkDude"),
++        el("h2", { style: "margin-top:4px" }, "VolkDude's QuixiDesk"),
+         el(
+           "p",
+           { class: "muted" },
+-          "An independent native AI workspace built with Rust.",
++          "A Linux desktop for running an agent against your own machine: your files, your models, your storage.",
+         ),
+-        el("p", {}, "Original interface and task instructions · MIT license"),
++        el("p", {}, "Built on QuixiDesk by QuixiAI · MIT license"),
+         el(
+           "p",
+           { class: "muted" },
+-          "Uses the system webview and optional model providers. Native operating-system capabilities vary by platform.",
++          "Runs on GTK and the system webview. What it can do depends on what you have installed — it reports what is missing rather than pretending.",
+         ),
+         button(
+           "Open project website",
+diff -Naur /tmp/mk35/a36/resources/ui/capability-workflows.js /tmp/mk35/b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js
++++ b/resources/ui/capability-workflows.js
+@@ -163,28 +163,77 @@
+       if (!Array.isArray(files) || !files.length) throw new Error("This skill’s instructions could not be loaded.");
+       return files;
+     }
+-    function skillsSection(skills) {
+-      const names={docx:"Word documents",pdf:"PDF editing","pdf-reading":"Read PDFs",pptx:"Presentations",xlsx:"Spreadsheets","frontend-design":"Interface design"};
+-      const query = el("input", { type: "search", placeholder: "Search skills", "aria-label": "Search skills" });
++    // Two libraries, two searches.
++    //
++    // QuixiDesk ships a small set of its own tools and skills. The Hermes roots are discovered by
++    // convention, so this machine also carries the agent's whole procedural library — hundreds of
++    // skills, named area/name. Mixing them in one list made the smaller set look like the whole
++    // thing and buried the larger one.
++    function skillArea(skill) {
++      const id = String(skill.skillId || skill.name || "");
++      const slash = id.indexOf("/");
++      return slash > 0 ? id.slice(0, slash) : "";
++    }
++    function skillList(skills, query, areas) {
++      const needle = query.trim().toLocaleLowerCase();
++      const matched = skills.filter((skill) => {
++        const hay = `${skill.displayName || ""} ${skill.skillId || skill.name || ""} ${skill.description || ""} ${skillArea(skill)}`;
++        if (needle && !hay.toLocaleLowerCase().includes(needle)) return false;
++        if (areas && areas.size && !areas.has(skillArea(skill) || "misc")) return false;
++        return true;
++      });
++      return matched;
++    }
++    function skillCard(skill, names) {
++      return el("article", { class: "card skill-card" },
++        el("h3", {}, skill.displayName || names[skill.name] || skill.name),
++        skillArea(skill) ? el("span", { class: "tag" }, skillArea(skill)) : null,
++        el("p", {}, skill.description || "Instructions for a task workflow."),
++        button("Try in a new instance", async () => { const files = await readSkill(skill); await ctx.startSkill(skill, files); }, "primary"),
++        button("Read instructions", async () => {
++          const files = await readSkill(skill);
++          dialog(skill.displayName || skill.name, files.map((file) => el("details", { open: file.path === "SKILL.md" }, el("summary", {}, file.path),
++            el("pre", { class: "skill-file" }, file.content))));
++        }, "quiet"));
++    }
++    function skillPanel(title, blurb, skills) {
++      const query = el("input", { type: "search", placeholder: `Search ${title}`, "aria-label": `Search ${title}` });
++      const areaBar = el("div", { class: "area-bar" });
+       const results = el("div", { class: "cards" });
+       const count = el("p", { class: "hint", role: "status" });
+-      function draw() {
+-        const needle = query.value.trim().toLocaleLowerCase();
+-        const matches = skills.filter((skill) => `${skill.displayName || ""} ${skill.name || ""} ${skill.description || ""}`.toLocaleLowerCase().includes(needle));
+-        count.textContent = `${matches.length} ${matches.length === 1 ? "skill" : "skills"}`;
+-        results.replaceChildren(...matches.map((skill) => el("article", { class: "card skill-card" },
+-          el("h3", {}, skill.displayName || names[skill.name] || skill.name), el("p", {}, skill.description || "Instructions for a task workflow."),
+-          button("Try in a new task", async () => { const files = await readSkill(skill); await ctx.startSkill(skill, files); }, "primary"),
+-          button("Read instructions", async () => {
+-            const files = await readSkill(skill);
+-            dialog(skill.displayName || skill.name, files.map((file) => el("details", { open: file.path === "SKILL.md" }, el("summary", {}, file.path),
+-              file.path === "SKILL.md" ? plainBody((file.content || "").replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "")) : el("pre", {}, file.content || ""))), { wide: true });
+-          }, "quiet"))));
+-        if (!matches.length) results.append(el("p", { class: "muted" }, needle ? "No skills match this search." : "No skills are installed."));
+-      }
+-      query.addEventListener("input", draw); draw();
+-      return el("section", { class: "skills-section" }, el("h2", {}, "Skills"),
+-        el("p", { class: "muted" }, "Start a task with a skill’s instructions attached, then describe what you want to do."), query, count, results);
++      const areas = new Set();
++      const allAreas = [...new Set(skills.map((s) => skillArea(s) || "misc"))].sort();
++      const drawAreas = () => {
++        areaBar.replaceChildren(
++          button("All", () => { areas.clear(); drawAreas(); draw(); }, areas.size ? "quiet" : "quiet active"),
++          ...allAreas.slice(0, 18).map((area) =>
++            button(`${area}`, () => { areas.has(area) ? areas.delete(area) : areas.add(area); drawAreas(); draw(); },
++              "quiet" + (areas.has(area) ? " active" : ""))));
++      };
++      const draw = () => {
++        const matched = skillList(skills, query.value, areas);
++        count.textContent = `${matched.length} of ${skills.length}`;
++        results.replaceChildren(...matched.map((s) => skillCard(s, {})));
++      };
++      query.addEventListener("input", draw);
++      drawAreas(); draw();
++      return el("section", { class: "skill-library" },
++        el("div", { class: "row" }, el("h2", { class: "grow" }, title), count),
++        el("p", { class: "muted" }, blurb),
++        allAreas.length > 1 ? areaBar : null,
++        query, results);
++    }
++    function skillsSection(skills) {
++      const isHermes = (s) => skillArea(s) !== "";
++      const own = skills.filter((s) => !isHermes(s));
++      const hers = skills.filter(isHermes);
++      return el("div", { class: "skill-libraries" },
++        skillPanel("QuixiDesk tools & skills",
++          "What ships with this app: the bundled skills plus anything in your data directory.",
++          own),
++        skillPanel("Hermes",
++          "Your agent's own procedural library, discovered from the Hermes profiles on this machine and grouped by area.",
++          hers));
+     }
+     // One search across connections, the tools inside them, and skills. Skills had a filter of their
+     // own and connections had none, so finding a tool you had already configured meant reading every

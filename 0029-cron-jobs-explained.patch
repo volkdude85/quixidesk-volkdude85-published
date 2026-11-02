@@ -1,0 +1,83 @@
+Cron jobs, explained on their own page
+=====================================
+
+The nav said "Schedules" and the page said "Schedules", so the feature was a word nobody could act on:
+you open it and there is a list of things with clocks next to them, or nothing at all.
+
+  * the page is titled "Cron jobs" and says what that means — a prompt that runs on a clock, five-field
+    expression, this computer's time zone
+  * the legend spells the five fields out with a worked example: `0 9 * * 1-5` is 09:00 Monday to Friday
+  * each job shows its raw expression next to the friendly description, because the expression is the
+    thing you actually came to check
+  * an empty list now explains the idea and offers to create the first one, instead of rendering blank
+
+The behaviour is unchanged — same runner, same approval rules. What changed is that the page stops
+assuming you already know what it is.
+
+diff -Naur /tmp/mk28/a28/resources/ui/app.css /tmp/mk28/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2339,3 +2339,8 @@
+ .tools-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
+ .tools-filter input { flex: 1; min-width: 220px; }
+ .tools-filter .hint { margin: 0; white-space: nowrap; }
++
++/* Cron jobs: show the expression, not just a friendly sentence. */
++.cron-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 16px; }
++.cron-legend code, .cron-expression { font-family: ui-monospace, monospace; font-size: 12px; background: var(--raised); color: var(--accent); padding: 2px 7px; border-radius: 5px; }
++.cron-expression { display: inline-block; margin: 4px 0 2px; }
+diff -Naur /tmp/mk28/a28/resources/ui/app.js /tmp/mk28/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -2075,18 +2075,38 @@
+   function schedulesPage(host) {
+     host.replaceChildren(
+       header(
+-        "Schedules",
+-        "Run repeatable work on a schedule.",
+-        button("New schedule", () => scheduleEditor(), "primary", "plus"),
++        "Cron jobs",
++        "A prompt that runs on a clock. Five-field cron expression, this computer's time zone.",
++        button("New cron job", () => scheduleEditor(), "primary", "plus"),
+       ),
+       el(
+         "div",
+         { class: "notice" },
+-        "Schedules run while QuixiDesk is open, using this computer’s time zone. Missed times are skipped. Manual-mode tools still ask for approval. Edit and save older definitions to activate scheduling.",
++        "These run only while QuixiDesk is open. A time that passes with the app closed is skipped, not caught up. Manual-mode tools still ask before they act.",
++      ),
++      el(
++        "div",
++        { class: "cron-legend" },
++        el("code", {}, "minute hour day-of-month month day-of-week"),
++        el("span", {}, "e.g. "),
++        el("code", {}, "0 9 * * 1-5"),
++        el("span", {}, "= 09:00, Monday to Friday"),
+       ),
+     );
+     const list = el("div", { class: "list" });
+-    for (const t of state.schedules.filter((t) => t.status !== "deleted"))
++    const active = state.schedules.filter((t) => t.status !== "deleted");
++    if (!active.length) {
++      host.append(
++        el(
++          "div",
++          { class: "empty" },
++          icon("schedule"),
++          el("p", {}, "No cron jobs yet. A job is a prompt plus a schedule — \"every weekday at 09:00, summarise the repo\" is the whole idea."),
++          button("Create the first one", () => scheduleEditor(), "primary"),
++        ),
++      );
++    }
++    for (const t of active)
+       list.append(
+         el(
+           "div",
+@@ -2097,6 +2117,7 @@
+             { class: "grow" },
+             el("h3", {}, t.displayName || t.name),
+             el("p", {}, window.QuixiSchedules.describe(t)),
++            el("code", { class: "cron-expression" }, t.cronExpression || t.cron || "not configured"),
+             el("small", { class: "schedule-detail" }, window.QuixiSchedules.nextRunLabel(t)),
+             el("small", { class: "schedule-detail" }, window.QuixiSchedules.runStatus(t)),
+             t.lastRunMessage ? el("small", { class: "schedule-detail" }, t.lastRunMessage) : null,

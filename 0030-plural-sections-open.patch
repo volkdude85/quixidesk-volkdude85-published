@@ -1,0 +1,117 @@
+Plural sections open, and the prompt has a mouth
+===============================================
+
+Every plural entry in the sidebar was a label with nothing under it. Projects, Artifacts, Cron jobs and
+Tools & skills now carry a chevron: the label still navigates to the page, the chevron opens a short
+list of what is actually in there — six most recent, click one to go to it. Open/closed is remembered
+per section.
+
+The list is drawn from what the app already holds (state.projects, state.artifacts, state.schedules,
+the skills index); nothing new is fetched, and an empty section simply opens to nothing.
+
+The composer placeholder was "Write your prompt to QuixiDesk". It now says what a person would say:
+
+    You gonna talk to me or what?
+
+Both the placeholder and its aria-label changed, so a screen reader gets the same sentence.
+diff -Naur /tmp/mk28/a29/resources/ui/app.css /tmp/mk28/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2344,3 +2344,17 @@
+ .cron-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 16px; }
+ .cron-legend code, .cron-expression { font-family: ui-monospace, monospace; font-size: 12px; background: var(--raised); color: var(--accent); padding: 2px 7px; border-radius: 5px; }
+ .cron-expression { display: inline-block; margin: 4px 0 2px; }
++
++/* Collapsible sidebar groups: the label still navigates, the chevron opens the list. */
++.nav-group { display: flex; flex-direction: column; }
++.nav-group-head { display: flex; align-items: center; gap: 4px; }
++.nav-group-head > .nav-button, .nav-group-head > button:first-child { flex: 1; min-width: 0; }
++.nav-chevron { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 11px;
++  line-height: 1; padding: 6px 6px; border-radius: 6px; transition: transform .12s ease, color .12s ease; }
++.nav-chevron:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
++.nav-chevron.open { transform: rotate(90deg); color: var(--accent); }
++.nav-children { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 26px;
++  border-left: 1px solid var(--line); padding-left: 8px; }
++.nav-child { background: none; border: 0; text-align: left; color: var(--muted); font-size: 12px;
++  padding: 4px 6px; border-radius: 5px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.nav-child:hover { color: var(--text); background: var(--raised); }
+diff -Naur /tmp/mk28/a29/resources/ui/app.js /tmp/mk28/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -429,6 +429,7 @@
+       state.page === "chat"
+         ? (session()?.title || "Task") + " · QuixiDesk"
+         : "QuixiDesk";
++    // Plural sections open. A list you cannot open is a label; a list you can open is a place.
+     const nav = [
+       ["search", "Search", "search"],
+       ["projects", "Projects", "projects"],
+@@ -436,6 +437,34 @@
+       ["schedules", "Cron jobs", "schedule"],
+       ["tools", "Tools & skills", "tools"],
+     ];
++    const GROUP_ITEMS = {
++      projects: () => (state.projects || []).slice(0, 6).map((p) => [p.name, () => { state.project = p.id || p.name; navigate("project"); }]),
++      artifacts: () => (state.artifacts || []).slice(0, 6).map((a) => [a.name || a.title, () => navigate("artifacts")]),
++      schedules: () => (state.schedules || []).filter((s) => s.status !== "deleted").slice(0, 6)
++        .map((s) => [s.displayName || s.name, () => navigate("schedules")]),
++      tools: () => ((toolsData.skills || []).slice(0, 6)).map((s) => [s.displayName || s.name, () => navigate("tools")]),
++    };
++    const groupOpen = (page) => {
++      try { return localStorage.getItem("quixi.group." + page) === "1" } catch { return false }
++    };
++    const setGroupOpen = (page, open) => {
++      try { open ? localStorage.setItem("quixi.group." + page, "1") : localStorage.removeItem("quixi.group." + page) } catch {}
++    };
++    function navigationGroup(page, label, ic, open, onToggle) {
++      const chevron = el("button", {
++        class: "nav-chevron" + (open ? " open" : ""),
++        "aria-expanded": String(open),
++        "aria-label": (open ? "Collapse " : "Expand ") + label,
++        title: (open ? "Collapse " : "Expand ") + label,
++        onclick: (event) => { event.stopPropagation(); onToggle(); },
++      }, "▸");
++      const items = open ? el("div", { class: "nav-children" },
++        ...(GROUP_ITEMS[page]?.() || []).map(([name, onPick]) =>
++          el("button", { class: "nav-child", onclick: onPick }, String(name).slice(0, 34)))) : null;
++      return el("div", { class: "nav-group" },
++        el("div", { class: "nav-group-head" }, navigationButton(label, ic, () => navigate(page), page), chevron),
++        items);
++    }
+     const sidebar = el(
+       "aside",
+       { class: "sidebar" },
+@@ -464,7 +493,12 @@
+           "new-task",
+         ),
+         ...nav.map(([page, label, ic]) =>
+-          navigationButton(
++          GROUP_ITEMS[page]
++            ? navigationGroup(page, label, ic, groupOpen(page), () => {
++                setGroupOpen(page, !groupOpen(page));
++                render();
++              })
++            : navigationButton(
+             label,
+             ic,
+             () => navigate(page),
+@@ -854,8 +888,8 @@
+       disabled: pendingSubmissions.has(draftKey()),
+       placeholder: running(s)
+         ? "Write a follow-up while this task runs…"
+-        : "Write your prompt to QuixiDesk",
+-      "aria-label": "Write your prompt to QuixiDesk",
++        : "You gonna talk to me or what?",
++      "aria-label": "You gonna talk to me or what?",
+       rows: 3,
+       value: getDraft(),
+       onInput: () => { resetHistory(); saveDraft(); },
+@@ -1198,7 +1232,7 @@
+     if (note) note.textContent = active ? "Enter to queue · Shift+Enter for a new line" : "Enter to send · Shift+Enter for a new line";
+     document.getElementById("pending-messages")?.replaceChildren(...pendingMessageRows(session()));
+     const input = document.getElementById("prompt");
+-    if (input) input.placeholder = active ? "Add a follow-up…" : "Write your prompt to QuixiDesk";
++    if (input) input.placeholder = active ? "Add a follow-up…" : "You gonna talk to me or what?";
+   }
+   async function refreshSession(id) {
+     let old = state.sessions.find((s) => s.sessionId === id);

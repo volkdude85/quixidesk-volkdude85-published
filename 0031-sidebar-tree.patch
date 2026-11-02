@@ -1,0 +1,124 @@
+The sidebar is a tree, not a row of play buttons
+===============================================
+
+The first attempt was wrong in every way that matters. The caret was a floating shape inside the row
+rather than a control in its own column, so labels did not line up. It pointed right, so it read as
+"play" instead of "opens downward". The whole row was not a hit target. Children rendered as solid
+blocks stacked vertically. And the Tools & skills section opened to nothing, because it listed skills
+that are not loaded at the time the sidebar draws.
+
+Now:
+
+  * the caret lives in a fixed 26px gutter, so every label starts on the same column
+  * closed points DOWN (it opens downward), open flips UP (it closes upward)
+  * the entire row is the hit target, and the open row carries a tinted band
+  * children indent under a guide rail as full-width rows, selectable with up/down arrow keys
+  * Tools & skills lists configured connections first — the things that actually exist when the
+    sidebar draws — then skills, and does not open to an empty box
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2345,16 +2345,24 @@
+ .cron-legend code, .cron-expression { font-family: ui-monospace, monospace; font-size: 12px; background: var(--raised); color: var(--accent); padding: 2px 7px; border-radius: 5px; }
+ .cron-expression { display: inline-block; margin: 4px 0 2px; }
+ 
+-/* Collapsible sidebar groups: the label still navigates, the chevron opens the list. */
+-.nav-group { display: flex; flex-direction: column; }
+-.nav-group-head { display: flex; align-items: center; gap: 4px; }
+-.nav-group-head > .nav-button, .nav-group-head > button:first-child { flex: 1; min-width: 0; }
+-.nav-chevron { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 11px;
+-  line-height: 1; padding: 6px 6px; border-radius: 6px; transition: transform .12s ease, color .12s ease; }
+-.nav-chevron:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+-.nav-chevron.open { transform: rotate(90deg); color: var(--accent); }
+-.nav-children { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 26px;
+-  border-left: 1px solid var(--line); padding-left: 8px; }
+-.nav-child { background: none; border: 0; text-align: left; color: var(--muted); font-size: 12px;
+-  padding: 4px 6px; border-radius: 5px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+-.nav-child:hover { color: var(--text); background: var(--raised); }
++/* Sidebar tree: full-width rows, caret in a fixed gutter so every label lines up, children
++   indented under a guide rail. Nothing here is a floating shape. */
++.nav-group { display: flex; flex-direction: column; gap: 1px; }
++.nav-row { display: flex; align-items: center; gap: 0; border-radius: 8px; }
++.nav-row:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
++.nav-disclosure { flex: 0 0 26px; width: 26px; height: 100%; display: grid; place-items: center;
++  background: none; border: 0; cursor: pointer; color: var(--muted); padding: 0; border-radius: 8px 0 0 8px; }
++.nav-disclosure:hover { color: var(--accent); }
++.nav-caret { width: 0; height: 0; border-left: 4.5px solid transparent; border-right: 4.5px solid transparent;
++  border-top: 6px solid currentColor; transition: transform .14s ease; display: block; }
++/* closed: points down (it opens downward). open: flipped up (it closes upward). */
++.nav-caret.open { transform: rotate(180deg); }
++.nav-group.is-open > .nav-row { background: color-mix(in srgb, var(--accent) 14%, transparent); }
++.nav-group.is-open > .nav-row .nav-caret { color: var(--accent); }
++.nav-children { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 3px 26px;
++  padding-left: 10px; border-left: 1px solid var(--line); }
++.nav-child { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--muted);
++  font-size: 12px; line-height: 1.2; padding: 6px 8px; border-radius: 6px; cursor: pointer;
++  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.nav-child:hover, .nav-child:focus-visible { color: var(--text); background: var(--raised); outline: none; }
++.nav-child:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -442,7 +442,13 @@
+       artifacts: () => (state.artifacts || []).slice(0, 6).map((a) => [a.name || a.title, () => navigate("artifacts")]),
+       schedules: () => (state.schedules || []).filter((s) => s.status !== "deleted").slice(0, 6)
+         .map((s) => [s.displayName || s.name, () => navigate("schedules")]),
+-      tools: () => ((toolsData.skills || []).slice(0, 6)).map((s) => [s.displayName || s.name, () => navigate("tools")]),
++      tools: () => {
++        // Connections exist by the time the sidebar draws; the skill index arrives later, which is
++        // why this section opened to nothing.
++        const servers = (toolsData.servers || []).map((s) => [s.name, () => navigate("tools")]);
++        const skills = (toolsData.skills || []).map((s) => [s.displayName || s.name, () => navigate("tools")]);
++        return [...servers, ...skills].slice(0, 8);
++      },
+     };
+     const groupOpen = (page) => {
+       try { return localStorage.getItem("quixi.group." + page) === "1" } catch { return false }
+@@ -450,19 +456,38 @@
+     const setGroupOpen = (page, open) => {
+       try { open ? localStorage.setItem("quixi.group." + page, "1") : localStorage.removeItem("quixi.group." + page) } catch {}
+     };
++    // A tree row, not a play button: the whole row is the hit target, the caret sits in its own
++    // gutter so labels line up down the column, and children indent under it with a guide rail.
++    // Caret points down when the row is closed (it opens downward) and up when it is open.
+     function navigationGroup(page, label, ic, open, onToggle) {
+-      const chevron = el("button", {
+-        class: "nav-chevron" + (open ? " open" : ""),
++      const caret = el("span", { class: "nav-caret" + (open ? " open" : ""), "aria-hidden": "true" });
++      const toggle = el("button", {
++        class: "nav-disclosure" + (open ? " open" : ""),
+         "aria-expanded": String(open),
+         "aria-label": (open ? "Collapse " : "Expand ") + label,
+         title: (open ? "Collapse " : "Expand ") + label,
+         onclick: (event) => { event.stopPropagation(); onToggle(); },
+-      }, "▸");
+-      const items = open ? el("div", { class: "nav-children" },
+-        ...(GROUP_ITEMS[page]?.() || []).map(([name, onPick]) =>
+-          el("button", { class: "nav-child", onclick: onPick }, String(name).slice(0, 34)))) : null;
+-      return el("div", { class: "nav-group" },
+-        el("div", { class: "nav-group-head" }, navigationButton(label, ic, () => navigate(page), page), chevron),
++      }, caret);
++      const items = open
++        ? el("div", { class: "nav-children", role: "group", "aria-label": label },
++            ...(GROUP_ITEMS[page]?.() || []).map(([name, onPick]) =>
++              el("button", {
++                class: "nav-child",
++                tabindex: "0",
++                onclick: onPick,
++                onkeydown: (event) => {
++                  // up/down walks the visible rows, as a list should
++                  const rows = [...document.querySelectorAll(".nav-child, .nav-button, .nav-disclosure")];
++                  const at = rows.indexOf(event.currentTarget);
++                  const next = event.key === "ArrowDown" ? rows[at + 1] : event.key === "ArrowUp" ? rows[at - 1] : null;
++                  if (next) { next.focus(); event.preventDefault(); }
++                },
++              }, String(name).slice(0, 40))))
++        : null;
++      return el("div", { class: "nav-group" + (open ? " is-open" : "") },
++        el("div", { class: "nav-row" },
++          toggle,
++          navigationButton(label, ic, () => navigate(page), page)),
+         items);
+     }
+     const sidebar = el(

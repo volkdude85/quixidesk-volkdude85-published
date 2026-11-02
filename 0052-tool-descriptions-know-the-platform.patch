@@ -1,0 +1,60 @@
+The tool descriptions still said macOS
+=====================================
+
+The prompt has said `running on linux` since the platform line was written — `platform =
+std::env::consts::OS` resolves correctly — but the tool catalogue did not, and the catalogue is
+what the model reads when it decides how to act. Three ways it kept being told this was a Mac:
+
+  * the computer-use `key` tool's own example was `'cmd+a'`. On Linux `cmd` is not a key, so a
+    combination written that way is delivered as a literal letter and the shortcut silently does
+    nothing. It says `ctrl+a` now, and says why.
+  * `app_bring_to_current_space` — "Bring an application window to the current macOS Space" — was
+    offered on a desktop with no Mission Control. A tool that exists teaches the model the concept
+    exists. It is filtered out of the catalogue anywhere that is not macOS.
+  * the Computer Use extension described itself as "Control local macOS apps…" in Tools & skills.
+
+Nothing here is deleted from the source: the macOS strings are still the macOS strings, selected by
+`cfg!(target_os = "macos")`. This is the same class of fix as `0023` (which took `open -a` and
+`osascript` out of the Bash examples) and `0021` (which stopped seeding the AppleScript server) — the
+third place the build was still speaking Macintosh on a Linux box.
+
+Why it matters beyond tidiness: an agent that believes it is on macOS reaches for `osascript`,
+`open -a`, `defaults write`, `pbcopy` and `/Applications` paths. Every one of those is a failed tool
+call the user watches happen.
+--- a/crates/quixi-mcp/src/lib.rs
++++ b/crates/quixi-mcp/src/lib.rs
+@@ -540,7 +540,13 @@
+                 "properties": { "text": { "type": "string" } },
+                 "required": ["text"]
+             })),
+-            ("key", "Press a key or key combination (e.g. 'return', 'escape', 'cmd+a').", json!({
++            ("key", if cfg!(target_os = "macos") {
++                "Press a key or key combination (e.g. 'return', 'escape', 'cmd+a')."
++            } else {
++                "Press a key or key combination (e.g. 'return', 'escape', 'ctrl+a'). The modifier is \
++                 `ctrl`, not `cmd`: this build runs on Linux, where `cmd` is not a key and a combination \
++                 written that way is delivered as a literal letter."
++            }, json!({
+                 "type": "object",
+                 "properties": {
+                     "text": { "type": "string" },
+@@ -778,6 +784,10 @@
+ 
+         tool_defs
+             .into_iter()
++            // Mission Control Spaces are a macOS concept. On Linux the tool was offered, answered
++            // nothing useful, and taught the model that this desktop has Spaces — one of the ways it
++            // kept behaving like it was still on macOS.
++            .filter(|(name, _, _)| cfg!(target_os = "macos") || *name != "app_bring_to_current_space")
+             .map(|(name, desc, schema)| {
+                 json!({
+                     "name": name,
+@@ -1270,7 +1280,7 @@
+             (
+                 "computer-use",
+                 "Computer Use",
+-                "Control local macOS apps, capture screenshots, click, type, and inspect accessibility trees.",
++                "Control local apps, capture screenshots, click, type, and inspect accessibility trees.",
+                 "--computer-use",
+             ),
+             (

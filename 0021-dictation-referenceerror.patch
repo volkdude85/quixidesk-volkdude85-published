@@ -1,0 +1,48 @@
+Dictation threw ReferenceError on every click
+=============================================
+
+`startEngineDictation` was declared beside `dictationControl` instead of inside it, but its body uses
+that function's `textarea` and `node`:
+
+    function startEngineDictation() {
+      if (!textarea.isConnected || engineSttStop) return;   // ReferenceError: textarea is not defined
+      ...
+      node.textContent = "Stop dictation";
+
+On macOS and in Chromium the click never reaches it — the webview recogniser exists, so the speech
+path is taken. On WebKitGTK there is no recogniser at all, so the engine path IS the path, and it
+threw on the first line every single time. An exception inside a click handler does not propagate to
+the caller: the button did nothing, no dialog, no error, no transcript call. Read from the outside
+that is "dictation does not work at all".
+
+Two arguments, one call site: `startEngineDictation(textarea, node)`.
+
+Verified by driving the shipped module in a browser with the Web Speech API removed and a stubbed
+bridge whose transcript grows while dictation runs:
+
+    before: Uncaught ReferenceError: textarea is not defined
+    after : button "Stop dictation", aria-pressed true, textarea "HELLO FROM THE MICROPHONE.",
+            Voice.getTranscript polled every 700 ms, and the text already in the service correctly
+            skipped rather than dumped into the prompt.
+
+diff -Naur a/resources/ui/capability-workflows.js b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js
++++ b/resources/ui/capability-workflows.js
+@@ -258,7 +258,7 @@
+         // command — and polling it is the only path that exists. Waiting for a probe first meant a
+         // slow or unreachable endpoint turned Dictate into a dialog telling a Linux user to use
+         // macOS dictation.
+-        startEngineDictation();
++        startEngineDictation(textarea, node);
+       }, "quiet");
+       node.title = typeof recognitionConstructor() === "function" ? "Dictate text into the prompt" : "System dictation help";
+       function start(Recognition) {
+@@ -291,7 +291,7 @@
+       return node;
+     }
+     let engineSttStop = null;
+-    function startEngineDictation() {
++    function startEngineDictation(textarea, node) {
+       if (!textarea.isConnected || engineSttStop) return;
+       node.textContent = "Stop dictation";
+       node.setAttribute("aria-pressed", "true");

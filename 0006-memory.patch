@@ -1,0 +1,717 @@
+diff -Naur /tmp/memclean/before/crates/quixi-engine/src/agent_tools.rs /tmp/memclean/after/crates/quixi-engine/src/agent_tools.rs
+--- a/crates/quixi-engine/src/agent_tools.rs
++++ b/crates/quixi-engine/src/agent_tools.rs
+@@ -165,6 +165,30 @@
+         {
+             "type":"function",
+             "function":{
++                "name":"Remember",
++                "description":"Store a durable fact so it survives this conversation. Memory is organised as wing / room / drawer: a wing is a broad domain (personal, projects, machines), a room is a topic inside it, a drawer is one document. Writing the same wing/room/name again replaces that drawer. Write what will still be true and useful later, not a transcript.",
++                "parameters":{"type":"object","properties":{"wing":{"type":"string","description":"Broad domain, e.g. personal, projects, machines, docs."},"room":{"type":"string","description":"Topic inside the wing, e.g. billing, deploy, hardware."},"name":{"type":"string","description":"Short stable drawer name, e.g. invoice-dates."},"content":{"type":"string","description":"Markdown content to store."}},"required":["wing","room","name","content"],"additionalProperties":false}
++            }
++        },
++        {
++            "type":"function",
++            "function":{
++                "name":"Recall",
++                "description":"Search stored memory and return ranked matches with snippets. Use before asking the user something they may already have told you. Ranking prefers an address match (wing/room/name) over a body mention and a whole-phrase match over scattered words.",
++                "parameters":{"type":"object","properties":{"query":{"type":"string","description":"What to look for. Short phrases work best."},"limit":{"type":"integer","description":"Maximum results, 1-25. Default 8."}},"required":["query"],"additionalProperties":false}
++            }
++        },
++        {
++            "type":"function",
++            "function":{
++                "name":"MemoryIndex",
++                "description":"Show what memory exists — wings, rooms and drawer counts — without dumping content. Use it to orient before searching.",
++                "parameters":{"type":"object","properties":{},"required":[],"additionalProperties":false}
++            }
++        },
++        {
++            "type":"function",
++            "function":{
+                 "name":"ListSkills",
+                 "description":"Search the installed skill library. Returns 50 results per page with a page counter, ranked so an id match beats a passing mention in a description. Call this when a request might match a stored procedure: search with a short query (pdf, browser, kanban), page through if needed, then LoadSkill with an exact id. Skills are named area/name.",
+                 "parameters":{"type":"object","properties":{
+diff -Naur /tmp/memclean/before/crates/quixi-engine/src/bin/quixi.rs /tmp/memclean/after/crates/quixi-engine/src/bin/quixi.rs
+--- a/crates/quixi-engine/src/bin/quixi.rs
++++ b/crates/quixi-engine/src/bin/quixi.rs
+@@ -68,7 +68,8 @@
+          \n\
+          environment:\n\
+          \x20 QUIXI_RESOURCES_DIR   override the resources directory\n\
+-         \x20 QUIXI_DATA_DIR        override the data directory (default ~/.quixi)"
++         \x20 QUIXI_PALACE_DIR      point memory at an existing palace\n\
++         \x20 HOME                  data lives under $HOME/.quixi; change HOME to isolate a run"
+     );
+     std::process::exit(code)
+ }
+@@ -80,9 +81,9 @@
+     }
+     // An unrecognised leading option is a mistake, not a prompt: sending `--bogus` to the model
+     // spends a call answering a question the user did not ask, and looks like the CLI hung.
+-    const KNOWN: [&str; 8] = [
++    const KNOWN: [&str; 11] = [
+         "--skills", "--skill", "--search", "--providers", "--prompt-block", "--json", "--cwd",
+-        "--capabilities",
++        "--remember", "--recall", "--memory", "--scope",
+     ];
+     if argv[0].starts_with('-') && !KNOWN.contains(&argv[0].as_str()) {
+         eprintln!("quixi: unknown option `{}`\n", argv[0]);
+@@ -168,6 +169,67 @@
+         return;
+     }
+ 
++    if argv[0] == "--remember" {
++        // quixi --remember <wing> <room> <name>   (content on stdin)
++        let (Some(wing), Some(room), Some(name)) = (argv.get(1), argv.get(2), argv.get(3)) else {
++            eprintln!("usage: quixi --remember <wing> <room> <name>   (content on stdin)");
++            std::process::exit(2);
++        };
++        let mut content = String::new();
++        if std::io::Read::read_to_string(&mut std::io::stdin(), &mut content).is_err() {
++            eprintln!("could not read content from stdin");
++            std::process::exit(2);
++        }
++        let (out, err) = engine.remember_tool(&serde_json::json!({
++            "wing": wing, "room": room, "name": name, "content": content
++        }));
++        if err {
++            eprintln!("{out}");
++            std::process::exit(1);
++        }
++        println!("{out}");
++        return;
++    }
++
++    if argv[0] == "--recall" {
++        let query = argv.get(1).cloned().unwrap_or_default();
++        let limit = argv
++            .iter()
++            .position(|a| a == "--limit")
++            .and_then(|i| argv.get(i + 1))
++            .and_then(|v| v.parse::<u64>().ok())
++            .unwrap_or(8);
++        let (out, is_err) = engine.recall_tool(&serde_json::json!({
++            "query": query, "limit": limit
++        }));
++        println!("{out}");
++        if is_err {
++            std::process::exit(1);
++        }
++        return;
++    }
++
++    if argv[0] == "--memory" {
++        let (out, is_err) = engine.memory_index_tool();
++        println!("{out}");
++        if is_err {
++            std::process::exit(1);
++        }
++        return;
++    }
++
++    if argv[0] == "--scope" {
++        // Which memory tier the active provider allows, without spending a call.
++        let local = engine.memory_provider_is_local();
++        let st = engine.provider_manager.state.read();
++        println!("provider:      {}", st.active_provider);
++        println!("memory scope:  {}", if local { "FULL (provider is local)" } else { "RESTRICTED (provider is remote)" });
++        if !local {
++            println!("recallable:    {}", quixi_engine::QuixiEngine::REMOTE_SAFE_WINGS.join(", "));
++        }
++        return;
++    }
++
+     if argv[0] == "--prompt-block" {
+         // Exactly what the model is told about the skill library, and what it costs to build it.
+         // Useful when the library grows and the per-turn overhead needs checking.
+diff -Naur /tmp/memclean/before/crates/quixi-engine/src/lib.rs /tmp/memclean/after/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs
++++ b/crates/quixi-engine/src/lib.rs
+@@ -4,6 +4,7 @@
+ mod scheduling;
+ mod context;
+ mod credentials;
++pub mod palace;
+ mod tool_media;
+ pub mod agent_tools;
+ pub mod providers;
+@@ -954,6 +955,146 @@
+     // =========================================================================
+     // CoworkMemory, CoworkArtifacts, CoworkScheduledTasks, CoworkStorage
+     // =========================================================================
++    /// Where the palace lives.
++    ///
++    /// Defaults to this app's own data dir so QuixiDesk never writes into another tool's store by
++    /// accident. `QUIXI_PALACE_DIR` points it at an existing palace deliberately.
++    pub fn palace_root(&self) -> PathBuf {
++        if let Ok(p) = std::env::var("QUIXI_PALACE_DIR") {
++            let p = p.trim();
++            if !p.is_empty() {
++                return PathBuf::from(p);
++            }
++        }
++        self.data_dir.join("palace")
++    }
++
++    pub fn palace(&self) -> crate::palace::Palace {
++        crate::palace::Palace::new(self.palace_root())
++    }
++
++    /// Wings that may be recalled when the active provider is remote.
++    ///
++    /// The security boundary is the model, not the transport. The bridge runs as a child process on
++    /// this machine and opens no port, so nothing off-box can reach it — but whatever it returns is
++    /// placed in a prompt and sent to whichever provider is configured. Local weights keep it local;
++    /// anything else does not, so on a remote provider only non-personal wings are served.
++    pub const REMOTE_SAFE_WINGS: [&'static str; 4] = ["projects", "machines", "docs", "skills"];
++
++    /// True when the active provider is talking to this machine.
++    pub fn memory_provider_is_local(&self) -> bool {
++        let st = self.provider_manager.state.read();
++        let active = st.active_provider.clone();
++        let base = st
++            .providers
++            .iter()
++            .find(|p| p.id == active)
++            .map(|p| p.base_url.to_lowercase())
++            .unwrap_or_default();
++        base.contains("127.0.0.1")
++            || base.contains("localhost")
++            || base.contains("0.0.0.0")
++            || base.contains("[::1]")
++    }
++
++    /// Remember tool: write a drawer.
++    pub fn remember_tool(&self, input: &Value) -> (String, bool) {
++        let get = |k: &str| input.get(k).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
++        let (wing, room, name, content) = (get("wing"), get("room"), get("name"), get("content"));
++        if wing.is_empty() || room.is_empty() || name.is_empty() {
++            return ("Remember needs wing, room and name.".into(), true);
++        }
++        if content.is_empty() {
++            return ("Remember needs content to store.".into(), true);
++        }
++        if content.len() > 400_000 {
++            return ("That drawer is too large (400k character limit).".into(), true);
++        }
++        match self.palace().remember(&wing, &room, &name, &content) {
++            Ok(path) => (
++                format!("Stored {wing}/{room}/{name} ({} chars) at {}", content.len(), path.display()),
++                false,
++            ),
++            Err(e) => (e, true),
++        }
++    }
++
++    /// Recall tool: ranked search across the palace.
++    pub fn recall_tool(&self, input: &Value) -> (String, bool) {
++        let query = input.get("query").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
++        let limit = input.get("limit").and_then(|v| v.as_u64()).unwrap_or(8).clamp(1, 25) as usize;
++        if query.is_empty() {
++            return ("Recall needs a query.".into(), true);
++        }
++        let local = self.memory_provider_is_local();
++        let palace = self.palace();
++        let mut hits = palace.search(&query, limit.saturating_mul(4));
++        if !local {
++            hits.retain(|h| Self::REMOTE_SAFE_WINGS.contains(&h.wing.as_str()));
++            hits.truncate(limit);
++        }
++        if hits.is_empty() {
++            let msg = if local {
++                format!("Nothing stored matches '{query}'.")
++            } else {
++                format!(
++                    "Nothing in the recallable wings matches '{query}'. The active provider is remote, \
++                     so only {} are sent; switch to a local model for the rest.",
++                    Self::REMOTE_SAFE_WINGS.join(", ")
++                )
++            };
++            return (msg, true);
++        }
++        let mut out = String::new();
++        if !local {
++            out.push_str(&format!(
++                "(active provider is remote — only {} are shown)\n\n",
++                Self::REMOTE_SAFE_WINGS.join(", ")
++            ));
++        }
++        for h in hits {
++            out.push_str(&format!(
++                "{}/{}/{}  [{:.1}]\n  {}\n",
++                h.wing, h.room, h.name, h.score, h.snippet
++            ));
++        }
++        (out, false)
++    }
++
++    /// MemoryIndex tool: what exists, without dumping content.
++    pub fn memory_index_tool(&self) -> (String, bool) {
++        let local = self.memory_provider_is_local();
++        let idx = self.palace().index();
++        let mut out = String::new();
++        if !local {
++            out.push_str(&format!(
++                "(active provider is remote — only {} are recallable)\n\n",
++                Self::REMOTE_SAFE_WINGS.join(", ")
++            ));
++        }
++        let empty = idx.as_array().map(|a| a.is_empty()).unwrap_or(true);
++        if empty {
++            out.push_str("No memory stored yet.");
++            return (out, true);
++        }
++        for wing in idx.as_array().unwrap() {
++            let w = wing["wing"].as_str().unwrap_or("?");
++            if !local && !Self::REMOTE_SAFE_WINGS.contains(&w) {
++                continue;
++            }
++            out.push_str(&format!("{} ({} drawers)\n", w, wing["drawers"]));
++            for room in wing["rooms"].as_array().cloned().unwrap_or_default() {
++                out.push_str(&format!(
++                    "  {}/{} — {}\n",
++                    w,
++                    room["room"].as_str().unwrap_or("?"),
++                    room["drawers"]
++                ));
++            }
++        }
++        (out, false)
++    }
++
+     pub fn read_global_memory(&self) -> String {
+         let p = self.data_dir.join("memory/MEMORY.md");
+         fs::read_to_string(p).unwrap_or_default()
+@@ -2681,6 +2822,12 @@
+                             self.load_skill(&input)
+                         } else if call.name == "ListSkills" {
+                             self.list_skills_tool(&input)
++                        } else if call.name == "Remember" {
++                            self.remember_tool(&input)
++                        } else if call.name == "Recall" {
++                            self.recall_tool(&input)
++                        } else if call.name == "MemoryIndex" {
++                            self.memory_index_tool()
+                         } else {
+                             self.execute_tool_with_approval(session_id, &call.id, &call.name, &input, cwd,
+                                 permission_mode, cancelled)
+diff -Naur /tmp/memclean/before/crates/quixi-engine/src/palace.rs /tmp/memclean/after/crates/quixi-engine/src/palace.rs
+--- a/crates/quixi-engine/src/palace.rs
++++ b/crates/quixi-engine/src/palace.rs
+@@ -0,0 +1,415 @@
++//! MemPalace-style memory: wings → rooms → drawers, markdown on disk.
++//!
++//! Upstream QuixiDesk keeps a single `memory/MEMORY.md` that only the UI ever reads — nothing
++//! injects it into a prompt and nothing searches it, so the model is blind to it. This is the
++//! replacement: a hierarchical store where every fact has an address, files are ordinary markdown
++//! a human can read and edit, and retrieval is a ranked search rather than a paste.
++//!
++//! Layout, under the palace root:
++//!
++//! ```text
++//! wings/<wing>/rooms/<room>/<drawer>.md
++//! ```
++//!
++//! A *wing* is a broad domain (personal, projects, machines). A *room* is a topic inside it
++//! (billing, deploy, hardware). A *drawer* is one document — a fact set, a decision, a note.
++//!
++//! Everything a caller supplies becomes a path component, so every segment is validated as one.
++//!
++//! # Credit
++//!
++//! The wings → rooms → drawers model, and the name MemPalace, come from the MemPalace project
++//! (<https://github.com/MemPalace/mempalace>, MIT), created by **Milla Jovovich** and **Ben Sigman**.
++//! Their own attribution is in the project's `docs/HISTORY.md` ("A Note from Milla & Ben"). This is
++//! an independent implementation of the idea inside QuixiDesk's engine — no MemPalace source was
++//! copied — but the design is theirs and the credit is theirs. If you find this useful, the thing
++//! to go and look at is the original.
++
++use std::fs;
++use std::path::{Path, PathBuf};
++
++use serde_json::{json, Value};
++
++/// One stored document.
++#[derive(Clone, Debug)]
++pub struct Drawer {
++    pub wing: String,
++    pub room: String,
++    pub name: String,
++    pub path: PathBuf,
++}
++
++/// One search result.
++#[derive(Clone, Debug)]
++pub struct Hit {
++    pub wing: String,
++    pub room: String,
++    pub name: String,
++    pub score: f64,
++    pub snippet: String,
++}
++
++/// A memory store rooted at a directory.
++pub struct Palace {
++    root: PathBuf,
++}
++
++/// Path segments come from the model, so treat each one as hostile until proven otherwise.
++fn safe_segment(s: &str) -> Option<String> {
++    let s = s.trim();
++    let ok = !s.is_empty()
++        && !s.starts_with('.')
++        && !s.contains("..")
++        && !s.contains('/')
++        && !s.contains('\\')
++        && s.chars()
++            .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.' | ' '));
++    if !ok {
++        return None;
++    }
++    // Spaces are legal in a name but awkward in a path; normalise them rather than reject.
++    Some(s.replace(' ', "-"))
++}
++
++impl Palace {
++    pub fn new(root: PathBuf) -> Self {
++        Self { root }
++    }
++
++    pub fn root(&self) -> &Path {
++        &self.root
++    }
++
++    fn wing_dir(&self, wing: &str) -> Option<PathBuf> {
++        safe_segment(wing).map(|w| self.root.join("wings").join(w))
++    }
++
++    fn room_dir(&self, wing: &str, room: &str) -> Option<PathBuf> {
++        Some(self.wing_dir(wing)?.join("rooms").join(safe_segment(room)?))
++    }
++
++    /// Write a drawer, creating its wing and room.
++    pub fn remember(
++        &self,
++        wing: &str,
++        room: &str,
++        name: &str,
++        content: &str,
++    ) -> Result<PathBuf, String> {
++        let dir = self
++            .room_dir(wing, room)
++            .ok_or_else(|| format!("invalid wing or room: {wing:?} / {room:?}"))?;
++        let file = safe_segment(name).ok_or_else(|| format!("invalid drawer name: {name:?}"))?;
++        fs::create_dir_all(&dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
++        let path = dir.join(format!("{file}.md"));
++        fs::write(&path, content).map_err(|e| format!("could not write {}: {e}", path.display()))?;
++        Ok(path)
++    }
++
++    /// Read one drawer.
++    pub fn read(&self, wing: &str, room: &str, name: &str) -> Option<String> {
++        let dir = self.room_dir(wing, room)?;
++        let file = safe_segment(name)?;
++        fs::read_to_string(dir.join(format!("{file}.md"))).ok()
++    }
++
++    /// Every drawer, optionally narrowed to a wing and/or room.
++    pub fn list(&self, wing: Option<&str>, room: Option<&str>) -> Vec<Drawer> {
++        let mut out = Vec::new();
++        let wings_root = self.root.join("wings");
++        let wings: Vec<String> = match wing {
++            Some(w) => safe_segment(w).map(|w| vec![w]).unwrap_or_default(),
++            None => read_dir_names(&wings_root),
++        };
++        for w in wings {
++            let rooms_root = wings_root.join(&w).join("rooms");
++            let rooms: Vec<String> = match room {
++                Some(r) => safe_segment(r).map(|r| vec![r]).unwrap_or_default(),
++                None => read_dir_names(&rooms_root),
++            };
++            for r in rooms {
++                let dir = rooms_root.join(&r);
++                for file in read_dir_names(&dir) {
++                    let Some(stem) = file.strip_suffix(".md") else { continue };
++                    out.push(Drawer {
++                        wing: w.clone(),
++                        room: r.clone(),
++                        name: stem.to_string(),
++                        path: dir.join(&file),
++                    });
++                }
++            }
++        }
++        out.sort_by(|a, b| (&a.wing, &a.room, &a.name).cmp(&(&b.wing, &b.room, &b.name)));
++        out
++    }
++
++    /// Ranked search across every drawer.
++    ///
++    /// Scoring is deliberately simple and explainable rather than clever: a term in the address
++    /// (wing/room/name) outranks a term in the body, repeated body terms accumulate, and a whole
++    /// phrase match outranks scattered words. No embeddings, no hidden model — so a miss is
++    /// debuggable by looking at the files.
++    pub fn search(&self, query: &str, limit: usize) -> Vec<Hit> {
++        let q = query.trim().to_lowercase();
++        if q.is_empty() {
++            return Vec::new();
++        }
++        let terms: Vec<String> = q
++            .split(|c: char| !c.is_alphanumeric())
++            .filter(|t| t.len() > 1)
++            .map(str::to_string)
++            .collect();
++        if terms.is_empty() {
++            return Vec::new();
++        }
++
++        let mut hits = Vec::new();
++        for drawer in self.list(None, None) {
++            let Ok(body) = fs::read_to_string(&drawer.path) else { continue };
++            let body_l = body.to_lowercase();
++            let address = format!(
++                "{}/{}/{}",
++                drawer.wing, drawer.room, drawer.name
++            )
++            .to_lowercase();
++
++            let mut score = 0.0f64;
++            // The phrase bonus only means something for a multi-word query. Applying it to a single
++            // word made any drawer whose body mentioned that word outrank a drawer actually named
++            // after it, which is precisely backwards.
++            if q.split_whitespace().count() > 1 && body_l.contains(&q) {
++                score += 12.0;
++            }
++            for term in &terms {
++                if address.contains(term) {
++                    score += 5.0;
++                }
++                let n = body_l.matches(term.as_str()).count();
++                if n > 0 {
++                    // Diminishing returns, so one very chatty drawer cannot bury the rest.
++                    score += 1.0 + (n as f64).min(8.0).sqrt();
++                }
++            }
++            if score == 0.0 {
++                continue;
++            }
++            hits.push(Hit {
++                wing: drawer.wing,
++                room: drawer.room,
++                name: drawer.name,
++                score,
++                snippet: snippet_for(&body, &terms),
++            });
++        }
++        hits.sort_by(|a, b| {
++            b.score
++                .partial_cmp(&a.score)
++                .unwrap_or(std::cmp::Ordering::Equal)
++                .then_with(|| a.name.cmp(&b.name))
++        });
++        hits.truncate(limit);
++        hits
++    }
++
++    /// A compact index: wing → room → drawer count.
++    pub fn index(&self) -> Value {
++        let mut wings: std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>> =
++            Default::default();
++        for d in self.list(None, None) {
++            *wings
++                .entry(d.wing)
++                .or_default()
++                .entry(d.room)
++                .or_insert(0) += 1;
++        }
++        json!(wings
++            .into_iter()
++            .map(|(w, rooms)| {
++                let total: usize = rooms.values().sum();
++                json!({
++                    "wing": w,
++                    "drawers": total,
++                    "rooms": rooms.into_iter().map(|(r, n)| json!({"room": r, "drawers": n})).collect::<Vec<_>>(),
++                })
++            })
++            .collect::<Vec<_>>())
++    }
++
++    /// Fold the upstream single-file memory in, so existing content is not orphaned.
++    pub fn import_legacy(&self, content: &str) -> Result<PathBuf, String> {
++        self.remember("hermes", "legacy-memory", "MEMORY", content)
++    }
++}
++
++fn read_dir_names(dir: &Path) -> Vec<String> {
++    let Ok(entries) = fs::read_dir(dir) else {
++        return Vec::new();
++    };
++    let mut names: Vec<String> = entries
++        .flatten()
++        .filter_map(|e| e.file_name().to_str().map(str::to_string))
++        .collect();
++    names.sort();
++    names
++}
++
++/// The first line that mentions a term, trimmed to something readable.
++fn snippet_for(body: &str, terms: &[String]) -> String {
++    for line in body.lines() {
++        let l = line.trim();
++        if l.is_empty() {
++            continue;
++        }
++        let lower = l.to_lowercase();
++        if terms.iter().any(|t| lower.contains(t)) {
++            return l.chars().take(180).collect();
++        }
++    }
++    body.lines()
++        .find(|l| !l.trim().is_empty())
++        .map(|l| l.trim().chars().take(180).collect())
++        .unwrap_or_default()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn tmp() -> PathBuf {
++        let p = std::env::temp_dir().join(format!("palace-test-{}", uuid::Uuid::new_v4()));
++        fs::create_dir_all(&p).unwrap();
++        p
++    }
++
++    #[test]
++    fn a_drawer_round_trips() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        p.remember("work", "billing", "invoice-dates", "Invoice 2026-10-09.").unwrap();
++        assert_eq!(
++            p.read("work", "billing", "invoice-dates").as_deref(),
++            Some("Invoice 2026-10-09.")
++        );
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn path_segments_cannot_escape_the_root() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        for (w, r, n) in [
++            ("../../etc", "x", "y"),
++            ("a", "../..", "y"),
++            ("a", "b", "../../../etc/passwd"),
++            ("/abs", "b", "c"),
++            ("a", "b", "c/d"),
++            ("a", "b", ".."),
++            ("a", "b", ""),
++        ] {
++            assert!(p.remember(w, r, n, "x").is_err(), "accepted {w}/{r}/{n}");
++        }
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn search_ranks_a_name_match_above_a_passing_mention() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        p.remember("projects", "engine", "tensor-layout", "how weights are laid out").unwrap();
++        p.remember("notes", "misc", "random", "one line that mentions tensor once").unwrap();
++
++        let hits = p.search("tensor", 10);
++        assert_eq!(hits[0].name, "tensor-layout", "{:?}", hits.iter().map(|h| &h.name).collect::<Vec<_>>());
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn an_address_match_outranks_a_body_match() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        // drawer named for the term, body unrelated
++        p.remember("projects", "engine", "kanban", "nothing relevant here at all").unwrap();
++        // drawer whose body mentions it many times but is not named for it
++        p.remember("notes", "misc", "notes-a", &"kanban ".repeat(6)).unwrap();
++
++        let hits = p.search("kanban", 10);
++        assert_eq!(hits[0].name, "kanban");
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn a_phrase_match_beats_scattered_terms() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        p.remember("a", "b", "phrase", "the quick brown fox").unwrap();
++        p.remember("a", "b", "scattered", "quick ... elsewhere ... brown ... fox").unwrap();
++
++        let hits = p.search("quick brown fox", 10);
++        assert_eq!(hits[0].name, "phrase");
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn an_empty_or_symbol_only_query_returns_nothing_and_does_not_panic() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        p.remember("a", "b", "c", "content").unwrap();
++        assert!(p.search("", 10).is_empty());
++        assert!(p.search("   ", 10).is_empty());
++        assert!(p.search("!!!", 10).is_empty());
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn listing_narrows_by_wing_and_room() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        p.remember("work", "billing", "a", "x").unwrap();
++        p.remember("personal", "health", "b", "x").unwrap();
++        p.remember("projects", "engine", "c", "x").unwrap();
++
++        assert_eq!(p.list(None, None).len(), 3);
++        assert_eq!(p.list(Some("personal"), None).len(), 2);
++        assert_eq!(p.list(Some("personal"), Some("billing")).len(), 1);
++        assert_eq!(p.list(Some("nope"), None).len(), 0);
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn the_index_reports_counts_per_wing_and_room() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        p.remember("work", "billing", "a", "x").unwrap();
++        p.remember("work", "billing", "b", "x").unwrap();
++        p.remember("projects", "engine", "c", "x").unwrap();
++
++        let idx = p.index();
++        let arr = idx.as_array().unwrap();
++        assert_eq!(arr.len(), 2);
++        let personal = arr.iter().find(|w| w["wing"] == "personal").unwrap();
++        assert_eq!(personal["drawers"], 2);
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn search_honours_the_limit() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        for i in 0..30 {
++            p.remember("a", "b", &format!("d-{i}"), "shared term here").unwrap();
++        }
++        assert_eq!(p.search("shared", 5).len(), 5);
++        fs::remove_dir_all(root).unwrap();
++    }
++
++    #[test]
++    fn every_hit_carries_a_snippet() {
++        let root = tmp();
++        let p = Palace::new(root.clone());
++        p.remember("a", "b", "c", "intro line\n\nthe needle is here\n\nmore").unwrap();
++        let hits = p.search("needle", 5);
++        assert!(hits[0].snippet.contains("needle"), "{}", hits[0].snippet);
++        fs::remove_dir_all(root).unwrap();
++    }
++}

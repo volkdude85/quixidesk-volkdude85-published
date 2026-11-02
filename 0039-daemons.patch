@@ -1,0 +1,155 @@
+Daemons: a light on the row, and a live check behind it
+=====================================================
+
+A page for the background services this app leans on, under Cron jobs, with a little horned face for an
+icon.
+
+The important part is that nothing on it is asserted. `/api/quixi/daemons` asks the machine:
+
+  * `systemctl --user is-active <unit>` for each known service
+  * a 120 ms TCP connect to the port it would be listening on
+
+A row is lit only when the thing is actually reachable. The list names what each one is for rather than
+just its unit name: streaming speech for dictation, Kokoro for read-aloud, the embedding index for
+memory recall, the model server, vision, and input injection for the agent driving mouse and keyboard.
+
+Missing services report as down rather than being hidden, because "this box cannot do voice" is
+information the user needs, and a page that silently omits it makes the absence look like a bug.
+diff -Naur /tmp/mk35/a39/crates/quixi-engine/src/lib.rs /tmp/mk35/b/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs
++++ b/crates/quixi-engine/src/lib.rs
+@@ -1593,6 +1593,46 @@
+         if clean_path == "/api/quixi/storage/status" {
+             return Self::json_resp(200, &self.session_storage_status());
+         }
++        // Daemons: what is running on this machine right now, by systemd unit and by listening port.
++        // Answering "is it up" from a live check beats a settings page that says a service "exists".
++        if clean_path == "/api/quixi/daemons" {
++            let unit_state = |unit: &str| -> String {
++                std::process::Command::new("systemctl")
++                    .args(["--user", "is-active", unit])
++                    .output()
++                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
++                    .unwrap_or_else(|_| "unknown".into())
++            };
++            let port_open = |port: u16| -> bool {
++                std::net::TcpStream::connect_timeout(
++                    &std::net::SocketAddr::from(([127, 0, 0, 1], port)),
++                    std::time::Duration::from_millis(120),
++                )
++                .is_ok()
++            };
++            let mut list: Vec<Value> = Vec::new();
++            for (name, unit, port, what) in [
++                ("Streaming speech", "nora-talk.service", Some(8791u16), "dictation and transcription"),
++                ("Kokoro voice", "kokoro.service", Some(8765u16), "read aloud"),
++                ("Embedding index", "embeddinggemma.service", Some(42666u16), "memory recall"),
++                ("Model server", "llama-swap.service", Some(8086u16), "local models"),
++                ("Vision", "qwen3vl.service", Some(8100u16), "looking at images"),
++                ("Input injection", "ydotoold", None, "the agent driving mouse and keyboard"),
++            ] {
++                let state = if unit.is_empty() { "n/a".to_string() } else { unit_state(unit) };
++                let listening = port.map(port_open);
++                list.push(json!({
++                    "name": name,
++                    "unit": unit,
++                    "what": what,
++                    "state": state,
++                    "port": port,
++                    "listening": listening,
++                    "up": listening.unwrap_or(state == "active"),
++                }));
++            }
++            return Self::json_resp(200, &json!({ "daemons": list }));
++        }
+         // Where the data actually is, in paths rather than reassurance. The Privacy page shows this
+         // instead of telling people their conversations are "stored on this device" — they can read
+         // the directory, see the files, and open it in a file manager.
+diff -Naur /tmp/mk35/a39/resources/ui/app.css /tmp/mk35/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2433,3 +2433,13 @@
+ .slider-row { display: grid; grid-template-columns: 130px 1fr 54px; align-items: center; gap: 12px; margin: 8px 0 4px; font-size: 13px; }
+ .slider-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+ .slider-value { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); text-align: right; }
++
++/* Daemons: a light on the row, and the thing it is attached to. */
++.daemon-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
++.daemon-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 10px; border-radius: 10px;
++  border: 1px solid var(--line); background: var(--panel); margin-bottom: 6px; }
++.daemon-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto;
++  background: var(--muted); box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted) 22%, transparent); }
++.daemon-row.up .daemon-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent); }
++.daemon-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
++.daemon-meta code { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); background: var(--raised); padding: 1px 6px; border-radius: 5px; }
+diff -Naur /tmp/mk35/a39/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -30,6 +30,7 @@
+     settingsTab: "general",
+   };
+   const icons = {
++    daemon: "M7.5 8.6C6.3 6.4 6.5 4.4 8.1 3.8M16.5 8.6c1.2-2.2 1-4.2-.6-4.8M6.5 10c0 4 2.5 7 5.5 7s5.5-3 5.5-7M9.6 12h.01M14.4 12h.01M10.4 15.4c1 .7 2.2.7 3.2 0",
+     plus: "M12 5v14M5 12h14",
+     trash: "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7",
+     search: "M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0",
+@@ -435,6 +436,7 @@
+       ["projects", "Projects", "projects"],
+       ["artifacts", "Artifacts", "artifacts"],
+       ["schedules", "Cron jobs", "schedule"],
++      ["daemons", "Daemons", "daemon"],
+       ["tools", "Tools & skills", "tools"],
+     ];
+     // Every branch must have leaves. An expansion that opens onto nothing reads as broken, so each
+@@ -574,6 +576,7 @@
+             project: project()?.name || "Project",
+             artifacts: "Private artifacts",
+             schedules: "Cron jobs",
++            daemons: "Daemons",
+             tools: "Tools & skills",
+             settings: "Settings",
+           }[state.page];
+@@ -726,6 +729,7 @@
+       project: workspaceUI.projectPage,
+       artifacts: workspaceUI.artifactsPage,
+       schedules: schedulesPage,
++      daemons: daemonsPage,
+       tools: capabilityUI.renderTools,
+       settings: settingsPage,
+       persona: personaPage,
+@@ -2144,6 +2148,35 @@
+       toast(e.message, true);
+     }
+   }
++  // What is actually running on this machine, asked rather than assumed: systemd unit state plus a
++  // connect to the port it would be listening on.
++  async function daemonsPage(host) {
++    const body = el("div", { class: "daemon-list" }, el("p", { class: "muted" }, "Asking systemd and the loopback ports…"));
++    host.replaceChildren(
++      header("Daemons", "Background services this app leans on. Nothing here is required to start the app.", button("Check again", () => renderPage(), "quiet")),
++      el("p", { class: "muted" }, "A daemon answers on a port or it does not. The state below is a live check, not a setting that says a service exists."),
++      body,
++    );
++    let data = null;
++    try { data = await api("/api/quixi/daemons"); } catch (e) { data = null; }
++    if (!data || !data.daemons) {
++      body.replaceChildren(el("p", { class: "error-text" }, "Could not read the daemon list."));
++      return;
++    }
++    body.replaceChildren(
++      ...data.daemons.map((d) =>
++        el("div", { class: "daemon-row" + (d.up ? " up" : "") },
++          el("span", { class: "daemon-dot" }),
++          el("div", { class: "grow" },
++            el("strong", {}, d.name),
++            el("span", { class: "muted" }, " — " + d.what),
++            el("div", { class: "daemon-meta" },
++              el("code", {}, d.unit || "no unit"),
++              d.port ? el("code", {}, ":" + d.port) : null,
++              el("span", { class: "tag" }, d.up ? "up" : (d.state || "down")))),
++        )),
++    );
++  }
+   function schedulesPage(host) {
+     host.replaceChildren(
+       header(

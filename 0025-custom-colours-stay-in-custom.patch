@@ -1,0 +1,35 @@
+Custom colours stop leaking into every other theme
+=================================================
+
+`applyAppearance()` wrote `quixi.custom.bg/text/accent` onto `:root` unconditionally. Pick a custom
+colour once and it overrode every theme chosen afterwards, because an inline `--accent` beats a
+stylesheet one. The visible symptom is not "my custom colour is wrong" — it is "this palette doesn't
+look right", with the palette itself correct and nothing on screen to explain the difference.
+
+Measured on the machine this was reported: the theme was Retro and the rendered greens were
+`#40bfb2` and `#40bf77` — hue 146°, saturation 66% — while Retro's own accent is `#02d63a`, hue
+136°, saturation 99%. The stale values were in localStorage from an earlier session.
+
+Custom overrides now apply only while the Custom theme is the selected theme; switching away removes
+them from `:root`. After clearing the two stale keys, the same window renders `#02d63a` at hue 135.8°
+saturation 99%, matching the reference palette to the byte.
+
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -3059,8 +3059,14 @@
+     size ? root.style.setProperty("--ui-font-size", size + "px") : root.style.removeProperty("--ui-font-size");
+     const font = localStorage.getItem("quixi.fontFamily");
+     font ? root.style.setProperty("--ui-font", font) : root.style.removeProperty("--ui-font");
++    // Custom colours belong to the Custom theme. They used to be written onto :root
++    // unconditionally, so a colour picked once overrode every theme chosen afterwards — the palette
++    // said phosphor green and the window rendered somebody's old teal, with nothing on screen to
++    // explain why.
++    const theme = localStorage.getItem("quixi.theme") || "retro";
++    const custom = theme === "custom";
+     for (const key of ["bg", "text", "accent"]) {
+-      const value = localStorage.getItem("quixi.custom." + key);
++      const value = custom ? localStorage.getItem("quixi.custom." + key) : null;
+       value
+         ? root.style.setProperty("--" + key, value)
+         : root.style.removeProperty("--" + key);

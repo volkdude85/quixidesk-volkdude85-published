@@ -1,0 +1,108 @@
+Your words in your edition, and a search that finds what is already there
+==========================================================================
+
+Copy that was upstream's, now this edition's:
+
+  "Personal workspace"  ->  "VolkDude's QuixiDesk"   (sidebar brand)
+  "New task"            ->  "New instance"           (sidebar action)
+  "Schedules"           ->  "Cron jobs"              (nav, page title, breadcrumb)
+
+Naming a thing by what it is beats naming it by what it resembles: a schedule here is a command run on
+a clock.
+
+Tools & skills could only be searched half at a time — skills had a filter, connections did not, so
+finding a tool you had already configured meant reading every card. There is now one search across
+connections, the tools inside them, and skills, with a live count of matches. It re-applies through a
+MutationObserver because both lists are drawn after the page renders.
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2334,3 +2334,8 @@
+ .toggle-row { display: flex; gap: 22px; flex-wrap: wrap; margin: 10px 0 4px; }
+ .toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
+ .toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
++
++/* One filter across connections, tools and skills. */
++.tools-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 14px; }
++.tools-filter input { flex: 1; min-width: 220px; }
++.tools-filter .hint { margin: 0; white-space: nowrap; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -433,7 +433,7 @@
+       ["search", "Search", "search"],
+       ["projects", "Projects", "projects"],
+       ["artifacts", "Artifacts", "artifacts"],
+-      ["schedules", "Schedules", "schedule"],
++      ["schedules", "Cron jobs", "schedule"],
+       ["tools", "Tools & skills", "tools"],
+     ];
+     const sidebar = el(
+@@ -447,14 +447,14 @@
+           "span",
+           {},
+           "QuixiDesk",
+-          el("span", { class: "brand-caption" }, "Personal workspace"),
++          el("span", { class: "brand-caption" }, "VolkDude's QuixiDesk"),
+         ),
+       ),
+       el(
+         "nav",
+         { "aria-label": "Main navigation" },
+         navigationButton(
+-          "New task",
++          "New instance",
+           "plus",
+           () => {
+             state.project = null;
+@@ -501,7 +501,7 @@
+             projects: "Projects",
+             project: project()?.name || "Project",
+             artifacts: "Private artifacts",
+-            schedules: "Schedules",
++            schedules: "Cron jobs",
+             tools: "Tools & skills",
+             settings: "Settings",
+           }[state.page];
+diff -Naur a/resources/ui/capability-workflows.js b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js
++++ b/resources/ui/capability-workflows.js
+@@ -186,9 +186,37 @@
+       return el("section", { class: "skills-section" }, el("h2", {}, "Skills"),
+         el("p", { class: "muted" }, "Start a task with a skill’s instructions attached, then describe what you want to do."), query, count, results);
+     }
++    // One search across connections, the tools inside them, and skills. Skills had a filter of their
++    // own and connections had none, so finding a tool you had already configured meant reading every
++    // card on the page.
++    function toolsFilter() {
++      const input = el("input", {
++        type: "search", class: "tools-search",
++        placeholder: "Search connections, tools and skills",
++        "aria-label": "Search connections, tools and skills",
++      });
++      const status = el("p", { class: "hint", role: "status" });
++      const apply = () => {
++        const needle = input.value.trim().toLocaleLowerCase();
++        let shown = 0;
++        let total = 0;
++        for (const node of document.querySelectorAll("#mcp-connections [data-server], .cards .skill-card")) {
++          total += 1;
++          const hit = !needle || node.textContent.toLocaleLowerCase().includes(needle);
++          node.hidden = !hit;
++          if (hit) shown += 1;
++        }
++        status.textContent = needle ? `${shown} of ${total} match "${input.value.trim()}"` : "";
++      };
++      input.addEventListener("input", apply);
++      // both lists are drawn after this renders, so re-apply when the DOM changes
++      new MutationObserver(apply).observe(document.body, { childList: true, subtree: true });
++      return el("div", { class: "tools-filter" }, input, status);
++    }
+     function renderTools(host) {
+       const data = ctx.getToolsData();
+       host.replaceChildren(header("Tools & skills", "Connect services and start tasks with reusable instructions."),
++        toolsFilter(),
+         el("div", { class: "row" }, el("h2", { class: "grow" }, "Connections"),
+           button("Add connection", () => connectionEditor(), "primary"), button("Advanced JSON", ctx.advancedMcpEditor, "quiet")),
+         el("p", { class: "muted" }, "Ready means initialization and tool discovery completed. Sign-in requests, failures and last-known catalogs stay visible."),

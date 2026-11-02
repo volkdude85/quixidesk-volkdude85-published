@@ -1,0 +1,111 @@
+name: Bug report
+description: Something in the package builds wrong, installs wrong, or a Linux capability fails.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most reports here come down to three things: which desktop, which session, and which
+        capability. Those three fields decide whether the bug is in the layer, the backend chain,
+        or the environment — so please fill them in rather than describing the symptom alone.
+
+        If the package itself does not build, that is always a bug. Attach the full output.
+
+  - type: input
+    id: version
+    attributes:
+      label: QuixiDesk version
+      description: The `pkgver` you installed — `pacman -Q quixidesk` prints it.
+      placeholder: 3.6556.12-1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: desktop
+    attributes:
+      label: Desktop
+      options:
+        - KDE Plasma
+        - GNOME
+        - XFCE
+        - Cinnamon
+        - Sway / Hyprland / other wlroots
+        - Other (say which below)
+        - Headless / no desktop
+    validations:
+      required: true
+
+  - type: dropdown
+    id: session
+    attributes:
+      label: Session type
+      description: The layer behaves differently on Wayland and X11, and several bugs were exactly this.
+      options:
+        - Wayland
+        - X11
+        - No session (SSH, container, TTY)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: capability
+    attributes:
+      label: Which capability failed
+      multiple: true
+      options:
+        - Screen capture
+        - Cursor position
+        - Active output / display listing
+        - Synthetic input (typing, keys, mouse)
+        - Clipboard
+        - File or folder picker
+        - Window under cursor
+        - Application launching
+        - Keyboard shortcut listing
+        - Build / packaging
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what you expected
+      description: The error text matters more than the description. Every backend is supposed to return a real error naming what is missing.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Capability report
+      description: |
+        Run this and paste the output — it is the fastest way to see what your session can and
+        cannot do, and it separates "the capability is missing here" from "the backend failed":
+
+        ```
+        quixi --capabilities
+        ```
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: build-output
+    attributes:
+      label: Build output (only if the build failed)
+      description: '`makepkg -si` output, or the failing part of `ci/ci.sh .`'
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I read WAIVER.md, so I know this package does not sandbox input or capture.
+          required: true
+        - label: This is a packaging or Linux-platform bug, not an upstream QuixiDesk bug.
+          required: true

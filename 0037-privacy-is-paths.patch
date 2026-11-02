@@ -1,0 +1,205 @@
+Privacy & data: paths, counts, and the files themselves
+======================================================
+
+The page said conversations "are stored on this device", which is reassurance dressed as information.
+Nothing on it told you where, what, or how much.
+
+There is now a `/api/quixi/storage/locations` endpoint that reads the real directory and reports it:
+
+  * the data directory path, and whether it is readable
+  * counts: chats, memory drawers (.md), artifacts
+  * each named file with its absolute path and size — persona.md, preferences.json, providers.json,
+    voice.json — or "not created yet"
+
+The page renders that as a path chip, three counts and a table, and says what actually leaves the
+machine (the prompt and its task context, to the provider you chose) and where credentials live. The
+claim it makes is the one a file system can back up: you can read, grep, back up or delete all of it
+without asking the app.
+diff -Naur /tmp/mk35/a37/crates/quixi-engine/src/lib.rs /tmp/mk35/b/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs
++++ b/crates/quixi-engine/src/lib.rs
+@@ -1593,6 +1593,56 @@
+         if clean_path == "/api/quixi/storage/status" {
+             return Self::json_resp(200, &self.session_storage_status());
+         }
++        // Where the data actually is, in paths rather than reassurance. The Privacy page shows this
++        // instead of telling people their conversations are "stored on this device" — they can read
++        // the directory, see the files, and open it in a file manager.
++        if clean_path == "/api/quixi/storage/locations" {
++            let data = self.data_dir.clone();
++            let count = |sub: &str, ext: Option<&str>| -> u64 {
++                std::fs::read_dir(data.join(sub))
++                    .map(|entries| {
++                        entries
++                            .flatten()
++                            .filter(|e| match ext {
++                                Some(want) => e.path().extension().and_then(|x| x.to_str()) == Some(want),
++                                None => e.path().is_file(),
++                            })
++                            .count() as u64
++                    })
++                    .unwrap_or(0)
++            };
++            let disk = |path: &std::path::Path| -> Value {
++                match std::fs::metadata(path) {
++                    Ok(_) => json!({ "ok": true }),
++                    Err(e) => json!({ "ok": false, "error": e.to_string() }),
++                }
++            };
++            let mut files: Vec<Value> = Vec::new();
++            for (label, rel) in [
++                ("persona", "persona.md"),
++                ("preferences", "preferences.json"),
++                ("providers", "providers.json"),
++                ("voice", "voice.json"),
++            ] {
++                let p = data.join(rel);
++                files.push(json!({
++                    "label": label,
++                    "path": p.to_string_lossy(),
++                    "exists": p.is_file(),
++                    "bytes": std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0),
++                }));
++            }
++            return Self::json_resp(200, &json!({
++                "data_dir": data.to_string_lossy(),
++                "reachable": disk(&data),
++                "counts": {
++                    "chats": count("chats", Some("json")),
++                    "memory_drawers": count("memory", Some("md")),
++                    "artifacts": count("artifacts", None),
++                },
++                "files": files,
++            }));
++        }
+         if clean_path == "/api/quixi/storage/retry" && method == "POST" {
+             return Self::json_resp(200, &self.retry_session_saves());
+         }
+diff -Naur /tmp/mk35/a37/resources/ui/app.css /tmp/mk35/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2378,3 +2378,16 @@
+ .area-bar button.active, .toolbar button.active { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+ .skill-card .tag { align-self: flex-start; margin-bottom: 4px; }
+ .skill-file { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 11px; max-height: 320px; overflow: auto; }
++
++/* Privacy & data: real paths and real counts, not reassurance. */
++.storage-panel { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--raised); margin: 8px 0 18px; }
++.storage-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
++.storage-path { font-family: ui-monospace, monospace; font-size: 12px; color: var(--accent); background: var(--bg); padding: 3px 8px; border-radius: 6px; }
++.storage-counts { display: flex; gap: 26px; margin: 4px 0 12px; }
++.storage-counts div { display: flex; flex-direction: column; }
++.storage-counts strong { font-size: 20px; color: var(--text); line-height: 1.1; }
++.storage-counts span { font-size: 11px; color: var(--muted); }
++.storage-files { width: 100%; border-collapse: collapse; font-size: 12px; }
++.storage-files td { padding: 4px 8px; border-top: 1px solid var(--line); vertical-align: top; }
++.storage-files td:first-child { color: var(--muted); white-space: nowrap; }
++.storage-files code { font-family: ui-monospace, monospace; font-size: 11px; }
+diff -Naur /tmp/mk35/a37/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -2806,6 +2806,31 @@
+     );
+   }
+ 
++  // Reads the real paths from the engine and renders them. Nothing here is guessed in the webview.
++  async function drawStorageLocations() {
++    const host = document.getElementById("storage-locations");
++    if (!host) return;
++    let data = null;
++    try { data = await api("/api/quixi/storage/locations"); } catch (e) { data = null; }
++    if (!data || !data.data_dir) {
++      host.replaceChildren(el("p", { class: "error-text" }, "Could not read the data directory."));
++      return;
++    }
++    host.replaceChildren(
++      el("div", { class: "storage-head" },
++        el("code", { class: "storage-path" }, data.data_dir),
++        el("span", { class: "tag" }, data.reachable && data.reachable.ok ? "readable" : "unreachable")),
++      el("div", { class: "storage-counts" },
++        el("div", {}, el("strong", {}, String((data.counts && data.counts.chats) || 0)), el("span", {}, "chats")),
++        el("div", {}, el("strong", {}, String((data.counts && data.counts.memory_drawers) || 0)), el("span", {}, "memory .md")),
++        el("div", {}, el("strong", {}, String((data.counts && data.counts.artifacts) || 0)), el("span", {}, "artifacts"))),
++      el("table", { class: "storage-files" },
++        ...(data.files || []).map((f) =>
++          el("tr", {},
++            el("td", {}, f.label),
++            el("td", {}, el("code", {}, f.path)),
++            el("td", {}, f.exists ? `${f.bytes} B` : el("span", { class: "muted" }, "not created yet"))))));
++  }
+   function settingsPage(host) {
+     const tabs = [
+       ["general", "General"],
+@@ -3019,57 +3044,23 @@
+         button("Manage providers", () => providerDirectory(), "primary"),
+       );
+     } else if (state.settingsTab === "privacy") {
++      // Paths, counts and files — not a promise that things are "stored on this device".
+       content.append(
+-        el("h2", {}, "Local conversations"),
+-        el(
+-          "p",
+-          { class: "muted" },
+-          "Conversations, projects, and provider settings are stored on this device. Sending a prompt transmits its contents and task context to the provider you select.",
+-        ),
+-        el("h3", {}, "Storage protection"),
+-        el(
+-          "p",
+-          { class: "muted" },
+-          "A recovery copy is created if normal saving fails. Keep the app open if both locations fail; the persistent storage notice offers retry and a recovery copy.",
+-        ),
+-        button("Inspect storage status", async () => {
+-          const status = await api("/api/quixi/storage/status");
+-          const issues = status.issues || [];
+-          dialog("Conversation storage", [
+-            el(
+-              "div",
+-              { class: "notice" },
+-              issues.length
+-                ? `${issues.length} conversation${issues.length === 1 ? " needs" : "s need"} attention. Use the storage notice to retry saving or export a recovery copy.`
+-                : "No storage problems reported.",
+-            ),
+-            ...issues.map((issue) =>
+-              el(
+-                "p",
+-                {},
+-                issue.recoverySaved
+-                  ? "A recovery copy is saved for an affected conversation."
+-                  : "An affected conversation is currently held in memory. Keep the app open until it is saved.",
+-              ),
+-            ),
+-            el(
+-              "details",
+-              {},
+-              el("summary", {}, "Technical details"),
+-              el("pre", {}, JSON.stringify(status, null, 2)),
+-            ),
+-          ]);
+-        }),
+-        el("hr"),
+-        button("View archived conversations", () => {
+-          navigate("search");
+-          const filter = document.querySelector("#page-host select");
+-          if (filter) {
+-            filter.value = "archived";
+-            filter.dispatchEvent(new Event("change"));
+-          }
+-        }),
++        el("h2", {}, "Where your data actually is"),
++        el("p", { class: "muted" }, "Everything this app knows is a file on this machine. You can read it, grep it, back it up or delete it without asking the app."),
++        el("div", { class: "storage-panel", id: "storage-locations" }, el("p", { class: "muted" }, "Reading…")),
++        el("h3", {}, "What leaves the machine"),
++        el("p", { class: "muted" }, "A prompt and its task context go to whichever model provider you selected, and nowhere else. Conversations, memory, persona and settings stay in the directory above."),
++        el("h3", {}, "Credentials"),
++        el("p", { class: "muted" }, "Provider keys live in the OS keyring when one is available, otherwise in the data directory above. Nothing is sent to us — there is no us to send it to."),
++        el("div", { class: "toolbar" },
++          button("Re-read locations", async () => { await drawStorageLocations(); }, "quiet"),
++          button("Inspect storage status", async () => {
++            const status = await api("/api/quixi/storage/status");
++            dialog("Conversation storage", [el("pre", {}, JSON.stringify(status, null, 2))]);
++          }, "quiet")),
+       );
++      drawStorageLocations();
+     } else
+       content.append(
+         el("img", {

@@ -1,0 +1,237 @@
+Resizable sidebar, translucent panels, boxed surfaces
+====================================================
+
+Three requests, and only one of them was ever CSS.
+
+1. Resize. The sidebar was a hard 228px grid column. It is now `var(--sidebar-width, 228px)` with a
+   6px drag strip on its edge, and the width is stored as a backend preference like the theme — the
+   installation's, not one window's. Arrow keys nudge it (shift for a bigger step) so it does not
+   depend on a steady hand.
+
+2. Boxes. Everything that holds content — composer, suggestion cards, panels, settings panes — gets a
+   real border, a 14px radius and a 1px accent-tinted inner highlight, so the page has structure
+   instead of text floating on a black field. The composer border lights up on focus.
+
+3. Translucency. `.sidebar` and the panels become `color-mix()` over transparent with a
+   backdrop blur, wrapped in `@supports`, so on a compositor without backdrop-filter the same colours
+   are simply opaque and nothing breaks. Window-level transparency is the compositor's business and is
+   NOT done here — a KWin rule does that.
+
+Both surface options are switches in Settings, General, and are stored as preferences rather than
+being hardcoded: "Boxed surfaces" and "Translucent panels".
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -271,10 +271,26 @@
+ }
+ .shell {
+   display: grid;
+-  grid-template-columns: 228px minmax(0, 1fr);
++  grid-template-columns: var(--sidebar-width, 228px) minmax(0, 1fr);
+   height: 100dvh;
+   overflow: hidden;
+ }
++/* The drag strip between the sidebar and the page. It is 6px wide with a 1px visible edge so the
++   target is grabbable without adding a visible gutter. */
++.sidebar-resizer {
++  position: absolute;
++  top: 0;
++  bottom: 0;
++  left: 0;
++  width: 6px;
++  cursor: col-resize;
++  background: transparent;
++  z-index: 30;
++}
++.sidebar-resizer:hover,
++.shell.resizing .sidebar-resizer { background: var(--accent); opacity: 0.5; }
++.shell { position: relative; }
++.shell.resizing { cursor: col-resize; user-select: none; }
+ .shell.collapsed {
+   grid-template-columns: 68px minmax(0, 1fr);
+ }
+@@ -2283,3 +2299,38 @@
+ 
+ /* The big line is the one thing on this screen that should carry the accent, not body white. */
+ .hero-heading { color: var(--accent); }
++
++/* ---- appearance options: translucency and heavier boxing ---- */
++/* Panels can be translucent where the compositor supports it; where it does not, the same colours
++   are simply opaque and nothing breaks. */
++@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
++  :root[data-translucent="on"] .sidebar {
++    background: color-mix(in srgb, var(--sidebar) 82%, transparent);
++    -webkit-backdrop-filter: blur(14px) saturate(1.1);
++    backdrop-filter: blur(14px) saturate(1.1);
++  }
++  :root[data-translucent="on"] .panel,
++  :root[data-translucent="on"] .settings-content,
++  :root[data-translucent="on"] .toolbar {
++    background: color-mix(in srgb, var(--panel) 86%, transparent);
++    -webkit-backdrop-filter: blur(10px);
++    backdrop-filter: blur(10px);
++  }
++}
++/* Boxing: everything that holds content gets a defined edge, so the page has structure instead of
++   floating text on a black field. */
++:root[data-boxing="on"] .composer,
++:root[data-boxing="on"] .suggestion,
++:root[data-boxing="on"] .panel,
++:root[data-boxing="on"] .settings-content,
++:root[data-boxing="on"] .provider-card {
++  border: 1px solid var(--line);
++  border-radius: 14px;
++  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 8%, transparent) inset;
++}
++:root[data-boxing="on"] .composer:focus-within { border-color: var(--accent); }
++
++/* Settings switches for the surface options. */
++.toggle-row { display: flex; gap: 22px; flex-wrap: wrap; margin: 10px 0 4px; }
++.toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
++.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -518,6 +518,7 @@
+         "div",
+         { class: "shell" + (state.collapsed ? " collapsed" : "") },
+         sidebar,
++        sidebarResizer(),
+         el(
+           "main",
+           { class: "main" },
+@@ -584,6 +585,64 @@
+         ),
+       );
+   }
++  // Drag the edge between the sidebar and the page. The width lives in the backend preferences, so
++  // it belongs to the installation rather than to one window, and it survives a restart.
++  const SIDEBAR_MIN = 180;
++  const SIDEBAR_MAX = 520;
++  function applySidebarWidth(width) {
++    const shell = document.querySelector(".shell");
++    if (shell && width) shell.style.setProperty("--sidebar-width", width + "px");
++  }
++  function sidebarResizer() {
++    const handle = el("div", {
++      class: "sidebar-resizer",
++      role: "separator",
++      "aria-orientation": "vertical",
++      "aria-label": "Resize sidebar",
++      tabindex: "0",
++    });
++    let dragging = false;
++    handle.addEventListener("pointerdown", (event) => {
++      if (event.button !== 0) return;
++      dragging = true;
++      document.querySelector(".shell")?.classList.add("resizing");
++      handle.setPointerCapture?.(event.pointerId);
++      event.preventDefault();
++    });
++    handle.addEventListener("pointermove", (event) => {
++      if (!dragging) return;
++      const shell = document.querySelector(".shell");
++      if (!shell) return;
++      const left = shell.getBoundingClientRect().left;
++      const width = Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, event.clientX - left)));
++      shell.style.setProperty("--sidebar-width", width + "px");
++    });
++    const finish = (event) => {
++      if (!dragging) return;
++      dragging = false;
++      document.querySelector(".shell")?.classList.remove("resizing");
++      const shell = document.querySelector(".shell");
++      const width = shell ? parseInt(getComputedStyle(shell).getPropertyValue("--sidebar-width"), 10) : 0;
++      if (width) rememberPreferenceSoon("sidebarWidth", String(width));
++      handle.releasePointerCapture?.(event.pointerId);
++    };
++    handle.addEventListener("pointerup", finish);
++    handle.addEventListener("pointercancel", finish);
++    // Arrow keys nudge it, so it works without a precise drag.
++    handle.addEventListener("keydown", (event) => {
++      const shell = document.querySelector(".shell");
++      if (!shell) return;
++      const now = parseInt(getComputedStyle(shell).getPropertyValue("--sidebar-width"), 10) || 228;
++      const step = event.shiftKey ? 40 : 8;
++      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
++        const width = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, now + (event.key === "ArrowRight" ? step : -step)));
++        shell.style.setProperty("--sidebar-width", width + "px");
++        rememberPreferenceSoon("sidebarWidth", String(width));
++        event.preventDefault();
++      }
++    });
++    return handle;
++  }
+   function renderPage() {
+     const host = document.getElementById("page-host");
+     if (!host) return;
+@@ -2800,6 +2859,42 @@
+           colourControl("text", "Text"),
+           colourControl("accent", "Accent"),
+         ),
++        el("h2", { style: "margin-top:30px" }, "Surfaces"),
++        el(
++          "p",
++          { class: "muted" },
++          "Boxed surfaces give every panel a defined edge. Translucency blurs what is behind a panel where the compositor supports it; where it does not, the panel simply stays solid.",
++        ),
++        el(
++          "div",
++          { class: "toggle-row" },
++          el(
++            "label",
++            { class: "toggle" },
++            el("input", {
++              type: "checkbox",
++              checked: localStorage.getItem("quixi.boxing") !== "0",
++              onchange: (event) => {
++                rememberPreference("boxing", event.target.checked ? "1" : "0");
++                applyTheme();
++              },
++            }),
++            el("span", {}, "Boxed surfaces"),
++          ),
++          el(
++            "label",
++            { class: "toggle" },
++            el("input", {
++              type: "checkbox",
++              checked: localStorage.getItem("quixi.translucent") === "1",
++              onchange: (event) => {
++                rememberPreference("translucent", event.target.checked ? "1" : "0");
++                applyTheme();
++              },
++            }),
++            el("span", {}, "Translucent panels"),
++          ),
++        ),
+         el("h2", { style: "margin-top:30px" }, "New tasks"),
+         field(
+           "Default permission mode",
+@@ -2916,6 +3011,7 @@
+     theme: "quixi.theme",
+     fontFamily: "quixi.fontFamily",
+     fontSize: "quixi.fontSize",
++    sidebarWidth: "quixi.sidebarWidth",
+   };
+   function adoptPreferences(prefs) {
+     if (!prefs || typeof prefs !== "object") return false;
+@@ -3065,6 +3161,9 @@
+     // explain why.
+     const theme = localStorage.getItem("quixi.theme") || "retro";
+     const custom = theme === "custom";
++    // Two surface options that are pure CSS flags on :root, so the stylesheet owns the look.
++    root.dataset.translucent = localStorage.getItem("quixi.translucent") === "1" ? "on" : "off";
++    root.dataset.boxing = localStorage.getItem("quixi.boxing") === "0" ? "off" : "on";
+     for (const key of ["bg", "text", "accent"]) {
+       const value = custom ? localStorage.getItem("quixi.custom." + key) : null;
+       value
+@@ -3845,6 +3944,7 @@
+       if (adoptPreferences(await rpc("AppPreferences", "getPreferences"))) applyTheme();
+     } catch {}
+     await loadPersona();
++    applySidebarWidth(localStorage.getItem("quixi.sidebarWidth"));
+     state.permission = localStorage.getItem("quixi.permission") || "default";
+     document.body.dataset.platform = /Mac/.test(navigator.platform)
+       ? "macos"

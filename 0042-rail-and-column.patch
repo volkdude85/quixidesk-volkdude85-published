@@ -1,0 +1,68 @@
+Daemons joins the caret column
+=============================
+
+Daemons was the one plural entry without a caret, so its icon started ~26px further left than
+Projects, Artifacts, Cron jobs and Tools & skills, and the column read as a mistake in the alignment.
+
+It is a group now, expanding to the services it checks: streaming speech, Kokoro voice, the embedding
+index, the model server, vision and input injection. Same icon column, same indent, same behaviour as
+the other four.
+
+Also here: `navigationButton` takes the page it belongs to and sets `aria-current` plus the active
+class itself, so the rail's state is not left to whichever call site remembered to pass a class.
+
+Correction worth recording: I first reported that the active rail never fired. It does — the plain nav
+rows pass `state.page === page ? "active" : ""` already. The window I measured happened to be on "New
+instance", which is a button of its own rather than a nav row, so no row was active and none should
+have been. The rail was fine; the column was not.
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -416,7 +416,7 @@
+     navigate(path, null, { replace: true });
+   });
+   function render() {
+-    const navigationButton = (label, name, action, cls = "") => {
++    const navigationButton = (label, name, action, cls = "", page = "") => {
+       const control = button(
+         [icon(name), el("span", { class: "nav-label" }, label)],
+         action,
+@@ -424,6 +424,15 @@
+       );
+       control.setAttribute("aria-label", label);
+       control.title = label;
++      // The rail in the stylesheet keys off these, and nothing was setting them, so the highlight
++      // never appeared on any page.
++      if (page) {
++        control.dataset.page = page;
++        if (state.page === page) {
++          control.classList.add("active");
++          control.setAttribute("aria-current", "page");
++        }
++      }
+       return control;
+     };
+     document.title =
+@@ -457,6 +466,14 @@
+           .map((s) => [s.displayName || s.name, () => navigate("schedules")]);
+         return items.length ? items : [["No cron jobs yet", () => navigate("schedules")]];
+       },
++      daemons: () => [
++        ["Streaming speech", () => navigate("daemons")],
++        ["Kokoro voice", () => navigate("daemons")],
++        ["Embedding index", () => navigate("daemons")],
++        ["Model server", () => navigate("daemons")],
++        ["Vision", () => navigate("daemons")],
++        ["Input injection", () => navigate("daemons")],
++      ],
+       tools: () => {
+         // Connections exist by the time the sidebar draws; the skill index arrives later.
+         const servers = (toolsData.servers || []).map((s) => [s.name, () => navigate("tools")]);
+@@ -502,7 +519,7 @@
+       return el("div", { class: "nav-group" + (open ? " is-open" : "") },
+         el("div", { class: "nav-row" },
+           toggle,
+-          navigationButton(label, ic, () => navigate(page), page)),
++          navigationButton(label, ic, () => navigate(page), page, page)),
+         items);
+     }
+     const sidebar = el(

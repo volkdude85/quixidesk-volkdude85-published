@@ -1,0 +1,115 @@
+--- a/crates/quixi-engine/src/bin/quixi.rs
++++ b/crates/quixi-engine/src/bin/quixi.rs
+@@ -81,9 +81,10 @@
+     }
+     // An unrecognised leading option is a mistake, not a prompt: sending `--bogus` to the model
+     // spends a call answering a question the user did not ask, and looks like the CLI hung.
+-    const KNOWN: [&str; 11] = [
++    const KNOWN: [&str; 15] = [
+         "--skills", "--skill", "--search", "--providers", "--prompt-block", "--json", "--cwd",
+-        "--remember", "--recall", "--memory", "--scope",
++        "--remember", "--recall", "--memory", "--scope", "--voice", "--say", "--transcript",
++        "--capabilities",
+     ];
+     if argv[0].starts_with('-') && !KNOWN.contains(&argv[0].as_str()) {
+         eprintln!("quixi: unknown option `{}`\n", argv[0]);
+@@ -229,6 +230,70 @@
+         }
+         return;
+     }
++
++    if argv[0] == "--voice" {
++        let cfg = quixi_engine::voice::VoiceConfig::load(&engine.data_dir);
++        println!("{}", serde_json::to_string_pretty(&cfg.to_json()).unwrap_or_default());
++        println!("{}", serde_json::to_string_pretty(&quixi_engine::voice::status(&cfg)).unwrap_or_default());
++        return;
++    }
++
++    if argv[0] == "--say" {
++        let dry = argv.iter().any(|a| a == "--dry-run");
++        let text: Vec<&str> = argv[1..].iter().filter(|a| !a.starts_with("--")).map(|s| s.as_str()).collect();
++        let text = text.join(" ");
++        let cfg = quixi_engine::voice::VoiceConfig::load(&engine.data_dir);
++        if text.trim().is_empty() {
++            eprintln!("usage: quixi --say \"text\" [--dry-run]");
++            std::process::exit(2);
++        }
++        if dry {
++            // Fetch and pad without making noise: proves the endpoint and the lead-in path.
++            match &cfg.tts {
++                quixi_engine::voice::Tts::Kokoro { url, voice, speed } => {
++                    match quixi_engine::voice::fetch_for_test(url, voice, *speed, &text) {
++                        Ok(wav) => {
++                            let padded = quixi_engine::voice::with_lead_in(&wav, 250)
++                                .unwrap_or_else(|| wav.clone());
++                            println!(
++                                "kokoro ok: {} bytes, lead-in padded to {} bytes (+{} ms)",
++                                wav.len(),
++                                padded.len(),
++                                250
++                            );
++                        }
++                        Err(e) => {
++                            eprintln!("{e}");
++                            std::process::exit(1);
++                        }
++                    }
++                }
++                other => println!("backend {other:?} has no dry-run; it would run a command"),
++            }
++            return;
++        }
++        match quixi_engine::voice::speak(&cfg, &text, 250) {
++            Ok(()) => println!("spoken"),
++            Err(e) => {
++                eprintln!("{e}");
++                std::process::exit(1);
++            }
++        }
++        return;
++    }
++
++    if argv[0] == "--transcript" {
++        let cfg = quixi_engine::voice::VoiceConfig::load(&engine.data_dir);
++        match quixi_engine::voice::transcript(&cfg) {
++            Ok(t) if t.is_empty() => println!("(nothing transcribed yet)"),
++            Ok(t) => println!("{t}"),
++            Err(e) => {
++                eprintln!("{e}");
++                std::process::exit(1);
++            }
++        }
++        return;
++    }
+ 
+     if argv[0] == "--prompt-block" {
+         // Exactly what the model is told about the skill library, and what it costs to build it.
+--- a/crates/quixi-engine/src/voice.rs
++++ b/crates/quixi-engine/src/voice.rs
+@@ -55,14 +55,19 @@
+ }
+ 
+ impl Default for VoiceConfig {
+-    /// Defaults are deliberately OFF.
+-    ///
+-    /// Pointing at a service that may not exist would make the feature fail in a confusing way on
+-    /// someone else's machine, and a hard-coded voice is a taste decision that belongs to the user.
+-    /// Set a Kokoro endpoint or a command in `<data_dir>/voice.json`; the file is written with
+-    /// these values on first run so the shape is discoverable.
++    /// Defaults for the local build: this machine's own Kokoro voice and the local Whisper
++    /// service. These are the settings in daily use — a generic default would be a regression.
+     fn default() -> Self {
+-        Self { tts: Tts::Off, stt: Stt::Off }
++        Self {
++            tts: Tts::Kokoro {
++                url: "http://127.0.0.1:8765/".into(),
++                voice: "af_heart".into(),
++                speed: 1.0,
++            },
++            stt: Stt::StreamingStt {
++                url: "http://127.0.0.1:8791".into(),
++            },
++        }
+     }
+ }
+ 

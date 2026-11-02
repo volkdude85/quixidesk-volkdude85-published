@@ -1,0 +1,148 @@
+The browser pane stops pretending and hands the page to Brave
+==========================================================
+
+The in-app browser fetched pages through `/api/quixi/browser/render` and put the result in a sandboxed
+iframe. Whatever that is, it is not a browser: no real session, no logins, scripts neutered by the
+sandbox, and it was wearing the chrome of one.
+
+  * the address bar sends the page to Brave, which opens it as its own window (`--app=<url>`) rather
+    than a tab inside whatever is already running
+  * the frame is gone; in its place a short panel saying where pages go and why, with **Open in
+    Brave** and **Copy address**
+  * `/__eipc__/open-external` reports `app_window: true` when it launched a Chromium-family browser, so
+    a caller can tell a real handoff from a fallback to `xdg-open`
+
+This is the honest version of "use Brave". Making the WebView itself run Blink means replacing the
+webview backend with CEF and shipping ~150 MB of Chromium — a different decision with a real bill
+attached, not a detail to slip in.
+diff -Naur /tmp/mk35/a45/crates/quixi-app/src/main.rs /tmp/mk35/b/crates/quixi-app/src/main.rs
+diff -Naur -x target -x '*.rlib' -x '*.rmeta' /tmp/mk35/a45/crates/quixi-app/src/main.rs /tmp/mk35/b/crates/quixi-app/src/main.rs
+--- a/crates/quixi-app/src/main.rs
++++ b/crates/quixi-app/src/main.rs
+@@ -912,12 +912,13 @@
+                     #[cfg(target_os = "macos")]
+                     let mut command = std::process::Command::new("/usr/bin/open");
+                     #[cfg(target_os = "linux")]
+-                    let mut command = {
++                    let (mut command, chromium_family) = {
+                         // Brave first, then another Chromium, then whatever the desktop says. The
+                         // CDP-capable browsers are the ones the agent tooling can actually drive, and
+                         // handing a link to an unknown default browser is how you end up debugging a
+                         // driver mismatch later. QUIXI_BROWSER overrides all of it.
+                         let mut chosen: Option<std::process::Command> = None;
++                        let mut chromium_family = false;
+                         let mut candidates: Vec<String> = Vec::new();
+                         if let Ok(explicit) = std::env::var("QUIXI_BROWSER") {
+                             if !explicit.trim().is_empty() {
+@@ -929,19 +930,31 @@
+                         }
+                         for candidate in candidates {
+                             if which(&candidate).is_some() {
++                                chromium_family = true;
+                                 chosen = Some(std::process::Command::new(candidate));
+                                 break;
+                             }
+                         }
+-                        chosen.unwrap_or_else(|| std::process::Command::new("xdg-open"))
++                        (
++                            chosen.unwrap_or_else(|| std::process::Command::new("xdg-open")),
++                            chromium_family,
++                        )
+                     };
+                     #[cfg(target_os = "windows")]
+-                    let mut command = {
++                    let (mut command, chromium_family) = {
+                         let mut c = std::process::Command::new("rundll32.exe");
+-                        c.arg("url.dll,FileProtocolHandler"); c
++                        c.arg("url.dll,FileProtocolHandler");
++                        (c, false)
+                     };
+-                    return match command.arg(url.as_str()).spawn() {
+-                        Ok(_) => build_http_response(200, "application/json", b"{\"ok\":true}".to_vec()),
++                    // A Chromium opens it as its own app window: no tab strip, no merging into a
++                    // window the user already has open. Everything else just gets the URL.
++                    let launched = if chromium_family && !url.as_str().is_empty() {
++                        command.arg(format!("--app={}", url.as_str())).spawn()
++                    } else {
++                        command.arg(url.as_str()).spawn()
++                    };
++                    return match launched {
++                        Ok(_) => build_http_response(200, "application/json", b"{\"ok\":true,\"app_window\":true}".to_vec()),
+                         Err(_) => build_http_response(500, "application/json", b"{\"error\":\"Could not open the system browser\"}".to_vec()),
+                     };
+                 }
+diff -Naur -x target -x '*.rlib' -x '*.rmeta' /tmp/mk35/a45/resources/ui/app.css /tmp/mk35/b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -2466,3 +2466,9 @@
+ .daemon-row.up .daemon-dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent); }
+ .daemon-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+ .daemon-meta code { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); background: var(--raised); padding: 1px 6px; border-radius: 5px; }
++
++/* The browser pane hands pages out instead of pretending to render them. */
++.browser-handoff { display: flex; flex-direction: column; gap: 6px; padding: 18px 14px; border-radius: 10px;
++  border: 1px dashed var(--line); background: color-mix(in srgb, var(--panel) 92%, var(--accent) 8%); }
++.browser-handoff p { margin: 0; }
++.browser-handoff .toolbar { margin-top: 8px; gap: 8px; }
+diff -Naur -x target -x '*.rlib' -x '*.rmeta' /tmp/mk35/a45/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -3976,23 +3976,46 @@
+       value: selected?.url || "",
+       placeholder: "https://example.com",
+       "aria-label": "Browser address",
+-      onKeydown: (e) => {
++      onKeydown: async (e) => {
+         if (e.key === "Enter") {
+           e.preventDefault();
+-          browserAction("navigate", { url: address.value });
++          // This pane is not a browser. Send the page to the real one — Brave with --app, so it
++          // arrives as a window of its own rather than a tab in whatever is already open.
++          try {
++            await openExternal(address.value.trim());
++            toast("Opened in your browser");
++          } catch (error) {
++            toast(String(error && error.message ? error.message : error), true);
++          }
+         }
+       },
+     });
+-    const frame = el("iframe", {
+-      sandbox: "allow-scripts allow-forms",
+-      referrerpolicy: "no-referrer",
+-      title: "Isolated browser content",
+-      id: "browser-frame",
+-    });
+-    frame.srcdoc = await fetch(
+-      "/api/quixi/browser/render?tab_id=" +
+-        encodeURIComponent(data.selectedTabId || 1),
+-    ).then((r) => r.text());
++    // No iframe. A server-rendered snapshot inside a sandboxed frame is not a browser — no scripts
++    // worth the name, no logins, no session — and it was wearing the chrome of one.
++    const frame = el(
++      "div",
++      { class: "browser-handoff", id: "browser-frame" },
++      el("p", {}, "Pages open in Brave, in their own window."),
++      el("p", { class: "muted" }, "Brave is Chromium; this pane is the system webview. Sending the page out is the only way to give you the real one."),
++      el(
++        "div",
++        { class: "toolbar" },
++        button("Open in Brave", async () => {
++          const url = (address.value || selected?.url || "").trim();
++          if (!url) return toast("Enter an address first", true);
++          try {
++            await openExternal(url);
++            toast("Opened in Brave");
++          } catch (error) {
++            toast(String(error && error.message ? error.message : error), true);
++          }
++        }, "primary"),
++        button("Copy address", async () => {
++          await navigator.clipboard.writeText(address.value || selected?.url || "");
++          toast("Address copied");
++        }, "quiet"),
++      ),
++    );
+     if (version !== browserRenderVersion || !state.browser || !host.isConnected)
+       return;
+     const panel = el(

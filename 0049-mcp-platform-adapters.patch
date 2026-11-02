@@ -1,0 +1,100 @@
+The MCP panel listed a server that cannot work here
+===================================================
+
+MCP is not a macOS feature and there is no Linux equivalent to look for — it is JSON-RPC, and this
+build serves it on Linux: `quixi-mcp-builtin --computer-use` answers an `initialize` and lists 44
+tools, `--fetch` identifies itself as `quixi-fetch 3.6556.12`. What was actually wrong was narrower.
+
+`applescript` is a macOS capability, and the seeding loop already knows that — it only adds the
+adapter when `cfg!(target_os = "macos")`. But it only stopped *seeding* it. The entry was already
+written to `~/.quixi/quixi_desktop_config.json` by an earlier run, so on this box the panel showed
+seven servers, `applescript` among them, and every call against that one failed. On a machine where
+the agent is being judged by what it can do, one broken row reads as a broken protocol.
+
+The existing config is now swept on startup: on anything that is not macOS, a `quixi-mcp-builtin`
+entry carrying `--applescript` is removed. Only the built-in adapter is touched — a server the user
+defined is never pruned, even if it is itself called `applescript`, because that is their
+configuration and not ours to edit.
+
+Measured after: six servers, every one of which resolves to a tool that exists on this platform.
+
+--- a/crates/quixi-mcp/src/lib.rs	2026-11-02 07:09:43.614735664 -0800
++++ b/crates/quixi-mcp/src/lib.rs	2026-11-02 07:08:50.203559987 -0800
+@@ -251,6 +251,31 @@
+                     parsed.mcp_servers.remove(&old);
+                     changed = true;
+                 }
++                // A macOS-only capability must not linger in a config that was written before the
++                // platform check existed. Not seeding it is not enough: the entry is already on
++                // disk, it appears in the panel, and every call fails — which reads as "MCP does
++                // not work on Linux" rather than "this one server is macOS-only". Measured on the
++                // development box: seven servers listed, `applescript` among them, and the tool
++                // looked broken for reasons that had nothing to do with the protocol.
++                //
++                // Only the built-in adapter is touched. A server the user defined is left alone,
++                // even if it is called "applescript", because that is their configuration and not
++                // ours to prune.
++                if !cfg!(target_os = "macos") {
++                    let macOS_only: Vec<String> = parsed
++                        .mcp_servers
++                        .iter()
++                        .filter(|(_, entry)| {
++                            entry.command.contains("quixi-mcp-builtin")
++                                && entry.args.iter().any(|a| a == "--applescript")
++                        })
++                        .map(|(name, _)| name.clone())
++                        .collect();
++                    for name in macOS_only {
++                        parsed.mcp_servers.remove(&name);
++                        changed = true;
++                    }
++                }
+                 let mut defaults: Vec<(&str, &str)> = vec![
+                     ("quixi-workspace", "--workspace"),
+                     ("computer-use", "--computer-use"),
+@@ -2816,6 +2841,45 @@
+         }
+         fs::remove_dir_all(root).unwrap();
+     }
++    /// AppleScript is a macOS capability. An entry written by an older build (or carried over from
++    /// another machine) sat in the panel and failed on every call, which reads as "MCP does not
++    /// work here" rather than "this one adapter is macOS-only". Not seeding it is not enough — the
++    /// entry is already on disk. The built-in adapter is removed; a user's own server is not.
++    #[test]
++    #[cfg(not(target_os = "macos"))]
++    fn a_macos_only_builtin_server_is_purged_but_a_users_own_is_kept() {
++        let root = std::env::temp_dir().join(format!(
++            "quixi-mcp-applescript-{}",
++            std::time::SystemTime::now()
++                .duration_since(std::time::UNIX_EPOCH)
++                .unwrap()
++                .as_nanos()
++        ));
++        fs::create_dir_all(&root).unwrap();
++        let input = json!({"mcpServers": {
++            "applescript":{"command":"quixi-mcp-builtin","args":["--applescript"]},
++            "applescript-mine":{"command":"my-applescript-bridge","args":["--custom"]}
++        }});
++        fs::write(
++            root.join("quixi_desktop_config.json"),
++            serde_json::to_vec(&input).unwrap(),
++        )
++        .unwrap();
++        let host = McpHost::new_with_data_dir(&root);
++        let cfg = host.read_config();
++        assert!(
++            !cfg.mcp_servers.contains_key("applescript"),
++            "the built-in macOS-only adapter must not be offered on Linux"
++        );
++        assert_eq!(
++            cfg.mcp_servers["applescript-mine"].command, "my-applescript-bridge",
++            "a server the user defined is not ours to prune"
++        );
++        // And it stays gone across a restart, rather than being re-seeded.
++        let host = McpHost::new_with_data_dir(&root);
++        assert!(!host.read_config().mcp_servers.contains_key("applescript"));
++        fs::remove_dir_all(root).unwrap();
++    }
+     #[test]
+     fn earlier_memory_notes_survive_the_current_filename() {
+         let root = std::env::temp_dir().join(format!(

@@ -1,0 +1,557 @@
+Hyprland, and the Omarchy that rides on it
+==========================================
+
+Omarchy is Hyprland. That is why this patch is short: everything Omarchy does, it does through the
+compositor, and the compositor answers every question the platform layer asks.
+
+    hyprctl -j monitors        the layout, including scale and which output is focused
+    hyprctl -j cursorpos       the global cursor position
+    hyprctl -j clients         the window list
+    hyprctl -j activewindow    what has focus
+
+That second one is the interesting one. `cursor_position()` returns None on Wayland, and an earlier
+patch documents why that is correct rather than lazy: XWayland will answer X queries and hand back a
+plausible wrong number, which is worse than no answer. Hyprland is the exception. It publishes the
+compositor's own cursor position, so the honest None becomes a real reading.
+
+Finding the compositor is not as simple as it looks
+------------------------------------------------Keybindings
+-----------
+`list_keybindings()` dispatched KDE -> GNOME -> else-XFCE, so on Hyprland it fell through to the XFCE
+reader and returned nothing: an empty shortcut list on a desktop with 88 declared bindings.
+
+Two sources, because they answer different questions. `hyprctl -j binds` is what the compositor is
+ACTUALLY holding, including runtime bindings, and on plain Hyprland it carries real dispatchers. But
+on Omarchy 4.x it returns 223 bindings with the dispatcher `__lua` and a numeric argument on every
+single one — structurally useless as a shortcut list. The Lua modules at
+/usr/share/omarchy/default/hypr/bindings/*.lua carry the description, so both are read and
+de-duplicated.
+
+Measured on the real machine, over SSH with no session environment:
+
+    total: 151    hyprland: 151
+    alt+print          Screenrecording
+    alt+shift+super+a  Grok                 https://grok.com
+    lookup "terminal" -> alt+super+return = terminal-tmux
+
+A stale runtime directory is not a running compositor
+-----------------------------------------------------
+Scanning $XDG_RUNTIME_DIR/hypr/ is right, but a directory alone proves nothing: an exited compositor
+leaves its directory behind. Measured, a dead instance keeps `hyprland.log` and `.socket2.sock` while
+a live one also has `.socket.sock` (the command socket hyprctl talks to) and `hyprland.lock`. Two
+leftover directories from a nested test made a KDE session report itself as Hyprland, which the
+capability test caught. The scan now requires `.socket.sock`.
+
+references/OMARCHY-KEYBINDINGS.md ships the harvested set so the defaults are documented rather than
+having to be re-derived from a live install.
+
+---
+The obvious test is `HYPRLAND_INSTANCE_SIGNATURE`, and it is wrong on its own. That variable is
+exported to the processes the compositor *launches*, so a GUI app started from the session has it —
+but an SSH shell, a cron job, or anything started from outside the session does not. Measured on
+Omarchy 4.0.1 / Hyprland 0.56.2: the variable is absent from **Hyprland's own environment**, so a
+check that only reads it reports "no Hyprland" on a machine running Hyprland at that moment.
+
+This was not caught by reading the code. It was caught by connecting to a real Omarchy box and
+watching the backend decline to fire.
+
+Resolution order, the same two sources `hyprctl` itself uses:
+
+    1. HYPRLAND_INSTANCE_SIGNATURE if set and non-empty
+    2. newest directory under $XDG_RUNTIME_DIR/hypr/   <- the compositor writes its signature there
+    3. XDG_CURRENT_DESKTOP containing "hyprland"       <- weakest, kept only as a last resort
+
+`hyprctl_json()` then passes the resolved signature to hyprctl explicitly, so the result is identical
+whether the call comes from a session app, an SSH shell, or cron.
+
+Verified in the worst case, over SSH with nothing set:
+
+    HYPRLAND_INSTANCE_SIGNATURE  (unset)
+    XDG_CURRENT_DESKTOP          (unset)
+    WAYLAND_DISPLAY              (unset)
+
+    session_type         wayland (hyprland, omarchy)
+    cursor_position      Some(1447, 226)          matches hyprctl -j cursorpos exactly
+    displays()           eDP-2  2560x1600 @ 1.6x  matches hyprctl -j monitors
+
+Omarchy is reported separately
+------------------------------
+`session_type` says `wayland (hyprland, omarchy)`, not plain `wayland` or plain `hyprland`. Omarchy
+4.x replaced the bar and launcher with Quickshell, so the two are different stacks around the same
+compositor, and a bug report that cannot tell them apart sends whoever reads it to the wrong place.
+
+The capture chain had the same environment-trust defect: a Hyprland client running nested inside KDE
+inherits XDG_CURRENT_DESKTOP=KDE and selected kwin-screenshot2, which would have captured the HOST
+desktop instead of the compositor the process belongs to. `kwin_screenshot2_available()` now yields
+when a Hyprland instance is running.
+
+Verified against a real installation
+------------------------------------
+Omarchy 4.0.1 packages / 4.0.4 ISO, 1146 packages: hyprland 0.56.2, quickshell 0.3.1,
+hyprtoolkit 0.5.4, xdg-desktop-portal-hyprland 1.4.1, /usr/bin/omarchy and /usr/bin/hyprctl present.
+No waybar, no walker, no mako — any support written against the waybar-era stack is wrong here.
+
+`examples/platform_probe` ships so the same check can be run on any compositor; `ci/hypr-nested.sh`
+starts a throwaway nested Hyprland to develop against without switching sessions.
+
+---
+--- a/crates/quixi-platform/examples/platform_probe.rs
++++ b/crates/quixi-platform/examples/platform_probe.rs
+@@ -0,0 +1,76 @@
++//! Probe the platform layer against a running compositor and print what it actually reports.
++//!
++//! Written for the Hyprland/Omarchy port, but it is deliberately compositor-agnostic: run it on KDE,
++//! GNOME, XFCE or inside a nested Hyprland and it prints what the layer sees. The value is the same
++//! either way — it is the difference between "the code compiles" and "the code answers".
++//!
++//! Run against a nested instance:
++//!   XDG_RUNTIME_DIR=/run/user/1000 \
++//!   HYPRLAND_INSTANCE_SIGNATURE=$(ls -t /run/user/1000/hypr/ | head -1) \
++//!   cargo run --release --example platform_probe
++
++fn main() {
++    println!("=== environment ===");
++    for var in [
++        "XDG_CURRENT_DESKTOP",
++        "XDG_SESSION_TYPE",
++        "WAYLAND_DISPLAY",
++        "DISPLAY",
++        "HYPRLAND_INSTANCE_SIGNATURE",
++    ] {
++        println!("  {var:<28} {}", std::env::var(var).unwrap_or_else(|_| "(unset)".into()));
++    }
++
++    println!("\n=== capabilities ===");
++    let caps = quixi_platform::linux::capabilities();
++    println!("  session_type         {}", caps.session_type);
++    println!("  screenshot           {} ({})", caps.screenshot, caps.screenshot_backend);
++    println!("  screenshot_region    {}", caps.screenshot_region);
++    println!("  clipboard            {}", caps.clipboard);
++    println!("  input_synthesis      {}", caps.input_synthesis);
++    println!("  file_pickers         {}", caps.file_pickers);
++    println!("  display_listing      {}", caps.display_listing);
++    println!("  app_launch           {}", caps.app_launch);
++    println!("  window_layout        {}", caps.window_layout);
++    for n in &caps.notes {
++        println!("  note: {n}");
++    }
++
++    println!("\n=== cursor_position ===");
++    match quixi_platform::linux::cursor_position() {
++        Some((x, y)) => println!("  Some({x}, {y})"),
++        None => println!("  None  (no compositor that publishes it, or no input backend)"),
++    }
++
++    println!("\n=== displays() ===");
++    let ds = quixi_platform::linux::displays();
++    if ds.is_empty() {
++        println!("  (none)");
++    }
++    for d in &ds {
++        println!("  id={:<3} {:<14} {}x{} @ {}x", d.id, d.name, d.width, d.height, d.scale);
++    }
++
++    println!("\n=== list_displays_json() ===");
++    match quixi_platform::linux::list_displays_json() {
++        Ok(v) => println!("  {}", serde_json::to_string(&v).unwrap_or_else(|_| "?".into())),
++        Err(e) => println!("  Err: {e:#}"),
++    }
++
++    println!("\n=== keybindings ===");
++    let kb = quixi_platform::linux::list_keybindings();
++    println!("  total: {}", kb.len());
++    let mut by_source: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
++    for k in &kb {
++        *by_source.entry(k.source.as_str()).or_default() += 1;
++    }
++    for (s, n) in by_source {
++        println!("  {s}: {n}");
++    }
++    for k in kb.iter().filter(|k| !k.keys.is_empty()).take(12) {
++        println!("    {:<28} {:<30} {}", k.keys, k.description, k.action);
++    }
++    if let Some(t) = quixi_platform::linux::find_keybinding("terminal") {
++        println!("  lookup \"terminal\" -> {} = {}", t.keys, t.action);
++    }
++}
+--- a/crates/quixi-platform/src/linux.rs
++++ b/crates/quixi-platform/src/linux.rs
+@@ -324,7 +324,18 @@
+         // `if is_wayland() { "wayland" } else { "x11" }`, which reported "x11" on a
+         // machine with no display at all — an SSH shell, a container, a server —
+         // and the UI then offered capture and input buttons that could not work.
+-        session_type: if is_wayland() {
++        // Name the compositor when it is known, not just the protocol. "wayland" is true of KDE,
++        // GNOME, Hyprland and everything else, so a bug report saying "wayland" does not say where
++        // to look. Omarchy is called out separately because it is Hyprland with a different stack
++        // around it — Quickshell rather than a plain bar — and the distinction matters when
++        // something in that stack is what is misbehaving.
++        session_type: if hyprland_running() {
++            if omarchy_running() {
++                "wayland (hyprland, omarchy)"
++            } else {
++                "wayland (hyprland)"
++            }
++        } else if is_wayland() {
+             "wayland"
+         } else if std::env::var_os("DISPLAY").is_some_and(|v| !v.is_empty()) {
+             "x11"
+@@ -406,6 +417,20 @@
+     // exactly the centre of a 2560x1600 screen, before AND after the pointer was moved
+     // elsewhere. A caller cannot tell that apart from a real reading, which is worse than no
+     // reading at all. Measured on GNOME 51 / mutter.
++    // Hyprland is the one Wayland compositor that publishes the global cursor position, via
++    // `hyprctl -j cursorpos`. Ask it before falling through to the honest None below — this is not
++    // the XWayland guess that the comment above warns about, it is the compositor's own reading.
++    if hyprland_running() {
++        if let Ok(v) = hyprctl_json("cursorpos") {
++            if let (Some(x), Some(y)) = (
++                v.get("x").and_then(|n| n.as_f64()),
++                v.get("y").and_then(|n| n.as_f64()),
++            ) {
++                return Some((x, y));
++            }
++        }
++    }
++
+     if is_wayland() {
+         return None;
+     }
+@@ -461,9 +486,117 @@
+     }
+ }
+ 
++/// Whether a Hyprland compositor is the one we are talking to.
++///
++/// The signal is `HYPRLAND_INSTANCE_SIGNATURE`, which the compositor sets for every process it
++/// starts and which nothing else can fake: a nested instance has its own signature, and a KDE or
++/// GNOME session simply does not have the variable at all.
++///
++/// `XDG_CURRENT_DESKTOP` is deliberately *not* used for this. `desktop_is()` treats an empty value
++/// as a match, which is right for a fallback order and wrong for a positive identification — on a
++/// box with no session set it would claim Hyprland was running.
++/// The running Hyprland instance's signature.
++///
++/// `HYPRLAND_INSTANCE_SIGNATURE` is exported to the processes the compositor *launches*, so a GUI app
++/// started from the session has it — but an SSH shell, a cron job, or anything started from outside
++/// the session does not. Measured on Omarchy 4.0.1 / Hyprland 0.56.2: the variable is absent from
++/// Hyprland's own environment, so testing only that variable reports "no Hyprland" on a machine that
++/// is running Hyprland at that moment.
++///
++/// The compositor also writes its signature as a directory under `$XDG_RUNTIME_DIR/hypr/`, which
++/// anything running as the same user can read. Use the variable when present, fall back to the
++/// directory — the same two sources, in the same order, that `hyprctl` itself uses.
++fn hyprland_signature() -> Option<String> {
++    if let Ok(v) = std::env::var("HYPRLAND_INSTANCE_SIGNATURE") {
++        if !v.is_empty() {
++            return Some(v);
++        }
++    }
++    let runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
++    let dir = std::path::Path::new(&runtime).join("hypr");
++    let mut newest: Option<(std::time::SystemTime, String)> = None;
++    for entry in std::fs::read_dir(dir).ok()?.flatten() {
++        if !entry.file_type().map(|f| f.is_dir()).unwrap_or(false) {
++            continue;
++        }
++        // A directory alone proves nothing — a compositor that exited leaves its runtime directory
++        // behind. Measured: a dead instance keeps `hyprland.log` and `.socket2.sock`, while a live one
++        // also has `.socket.sock` (the command socket hyprctl talks to) and `hyprland.lock`. Without
++        // this check, two leftover directories from a nested test made a KDE session report itself as
++        // Hyprland. Require the live socket.
++        if !entry.path().join(".socket.sock").exists() {
++            continue;
++        }
++        let Ok(modified) = entry.metadata().and_then(|m| m.modified()) else {
++            continue;
++        };
++        if newest.as_ref().map(|(best, _)| modified > *best).unwrap_or(true) {
++            newest = Some((modified, entry.file_name().to_string_lossy().to_string()));
++        }
++    }
++    newest.map(|(_, name)| name)
++}
++
++fn hyprland_running() -> bool {
++    if !have("hyprctl") {
++        return false;
++    }
++    // A signature from either source is authoritative — it names a live compositor socket.
++    if hyprland_signature().is_some() {
++        return true;
++    }
++    // Last resort, and a deliberately weak one: the session's own desktop name.
++    //
++    // NOT desktop_is(), on purpose: that helper returns true when XDG_CURRENT_DESKTOP is unset
++    // ("empty means match anything"), which is the right default when choosing a fallback chain and
++    // exactly wrong for a positive identification. In a test or cron environment with no session
++    // variable, desktop_is("HYPRLAND") answers yes for every machine on earth.
++    std::env::var("XDG_CURRENT_DESKTOP")
++        .map(|v| v.to_uppercase().contains("HYPRLAND"))
++        .unwrap_or(false)
++}
++
++/// Omarchy is Hyprland plus an opinionated stack on top (Quickshell for the shell, hyprtoolkit, the
++/// `omarchy-*` packages). Nothing in the platform layer behaves differently for it — the point of
++/// detecting it is to report it honestly instead of calling an Omarchy desktop "Hyprland", which
++/// sends anyone debugging in the wrong direction.
++fn omarchy_running() -> bool {
++    have("omarchy") || std::path::Path::new("/etc/omarchy").exists()
++}
++
++/// `hyprctl -j <query>`, parsed.
++///
++/// Returned as a Result so callers fall through to the next backend on a compositor hiccup instead
++/// of reporting "no displays" — an error here means "ask someone else", not "the answer is zero".
++fn hyprctl_json(query: &str) -> Result<serde_json::Value> {
++    // hyprctl needs the signature in its environment to find the compositor socket. Resolve it here
++    // rather than inheriting whatever the caller happens to have, so this works identically from a
++    // session-launched app, an SSH shell, and a cron job.
++    let signature = hyprland_signature()
++        .ok_or_else(|| anyhow::anyhow!("no Hyprland instance signature found for hyprctl -j {query}"))?;
++    let out = std::process::Command::new("hyprctl")
++        .env("HYPRLAND_INSTANCE_SIGNATURE", &signature)
++        .args(["-j", query])
++        .output()
++        .with_context(|| format!("running hyprctl -j {query}"))?;
++    if !out.status.success() {
++        bail!(
++            "hyprctl -j {query} exited {}: {}",
++            out.status,
++            String::from_utf8_lossy(&out.stderr).trim()
++        );
++    }
++    serde_json::from_str(&String::from_utf8_lossy(&out.stdout))
++        .with_context(|| format!("hyprctl -j {query} returned unparseable JSON"))
++}
++
+ fn kwin_screenshot2_available() -> bool {
+     use zbus::blocking::Connection;
+-    if !desktop_is("KDE") {
++    // `!hyprland_running()` matters when Hyprland runs nested inside a KDE session: the process
++    // inherits XDG_CURRENT_DESKTOP=KDE, so desktop_is("KDE") is true and KWin's API would capture
++    // the HOST desktop rather than the compositor this process is actually a client of. The
++    // instance signature cannot be inherited that way, so it wins.
++    if hyprland_running() || !desktop_is("KDE") {
+         return false;
+     }
+     let Ok(conn) = Connection::session() else {
+@@ -1902,6 +2035,30 @@
+ 
+ /// Parsed output list from kscreen-doctor (KDE) with an xrandr fallback.
+ pub fn list_displays_json() -> Result<serde_json::Value> {
++    // Hyprland answers this itself; see displays() for why it goes first.
++    if hyprland_running() {
++        if let Ok(v) = hyprctl_json("monitors") {
++            if let Some(mons) = v.as_array() {
++                let list: Vec<serde_json::Value> = mons
++                    .iter()
++                    .filter(|m| !m.get("disabled").and_then(|d| d.as_bool()).unwrap_or(false))
++                    .map(|m| {
++                        serde_json::json!({
++                            "id": m.get("id").cloned().unwrap_or(serde_json::Value::Null),
++                            "name": m.get("name").cloned().unwrap_or(serde_json::Value::Null),
++                            "width": m.get("width").cloned().unwrap_or(serde_json::Value::Null),
++                            "height": m.get("height").cloned().unwrap_or(serde_json::Value::Null),
++                            "scale": m.get("scale").cloned().unwrap_or(serde_json::Value::Null),
++                        })
++                    })
++                    .collect();
++                if !list.is_empty() {
++                    return Ok(serde_json::json!({ "displays": list }));
++                }
++            }
++        }
++    }
++
+     // GNOME has no kscreen-doctor and usually no xrandr; its own interface is the only
+     // route and needs no external tool.
+     if desktop_is("GNOME") {
+@@ -2089,6 +2246,35 @@
+ pub fn displays() -> Vec<LinuxDisplay> {
+     let mut out: Vec<LinuxDisplay> = Vec::new();
+ 
++    // Hyprland first on a Hyprland session. `hyprctl -j monitors` is the compositor's own idea of
++    // the layout, including scale and which output is focused, so it beats inferring anything from
++    // a tool that merely happens to be installed.
++    if hyprland_running() {
++        if let Ok(v) = hyprctl_json("monitors") {
++            if let Some(mons) = v.as_array() {
++                for (i, m) in mons.iter().enumerate() {
++                    if m.get("disabled").and_then(|d| d.as_bool()).unwrap_or(false) {
++                        continue;
++                    }
++                    out.push(LinuxDisplay {
++                        id: m.get("id").and_then(|n| n.as_u64()).unwrap_or(i as u64) as u32,
++                        name: m
++                            .get("name")
++                            .and_then(|n| n.as_str())
++                            .unwrap_or("output")
++                            .to_string(),
++                        width: m.get("width").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
++                        height: m.get("height").and_then(|n| n.as_u64()).unwrap_or(0) as u32,
++                        scale: m.get("scale").and_then(|n| n.as_f64()).unwrap_or(1.0),
++                    });
++                }
++                if !out.is_empty() {
++                    return out;
++                }
++            }
++        }
++    }
++
+     // X11: RandR over the protocol gives the same geometry `xrandr --query` prints, without
+     // the parsing. Falls through to the text parser if the protocol call fails.
+     if !is_wayland() {
+@@ -3691,8 +3877,14 @@
+             assert_eq!(report.screenshot_backend, "none");
+         }
+         // "none" is a real answer: a headless shell, a container, a server.
++        // Session types now name the compositor where it is known, not just the protocol: "wayland"
++        // alone does not tell a bug report where to look. Every value must still be a real
++        // classification rather than an empty or inventable string.
+         assert!(
+-            matches!(report.session_type.as_str(), "wayland" | "x11" | "none"),
++            matches!(
++                report.session_type.as_str(),
++                "wayland" | "wayland (hyprland)" | "wayland (hyprland, omarchy)" | "x11" | "none"
++            ),
+             "unexpected session classification: {}",
+             report.session_type
+         );
+@@ -4046,8 +4238,134 @@
+ ///
+ /// Read-only: nothing is written back to the desktop's configuration. Returns an empty vector when the
+ /// desktop's source is unavailable, never an error — a missing shortcut list is not a failure.
++/// Hyprland, and therefore Omarchy.
++///
++/// Two sources, because they answer different questions:
++///
++///   * `hyprctl -j binds` reports what the compositor is ACTUALLY holding — the truth, including
++///     anything bound at runtime. On a plain Hyprland it carries real dispatchers.
++///   * Omarchy 4.x declares its bindings in Lua (`/usr/share/omarchy/default/hypr/bindings/*.lua`),
++///     and `hyprctl -j binds` reports every one of them with the dispatcher `__lua` and a numeric
++///     argument. Measured on Omarchy 4.0.1 / Hyprland 0.56.2: 223 bindings, all 223 `__lua`, which is
++///     useless as a shortcut list. The Lua modules carry the human description, so on Omarchy they are
++///     the better source.
++///
++/// The Lua files are read first and hyprctl fills in whatever they do not cover, so neither source
++/// alone decides the answer.
++fn keybindings_hyprland() -> Vec<Keybinding> {
++    let mut out: Vec<Keybinding> = Vec::new();
++
++    // 1. Omarchy's declared bindings, which carry descriptions.
++    let mut lua_files: Vec<std::path::PathBuf> = Vec::new();
++    if let Ok(entries) = std::fs::read_dir("/usr/share/omarchy/default/hypr/bindings") {
++        for e in entries.flatten() {
++            let p = e.path();
++            if p.extension().and_then(|x| x.to_str()) == Some("lua") {
++                lua_files.push(p);
++            }
++        }
++    }
++    if let Some(home) = dirs::home_dir() {
++        let user = home.join(".config/hypr/bindings.lua");
++        if user.is_file() {
++            lua_files.push(user);
++        }
++    }
++    lua_files.sort();
++    for file in lua_files {
++        let Ok(text) = std::fs::read_to_string(&file) else { continue };
++        for line in text.lines() {
++            let line = line.trim();
++            if !line.starts_with("o.bind(") && !line.starts_with("hl.bind(") {
++                continue;
++            }
++            // o.bind("SUPER + RETURN", "Terminal", "alacritty")
++            //         ^1                ^3          ^5
++            let parts: Vec<&str> = line.split('"').collect();
++            if parts.len() < 7 {
++                continue;
++            }
++            let combo = parts[1].trim();
++            let desc = parts[3].trim();
++            let command = parts[5].trim();
++            if combo.is_empty() {
++                continue;
++            }
++            out.push(Keybinding {
++                action: command.to_string(),
++                keys: normalize_keys(combo),
++                description: if desc.eq_ignore_ascii_case("nil") {
++                    String::new()
++                } else {
++                    desc.to_string()
++                },
++                source: "hyprland".into(),
++                custom: line.starts_with("hl.bind"),
++            });
++        }
++    }
++
++    // 2. Whatever the compositor itself is holding, for anything the Lua files did not cover.
++    if let Ok(v) = hyprctl_json("binds") {
++        if let Some(binds) = v.as_array() {
++            for b in binds {
++                let key = b.get("key").and_then(|k| k.as_str()).unwrap_or("");
++                let dispatcher = b.get("dispatcher").and_then(|d| d.as_str()).unwrap_or("");
++                // `__lua` means the binding came from Omarchy's Lua layer and its argument is an
++                // internal index — nothing a user could act on. Covered by the Lua pass above.
++                if key.is_empty() || dispatcher == "__lua" {
++                    continue;
++                }
++                let modmask = b.get("modmask").and_then(|m| m.as_u64()).unwrap_or(0);
++                let mut mods: Vec<&str> = Vec::new();
++                if modmask & 64 != 0 {
++                    mods.push("SUPER");
++                }
++                if modmask & 4 != 0 {
++                    mods.push("CTRL");
++                }
++                if modmask & 8 != 0 {
++                    mods.push("ALT");
++                }
++                if modmask & 1 != 0 {
++                    mods.push("SHIFT");
++                }
++                mods.push(key);
++                let combo = mods.join(" + ");
++                let arg = b.get("arg").and_then(|a| a.as_str()).unwrap_or("");
++                out.push(Keybinding {
++                    action: if arg.is_empty() {
++                        dispatcher.to_string()
++                    } else {
++                        format!("{dispatcher} {arg}")
++                    },
++                    keys: normalize_keys(&combo),
++                    description: b
++                        .get("description")
++                        .and_then(|d| d.as_str())
++                        .unwrap_or("")
++                        .to_string(),
++                    source: "hyprland".into(),
++                    custom: false,
++                });
++            }
++        }
++    }
++
++    // The two sources overlap by design; keep one row per key+action.
++    out.sort_by(|a, b| a.keys.cmp(&b.keys).then(a.action.cmp(&b.action)));
++    out.dedup_by(|a, b| a.keys == b.keys && a.action == b.action);
++    out
++}
++
+ pub fn list_keybindings() -> Vec<Keybinding> {
+-    let mut all = if desktop_is("KDE") {
++    // Hyprland goes FIRST, before the desktop_is() chain. Omarchy reports
++    // XDG_CURRENT_DESKTOP=Hyprland, which matches neither "KDE" nor "GNOME", so the old if/else-if
++    // fell through to the XFCE reader and returned nothing — an empty shortcut list on a desktop
++    // with 88 declared bindings.
++    let mut all = if hyprland_running() {
++        keybindings_hyprland()
++    } else if desktop_is("KDE") {
+         keybindings_kde()
+     } else if desktop_is("GNOME") {
+         keybindings_gnome()

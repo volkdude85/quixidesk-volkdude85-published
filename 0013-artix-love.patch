@@ -1,0 +1,62 @@
+Artix Love
+==========
+
+I don't want to run it, but I want to love it.
+
+That is the whole rationale. OpenRC is a pain in the ass, which is part of why it is not the daily
+driver here — and it is also worth supporting properly. So rather than install it, this package gets
+built and tested on it: Artix ships four inits (OpenRC, runit, s6, dinit) and there is no reason a
+desktop application should care which one is supervising the machine.
+
+This patch is what a cold build on Artix actually required. The suite would not pass in a container,
+and the reason had nothing to do with init systems: a test asserted that the pointer position becomes
+known after a mouse move, without first checking that this host can move a mouse at all. On a
+container, on CI, or with no ydotoold running, the move cannot happen — so the assertion was really
+"this machine has a pointer", which is the environment talking, not the contract.
+
+The fix asks the capability report instead of assuming, and asserts something real either way:
+
+  * input available  -> after a successful move the position is known
+  * no input backend -> the move cannot have happened, so a position must NOT be claimed
+
+Both branches are meaningful; neither is a skip.
+
+Found by: building the package in artixlinux/artixlinux on a machine that is not mine.
+Companion document: ARTIX.md. OpenRC service: contrib/ydotoold.openrc.
+
+---
+--- a/crates/quixi-platform/src/lib.rs
++++ b/crates/quixi-platform/src/lib.rs
+@@ -2189,13 +2189,27 @@
+         let fresh = CuSessionState::default();
+         assert!(!fresh.cursor_known, "a new session must not claim a known cursor position");
+ 
+-        // Moving the mouse makes it known by construction, because we choose the destination.
++        // A successful move makes the position known by construction, because we choose the
++        // destination. That only means anything on a host that can actually inject input: in a
++        // container, on CI, or with no ydotoold running, the move cannot happen at all, and
++        // asserting "the position is known" would be asserting that this machine has a mouse.
++        //
++        // The capability report already answers this, so ask it rather than assuming. This is the
++        // same defect as the other portability fixes in this suite: the test was measuring the
++        // environment it happened to run in.
+         CuSessionState::default();
+         ComputerUse::mouse_move(123.0, 456.0);
+-        assert!(
+-            ComputerUse::cursor_position_available(),
+-            "after a move the position is known"
+-        );
++        if crate::linux::capabilities().input_synthesis {
++            assert!(
++                ComputerUse::cursor_position_available(),
++                "after a move that succeeded, the position is known"
++            );
++        } else {
++            assert!(
++                !ComputerUse::cursor_position_available(),
++                "with no input backend the move cannot happen, so the position must not be claimed"
++            );
++        }
+         // Deliberately NOT asserting the exact coordinate here.
+         //
+         // `get_cursor_position()` reads the OS when a display is present, and on XWayland that

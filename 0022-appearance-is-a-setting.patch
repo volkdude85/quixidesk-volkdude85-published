@@ -1,0 +1,431 @@
+Appearance becomes a real setting, and the colour control becomes usable
+===========================================================================
+
+Three faults, one shape: the interface kept its own copy of something the application owns.
+
+1. The theme lived only in localStorage. The backend has an AppPreferences service with
+   getPreferences / setPreference — and the value it held was never written to disk, so it was not a
+   setting either. Preferences are now read at boot from <data_dir>/preferences.json and written back
+   when the interface changes one; localStorage stays as the paint cache so the window comes up in the
+   right theme instead of flashing the default while the bridge answers.
+
+2. The custom theme used <input type="color">. WebKitGTK renders that as a palette grid that COMMITS
+   ON FIRST TOUCH: no dragging a dial, no looking at it, no adjusting again and then accepting — the
+   first nudge is the result. It also has no saturation control, so a neon green is unreachable.
+   Replaced with hue / saturation / lightness sliders, a hex field and a live swatch. The sliders are
+   authoritative while you drag: deriving HSL back out of the 8-bit hex on every step drifts (hue 135,
+   saturation 100, lightness 50 lands on #00ff3c after a few nudges instead of #00ff41), and rounding
+   hue to whole degrees turns a typed #00ff41 into #00ff40. Hue keeps its fraction; the hex re-seeds
+   the sliders only when you type in it.
+
+   Verified by driving the real function in a browser: typed #00ff41, #7fff00, #39ff14, #ffffff and
+   #000000 all round-trip to themselves with the sliders landing on 135/100/50, 90/100/50, 111/100/54,
+   0/0/100, 0/0/0; a slow drag up through saturation and down through hue is reversible with no
+   creep; full saturation at hue 135 yields #00ff40, one step off the ideal only because a five-degree
+   step cannot land on 135.29. Writes behind a drag settle for 200 ms instead of one file write each.
+
+3. Matrix, Amber and Ice were tinted rather than phosphor. Matrix was #00ff88 on #7dffa8 — mint, not
+   the green anybody means by Matrix. Now #00ff41 on #8dff9f over #000800; amber #ffb000 over
+   #0a0600; ice #00e5ff over #000a0f. The swatches in the picker describe the same values they claim.
+
+   Verified in a browser: body background and text follow each theme (rgb(0,8,0) / rgb(141,255,159)
+   matrix, rgb(10,6,0) / rgb(255,198,92) amber, rgb(0,10,15) / rgb(168,236,255) ice).
+
+diff -Naur a/crates/quixi-engine/src/lib.rs b/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs
++++ b/crates/quixi-engine/src/lib.rs
+@@ -95,6 +95,42 @@
+         fallback.to_string()
+     }
+ 
++    /// Preferences set from the interface — theme, font, toggles — are backend state, not browser
++    /// state: they belong to the installation, so every window agrees and a restart keeps them.
++    fn preferences_path(&self) -> PathBuf {
++        self.data_dir.join("preferences.json")
++    }
++
++    /// Read what the interface last saved, laid over the built-in defaults. A missing or unreadable
++    /// file is not an error: the defaults are the answer.
++    pub fn load_app_preferences(&self) {
++        let Ok(text) = std::fs::read_to_string(self.preferences_path()) else {
++            return;
++        };
++        let Ok(serde_json::Value::Object(saved)) = serde_json::from_str(&text) else {
++            return;
++        };
++        let mut prefs = self.app_preferences.write();
++        if let Some(current) = prefs.as_object_mut() {
++            for (key, value) in saved {
++                current.insert(key, value);
++            }
++        }
++    }
++
++    /// Write the whole preference object. Failure is deliberately silent: a read-only data directory
++    /// must not stop somebody changing their theme for this session.
++    pub fn save_app_preferences(&self) {
++        let prefs = self.app_preferences.read().clone();
++        let path = self.preferences_path();
++        if let Some(parent) = path.parent() {
++            let _ = std::fs::create_dir_all(parent);
++        }
++        if let Ok(text) = serde_json::to_string_pretty(&prefs) {
++            let _ = std::fs::write(path, text);
++        }
++    }
++
+     pub fn cancel_turn(&self, session_id: &str) {
+         let _submission = self.chat_submission.lock();
+         if let Some(queue) = self.pending_messages.lock().get_mut(session_id) {
+@@ -282,6 +318,7 @@
+         engine.load_session_recovery();
+         engine.load_local_artifacts();
+         engine.load_subagents();
++        engine.load_app_preferences();
+         engine.start_scheduler();
+         engine
+     }
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a/crates/quixi-ipc/src/lib.rs
++++ b/crates/quixi-ipc/src/lib.rs
+@@ -256,6 +256,7 @@
+                         "preferencesChanged",
+                         prefs,
+                     );
++                    self.engine.save_app_preferences();
+                 }
+                 Value::Null
+             }
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -35,44 +35,44 @@
+    exist: matrix is green on near-black, amber and ice are the same shape at different hues. */
+ :root[data-theme="matrix"] {
+   color-scheme: dark;
+-  --bg: #05080a;
+-  --panel: #08120c;
+-  --raised: #0c1a12;
+-  --sidebar: #030605;
+-  --line: #12301c;
+-  --text: #7dffa8;
+-  --muted: #3f8f5f;
+-  --accent: #00ff88;
+-  --ink: #02150b;
+-  --danger: #ff5f6d;
++  --bg: #000800;
++  --panel: #03120a;
++  --raised: #06200f;
++  --sidebar: #000400;
++  --line: #0d4019;
++  --text: #8dff9f;
++  --muted: #2f9b4f;
++  --accent: #00ff41;
++  --ink: #00210a;
++  --danger: #ff4d5e;
+   --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
+ }
+ :root[data-theme="amber"] {
+   color-scheme: dark;
+-  --bg: #0b0803;
+-  --panel: #14100a;
+-  --raised: #1c1610;
+-  --sidebar: #08060a;
+-  --line: #33261a;
+-  --text: #ffcf8b;
+-  --muted: #9c7a4d;
+-  --accent: #ffb020;
+-  --ink: #1a1000;
+-  --danger: #ff7a6b;
++  --bg: #0a0600;
++  --panel: #141006;
++  --raised: #1e1808;
++  --sidebar: #070500;
++  --line: #3a2c0d;
++  --text: #ffc65c;
++  --muted: #9a7638;
++  --accent: #ffb000;
++  --ink: #1a1100;
++  --danger: #ff6a4d;
+   --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
+ }
+ :root[data-theme="ice"] {
+   color-scheme: dark;
+-  --bg: #060a0f;
+-  --panel: #0b121a;
+-  --raised: #101a24;
+-  --sidebar: #04070b;
+-  --line: #1b2c3d;
+-  --text: #cfe9ff;
+-  --muted: #6d8ea8;
+-  --accent: #4fc3f7;
+-  --ink: #001018;
+-  --danger: #ff6b81;
++  --bg: #000a0f;
++  --panel: #04121a;
++  --raised: #061c26;
++  --sidebar: #00070a;
++  --line: #0f3346;
++  --text: #a8ecff;
++  --muted: #4e8ba6;
++  --accent: #00e5ff;
++  --ink: #00161f;
++  --danger: #ff5f8a;
+   --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
+ }
+ /* Custom inherits the dark base; the user's own --bg/--text/--accent are set inline on :root. */
+@@ -1649,24 +1649,32 @@
+   background: linear-gradient(90deg, #e6ebe5 36%, #343a41 36%);
+ }
+ 
+-.theme-swatch.matrix { background: #05080a; border-color: #12301c; }
+-.theme-swatch.matrix > span:first-child { background: #0c1a12; }
+-.theme-swatch.matrix > span:last-child { background: #00ff88; }
+-.theme-swatch.amber { background: #0b0803; border-color: #33261a; }
+-.theme-swatch.amber > span:first-child { background: #1c1610; }
+-.theme-swatch.amber > span:last-child { background: #ffb020; }
+-.theme-swatch.ice { background: #060a0f; border-color: #1b2c3d; }
+-.theme-swatch.ice > span:first-child { background: #101a24; }
+-.theme-swatch.ice > span:last-child { background: #4fc3f7; }
++.theme-swatch.matrix { background: #000800; border-color: #0d4019; }
++.theme-swatch.matrix > span:first-child { background: #06200f; }
++.theme-swatch.matrix > span:last-child { background: #00ff41; }
++.theme-swatch.amber { background: #0a0600; border-color: #3a2c0d; }
++.theme-swatch.amber > span:first-child { background: #1e1808; }
++.theme-swatch.amber > span:last-child { background: #ffb000; }
++.theme-swatch.ice { background: #000a0f; border-color: #0f3346; }
++.theme-swatch.ice > span:first-child { background: #061c26; }
++.theme-swatch.ice > span:last-child { background: #00e5ff; }
+ .theme-swatch.custom { background: #191c20; border-color: #343a41; }
+ .theme-swatch.custom > span:first-child { background: #2a3036; }
+ .theme-swatch.custom > span:last-child { background: #8bd5bd; }
+ .font-grid { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+ .font-grid > label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+ .font-grid select, .font-grid input { min-width: 130px; }
+-.swatch-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
++.swatch-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 10px; }
+ .swatch-row > label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+-.swatch-row input[type="color"] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--line); background: none; border-radius: 4px; }
++/* The colour control: the native picker cannot set saturation, so these sliders are the interface. */
++.colour-control { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--raised); display: grid; gap: 8px; }
++.colour-head { display: flex; align-items: center; gap: 10px; }
++.colour-head strong { font-size: 12px; font-weight: 600; color: var(--text); }
++.colour-swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); flex: 0 0 auto; }
++.colour-hex { margin-left: auto; width: 92px; font-family: ui-monospace, monospace; font-size: 12px; text-align: center; }
++.colour-slider-row { display: grid; grid-template-columns: 66px 1fr; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
++.colour-slider { width: 100%; accent-color: var(--accent); }
++.colour-slider-row input[type="range"] { margin: 0; }
+ .theme-label {
+   display: flex;
+   align-items: center;
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -2666,7 +2666,7 @@
+                 ),
+               ],
+               () => {
+-                localStorage.setItem("quixi.theme", value);
++                rememberPreference("theme", value);
+                 applyTheme();
+                 renderPage();
+               },
+@@ -2701,7 +2701,7 @@
+               localStorage.getItem("quixi.fontFamily") || "",
+               (v) => {
+                 v
+-                  ? localStorage.setItem("quixi.fontFamily", v)
++                  ? rememberPreference("fontFamily", v)
+                   : localStorage.removeItem("quixi.fontFamily");
+                 applyAppearance();
+               },
+@@ -2724,7 +2724,7 @@
+               localStorage.getItem("quixi.fontSize") || "",
+               (v) => {
+                 v
+-                  ? localStorage.setItem("quixi.fontSize", v)
++                  ? rememberPreference("fontSize", v)
+                   : localStorage.removeItem("quixi.fontSize");
+                 applyAppearance();
+               },
+@@ -2739,27 +2739,9 @@
+         el(
+           "div",
+           { class: "swatch-row" },
+-          ...[
+-            ["bg", "Background"],
+-            ["text", "Text"],
+-            ["accent", "Accent"],
+-          ].map(([key, label]) =>
+-            el(
+-              "label",
+-              {},
+-              label,
+-              el("input", {
+-                type: "color",
+-                value: localStorage.getItem("quixi.custom." + key) || "#191c20",
+-                onchange: (event) => {
+-                  localStorage.setItem("quixi.custom." + key, event.target.value);
+-                  localStorage.setItem("quixi.theme", "custom");
+-                  applyTheme();
+-                  renderPage();
+-                },
+-              }),
+-            ),
+-          ),
++          colourControl("bg", "Background"),
++          colourControl("text", "Text"),
++          colourControl("accent", "Accent"),
+         ),
+         el("h2", { style: "margin-top:30px" }, "New tasks"),
+         field(
+@@ -2870,6 +2852,138 @@
+         ),
+       );
+   }
++  // Appearance is backend state. AppPreferences is the record; localStorage is only the paint cache,
++  // so the window comes up in the right theme immediately instead of flashing the default while the
++  // bridge answers. Every write goes to both, and a value the backend holds wins at boot.
++  const APPEARANCE_KEYS = {
++    theme: "quixi.theme",
++    fontFamily: "quixi.fontFamily",
++    fontSize: "quixi.fontSize",
++  };
++  function adoptPreferences(prefs) {
++    if (!prefs || typeof prefs !== "object") return false;
++    let changed = false;
++    for (const [key, storageKey] of Object.entries(APPEARANCE_KEYS)) {
++      const value = prefs[key];
++      if (typeof value === "string" && value && localStorage.getItem(storageKey) !== value) {
++        localStorage.setItem(storageKey, value);
++        changed = true;
++      }
++    }
++    for (const key of ["bg", "text", "accent"]) {
++      const value = prefs["custom." + key];
++      if (typeof value === "string" && localStorage.getItem("quixi.custom." + key) !== value) {
++        localStorage.setItem("quixi.custom." + key, value);
++        changed = true;
++      }
++    }
++    return changed;
++  }
++  function rememberPreference(key, value) {
++    const storageKey = APPEARANCE_KEYS[key] || "quixi." + key;
++    if (value === null || value === undefined || value === "") localStorage.removeItem(storageKey);
++    else localStorage.setItem(storageKey, value);
++    rpc("AppPreferences", "setPreference", [key, value]).catch(() => {});
++  }
++  // A colour slider fires continuously. The paint should follow every pixel; the record on disk
++  // should not, so writes behind a drag settle instead of one file write per step.
++  const preferenceTimers = new Map();
++  function rememberPreferenceSoon(key, value) {
++    const storageKey = APPEARANCE_KEYS[key] || "quixi." + key;
++    if (value) localStorage.setItem(storageKey, value);
++    clearTimeout(preferenceTimers.get(key));
++    preferenceTimers.set(
++      key,
++      setTimeout(() => {
++        preferenceTimers.delete(key);
++        rpc("AppPreferences", "setPreference", [key, value]).catch(() => {});
++      }, 200),
++    );
++  }
++  // WebKitGTK's <input type=color> is a palette grid: you can pick a hue but there is no
++  // saturation control, so a custom accent can never be a neon green. These sliders are the control.
++  function hexToHsl(hex) {
++    const m = /^#?([0-9a-f]{6})$/i.exec((hex || "").trim());
++    if (!m) return { h: 210, s: 12, l: 12 };
++    const n = parseInt(m[1], 16);
++    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
++    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
++    let h = 0;
++    if (d) {
++      if (max === r) h = ((g - b) / d) % 6;
++      else if (max === g) h = (b - r) / d + 2;
++      else h = (r - g) / d + 4;
++    }
++    // Keep the fraction: rounding hue to whole degrees cannot reproduce #00ff41 (135.29 -> #00ff40).
++    h = Math.round(((h * 60 + 360) % 360) * 100) / 100;
++    const l = (max + min) / 2;
++    const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
++    return { h, s: Math.round(s * 100), l: Math.round(l * 100) };
++  }
++  function hslToHex(h, s, l) {
++    const sat = Math.min(100, Math.max(0, s)) / 100;
++    const lig = Math.min(100, Math.max(0, l)) / 100;
++    const c = (1 - Math.abs(2 * lig - 1)) * sat;
++    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
++    const m = lig - c / 2;
++    const rgb = h < 60 ? [c, x, 0]
++      : h < 120 ? [x, c, 0]
++      : h < 180 ? [0, c, x]
++      : h < 240 ? [0, x, c]
++      : h < 300 ? [x, 0, c]
++      : [c, 0, x];
++    return "#" + rgb.map((v) =>
++      Math.round((v + m) * 255).toString(16).padStart(2, "0")).join("");
++  }
++  // One colour: a live swatch, three sliders, and the hex. The sliders are authoritative while you
++  // drag — deriving HSL back out of the 8-bit hex on every step drifts (hue 135 / sat 100 / light 50
++  // lands on #00ff3c instead of #00ff41 after a few nudges), so the hex is only re-read when you type
++  // in it.
++  function colourControl(key, label) {
++    let value = localStorage.getItem("quixi.custom." + key) || (key === "bg" ? "#191c20" : "#edf0f2");
++    let current = hexToHsl(value);
++    const swatch = el("span", { class: "colour-swatch", style: "background:" + value });
++    const hex = el("input", { type: "text", value: value, spellcheck: "false", class: "colour-hex" });
++    const sliders = {};
++    const paint = (record) => {
++      value = hslToHex(current.h, current.s, current.l);
++      swatch.style.background = value;
++      hex.value = value;
++      (record || rememberPreference)("custom." + key, value);
++      rememberPreference("theme", "custom");
++      applyTheme();
++    };
++    const slider = (channel, max, text) => {
++      const input = el("input", {
++        type: "range", min: 0, max, value: current[channel], class: "colour-slider",
++        "aria-label": label + " " + text,
++        oninput: (event) => {
++          current[channel] = Number(event.target.value);
++          paint(rememberPreferenceSoon);
++        },
++      });
++      sliders[channel] = input;
++      return el("label", { class: "colour-slider-row" }, el("span", {}, text), input);
++    };
++    hex.onchange = () => {
++      const typed = hex.value.trim();
++      if (!/^#?[0-9a-f]{6}$/i.test(typed)) {
++        hex.value = value;
++        return;
++      }
++      current = hexToHsl((typed[0] === "#" ? "" : "#") + typed);
++      for (const [channel, input] of Object.entries(sliders)) input.value = current[channel];
++      paint();
++    };
++    return el(
++      "div",
++      { class: "colour-control" },
++      el("div", { class: "colour-head" }, swatch, el("strong", {}, label), hex),
++      slider("h", 360, "Hue"),
++      slider("s", 100, "Saturation"),
++      slider("l", 100, "Lightness"),
++    );
++  }
+   function applyTheme() {
+     const choice = localStorage.getItem("quixi.theme") || "dark";
+     document.documentElement.dataset.theme =
+@@ -3663,6 +3777,10 @@
+   });
+   async function boot() {
+     applyTheme();
++    // The backend is the record: take its appearance before the first paint settles.
++    try {
++      if (adoptPreferences(await rpc("AppPreferences", "getPreferences"))) applyTheme();
++    } catch {}
+     state.permission = localStorage.getItem("quixi.permission") || "default";
+     document.body.dataset.platform = /Mac/.test(navigator.platform)
+       ? "macos"

@@ -1,0 +1,46 @@
+The usage text hid nine of the fourteen commands
+=================================================
+
+`--search`, `--prompt-block`, `--memory`, `--remember`, `--recall`, `--scope`, `--voice`, `--say` and
+`--transcript` are all accepted by the argument parser and all absent from `quixi`'s own usage output.
+A command that works but does not appear is a command nobody finds, and the memory and voice commands
+are the entire reason this edition exists.
+
+Grouped by what they cost: prompts, inspection that costs no model call, memory, and voice — with the
+real arity for each, taken from the handlers rather than guessed. `--remember` takes wing, room and name
+and reads the content from stdin; `--recall` takes `--limit`; `--say` takes `--dry-run`; `--scope` and
+`--transcript` take no arguments at all.
+
+diff -Naur a/crates/quixi-engine/src/bin/quixi.rs b/crates/quixi-engine/src/bin/quixi.rs
+--- a/crates/quixi-engine/src/bin/quixi.rs
++++ b/crates/quixi-engine/src/bin/quixi.rs
+@@ -59,12 +59,27 @@
+          \n\
+          usage:\n\
+          \x20 quixi \"prompt\"              run one prompt, streamed\n\
++         \x20 quixi --json \"prompt\"       print the reply as JSON\n\
++         \x20 quixi --cwd <dir> \"prompt\"  set the working directory\n\
++         \n\
++         inspect, no model call:\n\
+          \x20 quixi --skills             list skills available to the model\n\
+          \x20 quixi --skill <id>         print one skill body\n\
++         \x20 quixi --search <query>     search the skill index (--page N for the next page)\n\
++         \x20 quixi --prompt-block       print the index the model is actually given\n\
+          \x20 quixi --providers          list providers\n\
+          \x20 quixi --capabilities       report what this session can actually do\n\
+-         \x20 quixi --cwd <dir> \"prompt\"  set the working directory\n\
+-         \x20 quixi --json \"prompt\"       print the reply as JSON\n\
++         \n\
++         memory:\n\
++         \x20 quixi --memory             print the memory index\n\
++         \x20 quixi --remember <wing> <room> <name>   store stdin as a memory\n\
++         \x20 quixi --recall <query>     search memory (--limit N)\n\
++         \x20 quixi --scope              which memory tier the active provider allows\n\
++         \n\
++         voice:\n\
++         \x20 quixi --voice              show the voice configuration\n\
++         \x20 quixi --say <text>         speak through the configured backend (--dry-run to skip playback)\n\
++         \x20 quixi --transcript         print what the talk service has accumulated\n\
+          \n\
+          environment:\n\
+          \x20 QUIXI_RESOURCES_DIR   override the resources directory\n\

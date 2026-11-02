@@ -1,0 +1,530 @@
+[
+  {
+    "combo": "SUPER + CTRL + V",
+    "description": "Clipboard manager",
+    "command": "omarchy-shell shell toggle omarchy.clipboard",
+    "module": "clipboard"
+  },
+  {
+    "combo": "XF86AudioRaiseVolume",
+    "description": "Volume up",
+    "command": "omarchy-audio-output-volume raise",
+    "module": "media"
+  },
+  {
+    "combo": "XF86AudioLowerVolume",
+    "description": "Volume down",
+    "command": "omarchy-audio-output-volume lower",
+    "module": "media"
+  },
+  {
+    "combo": "XF86AudioMute",
+    "description": "Mute",
+    "command": "omarchy-audio-output-volume mute-toggle",
+    "module": "media"
+  },
+  {
+    "combo": "XF86AudioMicMute",
+    "description": "Mute microphone",
+    "command": "omarchy-audio-input-mute",
+    "module": "media"
+  },
+  {
+    "combo": "XF86MonBrightnessUp",
+    "description": "Brightness up",
+    "command": "omarchy-brightness-display +5%",
+    "module": "media"
+  },
+  {
+    "combo": "XF86MonBrightnessDown",
+    "description": "Brightness down",
+    "command": "omarchy-brightness-display 5%-",
+    "module": "media"
+  },
+  {
+    "combo": "SHIFT + XF86MonBrightnessUp",
+    "description": "Brightness maximum",
+    "command": "omarchy-brightness-display 100%",
+    "module": "media"
+  },
+  {
+    "combo": "SHIFT + XF86MonBrightnessDown",
+    "description": "Brightness minimum",
+    "command": "omarchy-brightness-display 1%",
+    "module": "media"
+  },
+  {
+    "combo": "XF86KbdBrightnessUp",
+    "description": "Keyboard brightness up",
+    "command": "omarchy-brightness-keyboard up",
+    "module": "media"
+  },
+  {
+    "combo": "XF86KbdBrightnessDown",
+    "description": "Keyboard brightness down",
+    "command": "omarchy-brightness-keyboard down",
+    "module": "media"
+  },
+  {
+    "combo": "XF86KbdLightOnOff",
+    "description": "Keyboard backlight cycle",
+    "command": "omarchy-brightness-keyboard cycle",
+    "module": "media"
+  },
+  {
+    "combo": "XF86TouchpadOn",
+    "description": "Enable touchpad",
+    "command": "omarchy-toggle-touchpad on",
+    "module": "media"
+  },
+  {
+    "combo": "XF86TouchpadOff",
+    "description": "Disable touchpad",
+    "command": "omarchy-toggle-touchpad off",
+    "module": "media"
+  },
+  {
+    "combo": "ALT + XF86AudioRaiseVolume",
+    "description": "Volume up precise",
+    "command": "omarchy-audio-output-volume +1",
+    "module": "media"
+  },
+  {
+    "combo": "ALT + XF86AudioLowerVolume",
+    "description": "Volume down precise",
+    "command": "omarchy-audio-output-volume -1",
+    "module": "media"
+  },
+  {
+    "combo": "ALT + XF86MonBrightnessUp",
+    "description": "Brightness up precise",
+    "command": "omarchy-brightness-display +1%",
+    "module": "media"
+  },
+  {
+    "combo": "ALT + XF86MonBrightnessDown",
+    "description": "Brightness down precise",
+    "command": "omarchy-brightness-display 1%-",
+    "module": "media"
+  },
+  {
+    "combo": "XF86AudioNext",
+    "description": "Next track",
+    "command": "omarchy-shell media next",
+    "module": "media"
+  },
+  {
+    "combo": "ALT + XF86AudioPlay",
+    "description": "Next track",
+    "command": "omarchy-shell media next",
+    "module": "media"
+  },
+  {
+    "combo": "XF86AudioPause",
+    "description": "Pause",
+    "command": "omarchy-shell media playPause",
+    "module": "media"
+  },
+  {
+    "combo": "XF86AudioPlay",
+    "description": "Play",
+    "command": "omarchy-shell media playPause",
+    "module": "media"
+  },
+  {
+    "combo": "XF86AudioPrev",
+    "description": "Previous track",
+    "command": "omarchy-shell media previous",
+    "module": "media"
+  },
+  {
+    "combo": "ALT + SHIFT + XF86AudioPlay",
+    "description": "Previous track",
+    "command": "omarchy-shell media previous",
+    "module": "media"
+  },
+  {
+    "combo": "XF86Eject",
+    "description": "Eject media",
+    "command": "eject",
+    "module": "media"
+  },
+  {
+    "combo": "SHIFT + XF86AudioMute",
+    "description": "Switch audio output",
+    "command": "omarchy-audio-output-switch",
+    "module": "media"
+  },
+  {
+    "combo": "SHIFT + XF86AudioPause",
+    "description": "Switch media source",
+    "command": "omarchy-audio-source-switch",
+    "module": "media"
+  },
+  {
+    "combo": "SHIFT + XF86AudioPlay",
+    "description": "Switch media source",
+    "command": "omarchy-audio-source-switch",
+    "module": "media"
+  },
+  {
+    "combo": "CTRL + ALT + DELETE",
+    "description": "Close all windows",
+    "command": "omarchy-hyprland-window-close-all",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + CTRL + F",
+    "description": "Tiled full screen",
+    "command": "omarchy-hyprland-window-tiled-fullscreen-toggle",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + O",
+    "description": "Pop window out (float & pin)",
+    "command": "omarchy-hyprland-window-pop",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + ALT + Home",
+    "description": "Save window width",
+    "command": "omarchy-hyprland-window-width save",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + Home",
+    "description": "Restore window width",
+    "command": "omarchy-hyprland-window-width restore",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + L",
+    "description": "Toggle workspace layout",
+    "command": "omarchy-hyprland-workspace-layout-toggle",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + SLASH",
+    "description": "Monitor scaling up",
+    "command": "omarchy-hyprland-monitor-scaling up",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + ALT + SLASH",
+    "description": "Monitor scaling down",
+    "command": "omarchy-hyprland-monitor-scaling down",
+    "module": "tiling"
+  },
+  {
+    "combo": "SUPER + SPACE",
+    "description": "Omarchy menu",
+    "command": "omarchy-menu toggle",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + ALT + SPACE",
+    "description": "Apps menu",
+    "command": "omarchy-menu toggle apps",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + E",
+    "description": "Emojis",
+    "command": "omarchy-shell shell toggle omarchy.emojis",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + C",
+    "description": "Capture menu",
+    "command": "omarchy-menu toggle capture",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + O",
+    "description": "Toggle menu",
+    "command": "omarchy-menu toggle toggle",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + H",
+    "description": "Hardware menu",
+    "command": "omarchy-menu toggle hardware",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + SHIFT + code:201",
+    "description": "Omarchy menu",
+    "command": "omarchy-menu toggle root",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + ESCAPE",
+    "description": "System menu",
+    "command": "omarchy-menu toggle system",
+    "module": "utilities"
+  },
+  {
+    "combo": "XF86PowerOff",
+    "description": "Power menu",
+    "command": "omarchy-menu toggle system",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + K",
+    "description": "Keybindings",
+    "command": "omarchy-menu-keybindings",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + ALT + K",
+    "description": "Tmux keybindings",
+    "command": "omarchy-menu-tmux-keybindings",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + K",
+    "description": "Herdr keybindings",
+    "command": "omarchy-menu-herdr-keybindings",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + Q",
+    "description": "Calculator",
+    "command": "omacalc",
+    "module": "utilities"
+  },
+  {
+    "combo": "XF86Calculator",
+    "description": "Calculator",
+    "command": "omacalc",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + SPACE",
+    "description": "Background switcher",
+    "command": "omarchy-menu toggle background",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + SHIFT + CTRL + SPACE",
+    "description": "Theme menu",
+    "command": "omarchy-menu toggle theme",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + BACKSPACE",
+    "description": "Toggle window transparency",
+    "command": "omarchy-hyprland-window-transparency-toggle",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + SHIFT + BACKSPACE",
+    "description": "Toggle window gaps",
+    "command": "omarchy-hyprland-window-gaps-toggle",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + BACKSPACE",
+    "description": "Toggle single-window square aspect",
+    "command": "omarchy-hyprland-window-single-square-aspect-toggle",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + comma",
+    "description": "Dismiss last notification",
+    "command": "omarchy-shell notifications dismissOne",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + SHIFT + comma",
+    "description": "Dismiss all notifications",
+    "command": "omarchy-shell notifications dismissAll",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + ALT + comma",
+    "description": "Invoke last notification",
+    "command": "omarchy-shell notifications invokeLast",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + SHIFT + ALT + comma",
+    "description": "Open notification history",
+    "command": "omarchy-shell notifications showHistory",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + Delete",
+    "description": "Toggle laptop display",
+    "command": "omarchy-hyprland-monitor-internal toggle",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + ALT + Delete",
+    "description": "Toggle laptop display mirroring",
+    "command": "omarchy-hyprland-monitor-internal-mirror toggle",
+    "module": "utilities"
+  },
+  {
+    "combo": "switch:on:Lid Switch",
+    "description": null,
+    "command": "omarchy-system-lid-close",
+    "module": "utilities"
+  },
+  {
+    "combo": "switch:off:Lid Switch",
+    "description": null,
+    "command": "omarchy-hyprland-monitor-clamshell",
+    "module": "utilities"
+  },
+  {
+    "combo": "PRINT",
+    "description": "Screenshot",
+    "command": "omarchy-capture-screenshot",
+    "module": "utilities"
+  },
+  {
+    "combo": "ALT + PRINT",
+    "description": "Screenrecording",
+    "command": "omarchy-capture-screenrecording --stop-recording || omarchy-menu toggle trigger.capture.screenrecord",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + ALT + code:34",
+    "description": "Make webcam overlay smaller",
+    "command": "omarchy-capture-webcam-resize smaller",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + ALT + code:35",
+    "description": "Make webcam overlay larger",
+    "command": "omarchy-capture-webcam-resize larger",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + PRINT",
+    "description": "Color picker",
+    "command": "pkill hyprpicker || hyprpicker -a",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + PRINT",
+    "description": "Extract text (OCR) from screenshot",
+    "command": "omarchy-capture-text",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + S",
+    "description": "Share",
+    "command": "omarchy-menu toggle share",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + PERIOD",
+    "description": "Transcode",
+    "command": "omarchy-transcode",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + R",
+    "description": "Set reminder",
+    "command": "omarchy-menu toggle reminder-set",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + ALT + R",
+    "description": "Show reminders",
+    "command": "omarchy-reminder show",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + SHIFT + CTRL + R",
+    "description": "Clear reminders",
+    "command": "omarchy-reminder clear",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + ALT + T",
+    "description": "Show time",
+    "command": "omarchy-notification-time",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + ALT + B",
+    "description": "Show battery remaining",
+    "command": "omarchy-notification-battery",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + ALT + W",
+    "description": "Toggle weather",
+    "command": "omarchy-notification-weather",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + SHIFT + CTRL + A",
+    "description": "Agent",
+    "command": "omarchy-agent --pick",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + A",
+    "description": "Audio",
+    "command": "omarchy-shell shell toggle omarchy.audio",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + B",
+    "description": "Bluetooth",
+    "command": "omarchy-shell shell toggle omarchy.bluetooth",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + D",
+    "description": "Display",
+    "command": "omarchy-shell shell toggle omarchy.monitor",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + ALT + D",
+    "description": "Calendar",
+    "command": "omarchy-shell shell toggle omarchy.clock",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + W",
+    "description": "Network",
+    "command": "omarchy-shell shell toggle omarchy.network",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + P",
+    "description": "Power",
+    "command": "omarchy-shell shell toggle omarchy.power",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + L",
+    "description": "Lock system",
+    "command": "omarchy-system-lock",
+    "module": "utilities"
+  },
+  {
+    "combo": "SUPER + CTRL + X",
+    "description": "Toggle dictation",
+    "command": "voxtype record toggle",
+    "module": "voxtype"
+  },
+  {
+    "combo": "F9",
+    "description": "Start dictation (push-to-talk)",
+    "command": "voxtype record start",
+    "module": "voxtype"
+  },
+  {
+    "combo": "F9",
+    "description": "Stop dictation (push-to-talk)",
+    "command": "voxtype record stop",
+    "module": "voxtype"
+  }
+]

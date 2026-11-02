@@ -1,0 +1,354 @@
+Reverse-engineering skill: Ghidra headless, with the output made readable
+==========================================================================
+
+Ghidra ships on this machine and its headless analyser works, so the missing piece was not capability
+— it was that `analyzeHeadless` output is unusable as it stands. Every line of a script's output
+arrives prefixed with `INFO  <Script>.java>`, multi-line strings lose the prefix after the first line
+and gain a ` (GhidraScript)` tail, and the whole thing is interleaved with JVM warnings and ELF
+relocation complaints. Reading that as decompiled C is how you end up quoting noise.
+
+So the skill ships three files:
+
+- `SKILL.md` — when to use this, what decompiled C can and cannot be trusted for, and the order of
+  attack (strings first, then walk outward from a hit — not "dump everything").
+- `DumpDecomp.java` — a Ghidra post-script that decompiles functions in address order, skips thunks,
+  and stops at a function limit so a big binary does not produce a wall of text.
+- `ghidra_dump.py` — the wrapper: runs `analyzeHeadless`, recovers exactly the script's payload from
+  both echo forms, drops everything else, and exits non-zero when no real output was produced instead
+  of printing an empty success.
+
+Two things were found by running it rather than reading about it:
+
+1. Ghidra refuses any project path with a component starting with `.` — `Path element starting with '.'
+   is not permitted`. Sandboxed TMPDIRs contain one, so the wrapper picks a scratch directory with no
+   such component and falls back to /tmp.
+2. Java 27 throws a wall of `sun.misc.Unsafe` warnings at Ghidra 12.1.2. They are warnings: analysis
+   completes normally.
+
+Verified by decompiling /bin/true end to end: three functions of readable C, no Ghidra noise, exit 0.
+
+diff -Naur a/resources/bundled-skills-extracted/reverse-engineering/DumpDecomp.java b/resources/bundled-skills-extracted/reverse-engineering/DumpDecomp.java
+--- a/resources/bundled-skills-extracted/reverse-engineering/DumpDecomp.java
++++ b/resources/bundled-skills-extracted/reverse-engineering/DumpDecomp.java
+@@ -0,0 +1,54 @@
++// Dump every function's decompiled C to stdout, in address order.
++// @category Quixi
++// @runtime Java
++import ghidra.app.decompiler.DecompInterface;
++import ghidra.app.decompiler.DecompileResults;
++import ghidra.app.script.GhidraScript;
++import ghidra.program.model.listing.Function;
++import ghidra.program.model.listing.FunctionIterator;
++
++public class DumpDecomp extends GhidraScript {
++    @Override
++    public void run() throws Exception {
++        int limit = 200;
++        String envLimit = System.getenv("QUIXI_GHIDRA_MAX_FUNCTIONS");
++        if (envLimit != null) {
++            try {
++                limit = Integer.parseInt(envLimit.trim());
++            } catch (NumberFormatException ignored) {
++                // keep the default rather than failing the whole run over a bad env var
++            }
++        }
++        int timeout = 30;
++        String envTimeout = System.getenv("QUIXI_GHIDRA_FN_TIMEOUT");
++        if (envTimeout != null) {
++            try {
++                timeout = Integer.parseInt(envTimeout.trim());
++            } catch (NumberFormatException ignored) {
++                // as above
++            }
++        }
++
++        DecompInterface ifc = new DecompInterface();
++        ifc.openProgram(currentProgram);
++        FunctionIterator fns = currentProgram.getFunctionManager().getFunctions(true);
++        int printed = 0;
++        while (fns.hasNext() && printed < limit) {
++            Function f = fns.next();
++            if (f.isThunk()) {
++                continue;
++            }
++            println("// " + f.getEntryPoint() + "  " + f.getName());
++            DecompileResults r = ifc.decompileFunction(f, timeout, monitor);
++            if (r != null && r.decompileCompleted() && r.getDecompiledFunction() != null) {
++                println(r.getDecompiledFunction().getC());
++            } else {
++                println("// (decompilation failed: " + (r == null ? "no result" : r.getErrorMessage()) + ")");
++            }
++            println("");
++            printed++;
++        }
++        println("// " + printed + " function(s) printed" + (fns.hasNext() ? ", more remain — raise QUIXI_GHIDRA_MAX_FUNCTIONS" : ""));
++        ifc.dispose();
++    }
++}
+diff -Naur a/resources/bundled-skills-extracted/reverse-engineering/ghidra_dump.py b/resources/bundled-skills-extracted/reverse-engineering/ghidra_dump.py
+--- a/resources/bundled-skills-extracted/reverse-engineering/ghidra_dump.py
++++ b/resources/bundled-skills-extracted/reverse-engineering/ghidra_dump.py
+@@ -0,0 +1,178 @@
++#!/usr/bin/env python3
++"""Decompile a binary with Ghidra headless and print readable C.
++
++`analyzeHeadless` does the work but its output is not usable as-is: every line of the shipped
++post-script is prefixed with `INFO  DumpDecomp.java> `, mixed in with JVM warnings, ELF relocation
++noise and progress reporting. This runs it, keeps the payload, and drops the rest.
++
++    ./ghidra_dump.py /bin/true
++    ./ghidra_dump.py ./target/release/quixi --max-functions 40
++    ./ghidra_dump.py firmware.bin --function-timeout 90 --keep /tmp/proj
++
++Exit code is 0 only when the analysis actually produced decompiled output.
++"""
++
++from __future__ import annotations
++
++import argparse
++import os
++import re
++import shutil
++import subprocess
++import sys
++import tempfile
++from pathlib import Path
++
++PAYLOAD_PREFIX = re.compile(r"^INFO\s+DumpDecomp\.java>\s?(.*)$")
++NOISE = re.compile(r"^(INFO|WARN|ERROR)\s+")
++JVM_WARNING = re.compile(r"^(WARNING:|openjdk version|OpenJDK Runtime|OpenJDK 64-Bit)")
++
++
++def ghidra_home(explicit: str | None) -> Path | None:
++    for candidate in [
++        explicit,
++        os.environ.get("GHIDRA_HOME"),
++        os.environ.get("GHIDRA_INSTALL_DIR"),
++        "/opt/ghidra",
++        str(Path.home() / "ghidra"),
++    ]:
++        if candidate:
++            p = Path(candidate)
++            if (p / "support" / "analyzeHeadless").exists():
++                return p
++    return None
++
++
++def safe_tmpdir() -> str:
++    """A scratch directory Ghidra will accept.
++
++    Ghidra refuses any project path containing a path element that starts with '.', with the
++    message "Path element starting with '.' is not permitted". That rules out most sandboxed TMPDIRs,
++    including the one this runs under by default (/home/<user>/.hermes/.../scratch), so fall back to
++    /tmp rather than handing Ghidra a path it will reject.
++    """
++    for candidate in [os.environ.get("TMPDIR"), "/tmp"]:
++        if not candidate:
++            continue
++        parts = Path(candidate).resolve().parts
++        if any(part.startswith(".") for part in parts):
++            continue
++        if os.access(candidate, os.W_OK):
++            return candidate
++    return "/tmp"
++
++
++SUFFIX = re.compile(r"\s*\(GhidraScript\)\s*$")
++
++
++def extract(raw: str) -> list[str]:
++    """Recover exactly what the post-script printed.
++
++    Ghidra echoes a script's stdout two different ways, which is the whole difficulty:
++
++      * a single-line `println` arrives as `INFO  DumpDecomp.java> <text>`
++      * a multi-line string arrives with only its FIRST line prefixed; the rest are passthrough, and
++        Ghidra appends ` (GhidraScript)` to the end of the block
++
++    So the payload is a block that starts at the prefix and ends at that marker. Everything outside a
++    block is banner, the script-path list, ELF relocation complaints or progress reporting, and none
++    of it may be mistaken for decompiled output.
++    """
++    out: list[str] = []
++    in_block = False
++    for line in raw.splitlines():
++        m = PAYLOAD_PREFIX.match(line)
++        if m:
++            content = SUFFIX.sub("", m.group(1))
++            out.append(content)
++            in_block = not SUFFIX.search(m.group(1))
++            continue
++        if in_block:
++            if SUFFIX.search(line):
++                out.append(SUFFIX.sub("", line))
++                in_block = False
++            elif NOISE.match(line):
++                in_block = False
++            else:
++                out.append(line)
++    return out
++
++
++def main() -> int:
++    ap = argparse.ArgumentParser(description="Decompile a binary with Ghidra headless")
++    ap.add_argument("binary", help="file to analyse")
++    ap.add_argument("--max-functions", type=int, default=200,
++                    help="how many functions to decompile (default 200)")
++    ap.add_argument("--function-timeout", type=int, default=30,
++                    help="per-function decompiler timeout, seconds (default 30)")
++    ap.add_argument("--ghidra", help="Ghidra install directory (default: $GHIDRA_HOME or /opt/ghidra)")
++    ap.add_argument("--project", help="project directory to keep (implies --keep)")
++    ap.add_argument("--keep", action="store_true", help="keep the project directory and print its path")
++    ap.add_argument("--quiet", action="store_true", help="do not print the project path on stderr")
++    args = ap.parse_args()
++
++    target = Path(args.binary).expanduser().resolve()
++    if not target.exists():
++        print(f"ghidra_dump: no such file: {target}", file=sys.stderr)
++        return 2
++
++    home = ghidra_home(args.ghidra)
++    if home is None:
++        print(
++            "ghidra_dump: no Ghidra install found. Set GHIDRA_HOME or pass --ghidra <dir>; the "
++            "script expects <dir>/support/analyzeHeadless.",
++            file=sys.stderr,
++        )
++        return 2
++
++    scripts = Path(__file__).resolve().parent
++    if not (scripts / "DumpDecomp.java").exists():
++        print(f"ghidra_dump: DumpDecomp.java is missing from {scripts}", file=sys.stderr)
++        return 2
++
++    keep = args.keep or bool(args.project)
++    project_dir = Path(args.project).expanduser() if args.project else Path(tempfile.mkdtemp(prefix="ghidra_dump_", dir=safe_tmpdir()))
++    project_dir.mkdir(parents=True, exist_ok=True)
++    project_name = "quixi_dump"
++
++    env = dict(os.environ)
++    env["QUIXI_GHIDRA_MAX_FUNCTIONS"] = str(args.max_functions)
++    env["QUIXI_GHIDRA_FN_TIMEOUT"] = str(args.function_timeout)
++
++    cmd = [
++        str(home / "support" / "analyzeHeadless"),
++        str(project_dir), project_name,
++        "-import", str(target),
++        "-scriptPath", str(scripts),
++        "-postScript", "DumpDecomp.java",
++    ]
++    try:
++        proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
++    except OSError as exc:
++        print(f"ghidra_dump: could not run analyzeHeadless: {exc}", file=sys.stderr)
++        return 2
++
++    payload = extract(proc.stdout + "\n" + proc.stderr)
++    c_lines = [line for line in payload if "function(s) printed" in line]
++    body = [line for line in payload if "function(s) printed" not in line]
++
++    if not body or not any(line.startswith("// ") for line in body):
++        print("ghidra_dump: analysis produced no decompiled output", file=sys.stderr)
++        tail = [l for l in (proc.stdout + proc.stderr).splitlines() if l.strip()][-8:]
++        for line in tail:
++            print(f"  {line}", file=sys.stderr)
++        return 1
++
++    print("\n".join(body).strip())
++    if c_lines:
++        print("\n" + c_lines[-1].strip())
++    if not args.quiet:
++        if keep:
++            print(f"# project kept at {project_dir}", file=sys.stderr)
++        else:
++            shutil.rmtree(project_dir, ignore_errors=True)
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff -Naur a/resources/bundled-skills-extracted/reverse-engineering/SKILL.md b/resources/bundled-skills-extracted/reverse-engineering/SKILL.md
+--- a/resources/bundled-skills-extracted/reverse-engineering/SKILL.md
++++ b/resources/bundled-skills-extracted/reverse-engineering/SKILL.md
+@@ -0,0 +1,81 @@
++---
++name: reverse-engineering
++description: "Decompile a binary with Ghidra headless and read the C — functions, call graph, where to look first."
++version: 1.0.0
++tags: [reverse-engineering, ghidra, decompile, binary, assembly, security]
++---
++
++# Reverse-engineering a binary
++
++Ghidra is already installed and its headless analyser works. The hard part is not running it — it is
++reading what comes back without drowning in it, and knowing which question to ask first.
++
++## The fast path
++
++A wrapper sits beside this file. It runs `analyzeHeadless`, keeps only the decompiled output, and
++throws away the JVM warnings, ELF relocation complaints and progress noise:
++
++```sh
++python3 "$(dirname SKILL.md)/ghidra_dump.py" <binary> --max-functions 40
++```
++
++- `--max-functions N` — stop after N functions (default 200). Start small.
++- `--function-timeout S` — per-function decompiler budget (default 30s).
++- `--project DIR --keep` — keep the Ghidra project so a second pass skips re-analysis.
++- `--ghidra DIR` — if Ghidra is not at `$GHIDRA_HOME` or `/opt/ghidra`.
++
++It prints `// <address>  <name>` then the C for each function, and a final line telling you whether
++more remain. Exit code is 0 only when real output was produced — a silent failure is reported, not
++passed off as an empty result.
++
++## What this tells you, and what it does not
++
++Decompiled C is a reconstruction, not source. Treat these as facts and everything else as a guess:
++
++- **function boundaries and call relationships** — reliable
++- **string references** — reliable, usually the fastest way in: start from the strings, not the entry point
++- **control-flow shape** — usually right
++- **variable names, types, struct layouts** — invented unless debug symbols exist. `undefined4` and
++  `uVar1` are Ghidra admitting it does not know.
++
++So the useful first move is almost never "dump everything". It is:
++
++1. `strings -n 6 <binary> | grep -i <the thing>` — find the message, URL, error text or flag you care about
++2. locate that string's use in the decompiled output
++3. walk outward from there through callers
++
++## Doing it by hand
++
++When the wrapper's fixed post-script is not enough, drive Ghidra directly and supply your own script:
++
++```sh
++/opt/ghidra/support/analyzeHeadless /tmp/proj myproject \
++    -import ./target/release/quixi \
++    -scriptPath /path/to/scripts \
++    -postScript MyScript.java
++```
++
++Ghidra compiles `.java` post-scripts on first use, so a script needs no build step. A script's
++`println` output is forwarded to the console prefixed with `INFO  <Script>.java> `.
++
++## Pitfalls that actually bite
++
++- **Ghidra refuses any project path containing a component that starts with `.`** — the error is
++  `Path element starting with '.' is not permitted`. Sandboxed `TMPDIR`s (including this agent's own
++  scratch directory) usually contain one, so put projects under `/tmp` or `$HOME/projects`. The
++  wrapper already handles this.
++- **Analysis time scales with binary size, not function count.** `--max-functions` limits what is
++  decompiled, not what is analysed. A 40 MB binary can spend several minutes analysing before the
++  first function is printed.
++- **Java warnings are not failures.** A pile of `WARNING: sun.misc.Unsafe...` lines means the JDK is
++  newer than Ghidra expects; the analysis still runs.
++- **Stripped binaries decompile to `FUN_0010xxxx` everywhere.** That is normal. Rename what you work
++  out (`F` in Ghidra's UI) or keep a notes file mapping addresses to meanings as you go.
++- **Never quote decompiled C as if it were the original source.** Say "the decompiler shows", and say
++  where the function was.
++
++## When not to use this
++
++If the binary is Go or Rust and not stripped, `strings` plus the symbol table
++(`nm -C <binary> | head -100`, `go tool nm`) gives better names than Ghidra ever will. Reach for
++Ghidra when symbols are gone and the question is genuinely about code.

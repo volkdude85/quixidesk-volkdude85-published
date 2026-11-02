@@ -1,0 +1,74 @@
+Links open in Brave, not in whatever the desktop picked
+=====================================================
+
+`/__eipc__/open-external` handed every URL to `xdg-open`, which means the browser you got depended on
+the desktop's default — and on this machine that is not the one the agent tooling can drive.
+
+The launcher now resolves a browser itself, first match wins:
+
+    $QUIXI_BROWSER, brave-browser, brave, brave-bin, chromium,
+    google-chrome-stable, google-chrome, then xdg-open
+
+Brave is first because it is what this edition targets and it exposes CDP, which is what the
+browser-driving skill needs. Chromium-family next, since the same driver works. `xdg-open` stays as the
+last resort so an unfamiliar desktop still opens something.
+
+A small `which()` walks PATH — this crate does not otherwise depend on a lookup crate, and adding one
+for seven candidates would be silly.
+diff -Naur /tmp/mk35/a41/crates/quixi-app/src/main.rs /tmp/mk35/b/crates/quixi-app/src/main.rs
+--- a/crates/quixi-app/src/main.rs
++++ b/crates/quixi-app/src/main.rs
+@@ -648,6 +648,22 @@
+     }
+ }
+ 
++/// Find an executable on PATH. Small on purpose: this crate does not otherwise need a `which` crate.
++fn which(name: &str) -> Option<std::path::PathBuf> {
++    if name.contains('/') {
++        let p = std::path::PathBuf::from(name);
++        return p.is_file().then_some(p);
++    }
++    let paths = std::env::var_os("PATH")?;
++    for dir in std::env::split_paths(&paths) {
++        let candidate = dir.join(name);
++        if candidate.is_file() {
++            return Some(candidate);
++        }
++    }
++    None
++}
++
+ fn build_http_response(
+     status: u16,
+     content_type: &str,
+@@ -896,7 +912,29 @@
+                     #[cfg(target_os = "macos")]
+                     let mut command = std::process::Command::new("/usr/bin/open");
+                     #[cfg(target_os = "linux")]
+-                    let mut command = std::process::Command::new("xdg-open");
++                    let mut command = {
++                        // Brave first, then another Chromium, then whatever the desktop says. The
++                        // CDP-capable browsers are the ones the agent tooling can actually drive, and
++                        // handing a link to an unknown default browser is how you end up debugging a
++                        // driver mismatch later. QUIXI_BROWSER overrides all of it.
++                        let mut chosen: Option<std::process::Command> = None;
++                        let mut candidates: Vec<String> = Vec::new();
++                        if let Ok(explicit) = std::env::var("QUIXI_BROWSER") {
++                            if !explicit.trim().is_empty() {
++                                candidates.push(explicit);
++                            }
++                        }
++                        for name in ["brave-browser", "brave", "brave-bin", "chromium", "google-chrome-stable", "google-chrome"] {
++                            candidates.push(name.to_string());
++                        }
++                        for candidate in candidates {
++                            if which(&candidate).is_some() {
++                                chosen = Some(std::process::Command::new(candidate));
++                                break;
++                            }
++                        }
++                        chosen.unwrap_or_else(|| std::process::Command::new("xdg-open"))
++                    };
+                     #[cfg(target_os = "windows")]
+                     let mut command = {
+                         let mut c = std::process::Command::new("rundll32.exe");

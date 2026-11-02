@@ -1,0 +1,60 @@
+Retro gets the contrast it was missing
+======================================
+
+Sampled from the running window, the palette was correct and the interface still read as washed out:
+
+    body/background  68% of the window    correct
+    sidebar          19%                  correct
+    panels            7%                  correct
+    accent           present, #02d63a     correct
+
+What was wrong was the middle of the ramp. `--muted` sat at #5c8a66 (33% saturation) and carried most
+of the labels, helper text, card subtitles and inactive nav, so everything secondary collapsed into
+the background. `--line` at #0d2312 was too close to the panel colour to read as a border, and
+`--raised` at #111911 is neutral — next to a green shell it reads blue-grey, which is what made the
+composer controls look like they belonged to a different theme.
+
+  muted   #5c8a66 -> #7fb18c
+  line    #0d2312 -> #17492a
+  raised  #111911 -> #13251a
+
+The heading is the accent now instead of body white, matching how the reference palette uses green for
+anything that carries meaning. Body prose stays #d9d9d9 so long answers remain readable.
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -23,11 +23,11 @@
+   color-scheme: dark;
+   --bg: #040d08;
+   --panel: #0e140f;
+-  --raised: #111911;
++  --raised: #13251a;
+   --sidebar: #020702;
+-  --line: #0d2312;
++  --line: #17492a;
+   --text: #d9d9d9;
+-  --muted: #5c8a66;
++  --muted: #7fb18c;
+   --accent: #02d63a;
+   --ink: #02150a;
+   --danger: #ff6b6b;
+@@ -2280,3 +2280,6 @@
+ .persona-editor { width: 100%; margin-top: 12px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.5;
+   background: var(--raised); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 14px; resize: vertical; }
+ .persona-editor:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
++
++/* The big line is the one thing on this screen that should carry the accent, not body white. */
++.hero-heading { color: var(--accent); }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -699,7 +699,7 @@
+             { class: "eyebrow" },
+             project() ? project().name : "NEW INSTANCE",
+           ),
+-          el("h1", {}, "Sup bitch?"),
++          el("h1", { class: "hero-heading" }, "Sup bitch?"),
+           el(
+             "p",
+             {},

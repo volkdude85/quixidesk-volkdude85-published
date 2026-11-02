@@ -1,0 +1,124 @@
+A socket file is not a running daemon
+=====================================
+
+`quixi --capabilities` reported `input_synthesis: true` on this box while ydotoold was not running
+and every synthesized event failed. The cause is `ydotool_socket()`: it probed candidates with
+`Path::exists()`, and a unix socket leaves its inode behind when the process behind it dies. So
+"a socket file is here" was being read as "something will answer", the capability report advertised
+input, and the event went into a dead socket.
+
+Measured before the fix, on the development box:
+
+    $ pgrep ydotoold            # nothing
+    $ ls -l /run/user/1000/.ydotool_socket
+    srw------- 1 volkdude volkdude 0 Nov  1 17:22 ...   # yesterday's inode, still there
+    $ connect() to it           # ECONNREFUSED
+    $ quixi --capabilities | grep input_synthesis
+      "input_synthesis": true,                          # a lie
+
+`exists()` is now a connect. A local unix connect either completes or is refused immediately, so it
+costs nothing, has no timeout to pick, and cannot claim a live daemon that is not there. Same
+treatment for the `YDOTOOL_SOCKET` override, which had the identical flaw.
+
+This edition's `cursor_position_is_not_claimed_until_known` had been relaxed to measure the move
+rather than the capability report, so the suite was green in both states and could not catch this.
+The new test binds a listener, drops it, and asserts the file survives while `socket_is_live()` says
+no — the exact state that lied.
+
+--- a/crates/quixi-platform/src/linux.rs	2026-11-02 07:05:37.218225113 -0800
++++ b/crates/quixi-platform/src/linux.rs	2026-11-02 07:08:18.948811620 -0800
+@@ -1507,6 +1507,22 @@
+ // Input synthesis (needs ydotool + a running ydotoold)
+ // ---------------------------------------------------------------------------
+ 
++/// Is something actually accepting connections on this socket path?
++///
++/// A unix socket leaves its inode behind when the process behind it dies, so `exists()` answers
++/// "a socket file is here", not "a daemon will answer". Those are different claims, and confusing
++/// them is how the capability report ends up advertising input synthesis on a box where every
++/// synthesized event fails: `cursor_position_is_not_claimed_until_known` moves the pointer, asks
++/// whether the position is now known, and gets "it should be" from the probe and "no" from reality.
++///
++/// Connect, then drop. A local unix connect either completes or is refused immediately, so there is
++/// no round trip to wait on and no timeout to pick, and it cannot report a live daemon that is not
++/// there.
++fn socket_is_live(path: &std::path::Path) -> bool {
++    use std::os::unix::net::UnixStream;
++    UnixStream::connect(path).is_ok()
++}
++
+ /// Where ydotoold is actually listening.
+ ///
+ /// ydotool defaults to `$XDG_RUNTIME_DIR/.ydotool_socket`, but ydotoold started without
+@@ -1515,16 +1531,16 @@
+ /// failed while the daemon sat there running. Honour the environment first, then look in the
+ /// places a daemon actually binds.
+ fn ydotool_socket() -> Option<std::path::PathBuf> {
+-    // Only honour YDOTOOL_SOCKET when the socket is actually there.
++    // Only honour YDOTOOL_SOCKET when a daemon is actually answering there.
+     //
+     // Trusting it blindly is how input dies silently: a launcher, a systemd unit or a test harness
+-    // exports a path it believes is right, the path does not exist, and every call fails with an
++    // exports a path it believes is right, nothing is listening, and every call fails with an
+     // empty error because the message only says "failed". Measured on a box whose ydotoold is the
+     // distro service on /run/ydotoold.socket while the caller had exported
+     // $XDG_RUNTIME_DIR/.ydotool_socket. Fall through to the probe instead.
+     if let Some(p) = std::env::var_os("YDOTOOL_SOCKET") {
+         let path = std::path::PathBuf::from(&p);
+-        if !p.is_empty() && path.exists() {
++        if !p.is_empty() && socket_is_live(&path) {
+             return Some(path);
+         }
+     }
+@@ -1534,7 +1550,7 @@
+     }
+     candidates.push(std::path::PathBuf::from("/tmp/.ydotool_socket"));
+     candidates.push(std::path::PathBuf::from("/run/ydotoold.socket"));
+-    candidates.into_iter().find(|p| p.exists())
++    candidates.into_iter().find(|p| socket_is_live(p))
+ }
+ 
+ /// Is the daemon reachable? The binary existing proves nothing — ydotoold is the privileged
+@@ -3472,6 +3488,42 @@
+ mod tests {
+     use super::*;
+ 
++    /// A socket inode outlives the process behind it, so a filesystem check reports a daemon that
++    /// is not there. This is the difference between `exists()` and `connect()`, and it is not
++    /// theoretical: on the development box a stale `/run/user/1000/.ydotool_socket` left over from
++    /// the previous day made `quixi --capabilities` advertise `input_synthesis: true` while
++    /// ydotoold was not running and every synthesized event failed.
++    ///
++    /// Bind, drop the listener, and the file stays while nothing answers — the exact state that
++    /// lied.
++    #[test]
++    fn a_stale_socket_file_is_not_a_live_daemon() {
++        let dir = std::env::temp_dir().join(format!("quixi-socket-liveness-{}", std::process::id()));
++        let _ = std::fs::create_dir_all(&dir);
++        let path = dir.join("dead.sock");
++        let _ = std::fs::remove_file(&path);
++
++        {
++            let listener = std::os::unix::net::UnixListener::bind(&path)
++                .expect("binding a unix socket in the temp dir");
++            assert!(socket_is_live(&path), "a bound listener must read as live");
++            // Dropping the listener does not unlink the socket file.
++            drop(listener);
++        }
++
++        assert!(
++            path.exists(),
++            "the socket inode is expected to survive the listener — that is the whole defect"
++        );
++        assert!(
++            !socket_is_live(&path),
++            "a socket file with nothing behind it must not be reported as available"
++        );
++
++        let _ = std::fs::remove_file(&path);
++        let _ = std::fs::remove_dir(&dir);
++    }
++
+     #[test]
+     fn keycodes_map_expected_combos() {
+         // Numeric evdev codes, not names: ydotool accepted `KEY_ENTER:1` and

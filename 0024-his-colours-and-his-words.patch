@@ -1,0 +1,99 @@
+It looks like his machine, and it says what he says
+====================================================
+
+The palette is not invented and not taken from the TUI theme: it was read straight out of a
+screenshot of his Hermes desktop window, by counting pixels.
+
+    background  #040d08      sidebar   #020702      panels  #0e140f
+    borders     #0d2312      accent    #02d63a      bright  #02e33b  #02f13e
+    body text   #d9d9d9      dim green #5c8a66
+
+Near-black with a green cast, phosphor green for anything that carries meaning, plain grey for prose
+so a long answer stays readable. It ships as the theme "Retro" and it is the DEFAULT on this edition —
+not a setting you have to go and find. Swatch included so the picker does not lie about it.
+
+Two strings, because they were upstream's and they were not his:
+
+    "Your workspace"          -> "New instance"
+    "Where should we start?"  -> "Sup bitch?"
+
+Neither is personal information. Both belong in the public edition: they are preference, not biography.
+
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -16,6 +16,23 @@
+   font-size: var(--ui-font-size, 14px);
+   -webkit-font-smoothing: antialiased;
+ }
++/* Volkdude: the palette taken from his Hermes desktop — near-black with a green cast, phosphor
++   green for anything that matters, plain grey for body text so long answers stay readable.
++   This is the default on this edition. */
++:root[data-theme="retro"] {
++  color-scheme: dark;
++  --bg: #040d08;
++  --panel: #0e140f;
++  --raised: #111911;
++  --sidebar: #020702;
++  --line: #0d2312;
++  --text: #d9d9d9;
++  --muted: #5c8a66;
++  --accent: #02d63a;
++  --ink: #02150a;
++  --danger: #ff6b6b;
++  --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
++}
+ :root[data-theme="light"] {
+   color-scheme: light;
+   --bg: #fcfcfa;
+@@ -1649,6 +1666,9 @@
+   background: linear-gradient(90deg, #e6ebe5 36%, #343a41 36%);
+ }
+ 
++.theme-swatch.retro { background: #040d08; border-color: #0d2312; }
++.theme-swatch.retro > span:first-child { background: #111911; }
++.theme-swatch.retro > span:last-child { background: #02d63a; }
+ .theme-swatch.matrix { background: #000800; border-color: #0d4019; }
+ .theme-swatch.matrix > span:first-child { background: #06200f; }
+ .theme-swatch.matrix > span:last-child { background: #00ff41; }
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -496,7 +496,7 @@
+       state.page === "chat"
+         ? session()?.title || "Task"
+         : {
+-            new: "Your workspace",
++            new: "New instance",
+             search: "Search",
+             projects: "Projects",
+             project: project()?.name || "Project",
+@@ -697,9 +697,9 @@
+           el(
+             "div",
+             { class: "eyebrow" },
+-            project() ? project().name : "YOUR WORKSPACE",
++            project() ? project().name : "NEW INSTANCE",
+           ),
+-          el("h1", {}, "Where should we start?"),
++          el("h1", {}, "Sup bitch?"),
+           el(
+             "p",
+             {},
+@@ -2696,6 +2696,7 @@
+           "div",
+           { class: "theme-options", role: "group", "aria-label": "Theme" },
+           ...[
++            ["retro", "Retro"],
+             ["light", "Light"],
+             ["dark", "Dark"],
+             ["matrix", "Matrix"],
+@@ -3041,7 +3042,7 @@
+     );
+   }
+   function applyTheme() {
+-    const choice = localStorage.getItem("quixi.theme") || "dark";
++    const choice = localStorage.getItem("quixi.theme") || "retro";
+     document.documentElement.dataset.theme =
+       choice === "system"
+         ? matchMedia("(prefers-color-scheme:dark)").matches

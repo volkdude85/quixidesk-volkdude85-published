@@ -1,0 +1,57 @@
+#!/sbin/openrc-run
+#
+# OpenRC service for ydotoold — the daemon behind all synthetic input.
+#
+# ydotool writes to /dev/uinput, which needs either root or a udev ACL. Running the daemon as root and
+# handing the SOCKET to your user is the smaller privilege surface than making uinput world-writable:
+# the privileged part stays in this one small process, and the app only ever talks to a socket it owns.
+#
+# Install:
+#   sudo cp contrib/ydotoold.openrc /etc/init.d/ydotoold
+#   sudo chmod +x /etc/init.d/ydotoold
+#   sudo rc-update add ydotoold default
+#   sudo rc-service ydotoold start
+#
+# Override the socket owner if you are not the user running the desktop session:
+#   echo 'YDOTOOL_OWNER="1000:1000"' >> /etc/conf.d/ydotoold
+
+name="ydotoold"
+description="ydotool input synthesis daemon"
+
+: ${YDOTOOL_SOCKET:=/run/ydotoold.socket}
+: ${YDOTOOL_OWNER:=}
+
+command="/usr/bin/ydotoold"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+
+# Build the argument list at runtime so the socket owner can come from /etc/conf.d/ydotoold. Without an
+# explicit owner the daemon keeps root ownership and the desktop user cannot connect — which fails as
+# "permission denied" on every input call, with nothing in the journal.
+if [ -n "${YDOTOOL_OWNER}" ]; then
+    command_args="--socket-path ${YDOTOOL_SOCKET} --socket-perm 0600 --socket-own ${YDOTOOL_OWNER}"
+else
+    command_args="--socket-path ${YDOTOOL_SOCKET} --socket-perm 0600"
+fi
+
+depend() {
+    need localmount
+    after bootmisc
+    provide ydotool
+}
+
+start_pre() {
+    checkpath --directory --mode 0755 "$(dirname "${YDOTOOL_SOCKET}")"
+    # A stale socket from a previous run makes the daemon fail to bind, and the error reads as
+    # "address in use" rather than "old socket left behind".
+    if [ -S "${YDOTOOL_SOCKET}" ]; then
+        ewarn "removing stale socket ${YDOTOOL_SOCKET}"
+        rm -f "${YDOTOOL_SOCKET}"
+    fi
+}
+
+stop_post() {
+    rm -f "${YDOTOOL_SOCKET}"
+}
+
+extra_started_commands=""

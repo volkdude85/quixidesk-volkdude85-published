@@ -1,0 +1,156 @@
+Voice over the bridge, because fetch() to a custom scheme is blocked
+===============================================================
+
+Dictation and read-aloud never worked in the window. The engine side was fine — `quixi --transcript`
+prints the live transcript, `--say` synthesises real audio — but the UI could not reach it.
+
+The three voice calls were the ONLY relative `fetch()` in the whole interface:
+
+    fetch("/api/quixi/voice/status")
+    fetch("/api/quixi/voice/transcript")
+    fetch("/api/quixi/voice/speak")
+
+Everything else in the app talks over the EIPC bridge (`rpc(service, member, args)`), because the
+webview is served from an `app://` custom scheme and WebKitGTK does not allow `fetch()` to a custom
+scheme unless it is registered CORS-enabled — which it is not. So `/api/quixi/voice/status` never
+answered, `engineVoice.stt` stayed false, and the Dictate button took the "this webview provides no
+speech recognition, use your system dictation" branch. That dialog is written for macOS and Windows,
+and on Linux it is simply false: the engine owns the microphone.
+
+Two changes:
+
+1. `Voice.getStatus`, `Voice.getTranscript` and `Voice.speak` are EIPC members now, served by the same
+   bridge as everything else. The HTTP routes stay for other clients and for the edge API.
+2. Dictate no longer waits for a probe before choosing a path. If the webview has no recogniser —
+   which on WebKitGTK is always — it goes straight to the engine. If the transcript call reports an
+   error, the reason is shown once instead of being swallowed, so a dead service says so.
+
+Verified by building the workspace and by `quixi --transcript` returning the live transcript.
+
+diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs
+--- a/crates/quixi-ipc/src/lib.rs
++++ b/crates/quixi-ipc/src/lib.rs
+@@ -319,6 +319,34 @@
+                     json!({"session_type": std::env::consts::OS, "notes": ["Capability probe is Linux-only."]})
+                 }
+             }
++            // Voice, over the same bridge every other feature uses. These used to be served only at
++            // /api/quixi/voice/* on the custom-protocol handler, and the webview's fetch() to a
++            // custom scheme is blocked — so the UI's probe always failed, Dictate fell through to
++            // "use system dictation", and the engine's whole voice stack was unreachable from the
++            // window. The CLI could do it and the UI could not.
++            ("Voice", "getStatus") => {
++                let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
++                quixi_engine::voice::status(&cfg)
++            }
++            ("Voice", "getTranscript") => {
++                let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
++                match quixi_engine::voice::transcript(&cfg) {
++                    Ok(text) => json!({ "transcript": text }),
++                    Err(error) => json!({ "transcript": "", "error": error }),
++                }
++            }
++            ("Voice", "speak") => {
++                let text = args.first().and_then(Value::as_str).unwrap_or("").to_string();
++                if text.trim().is_empty() {
++                    json!({ "ok": false, "error": "nothing to say" })
++                } else {
++                    let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
++                    match quixi_engine::voice::speak(&cfg, &text, 250) {
++                        Ok(()) => json!({ "ok": true }),
++                        Err(error) => json!({ "ok": false, "error": error }),
++                    }
++                }
++            }
+             ("MCP", "getMcpServersConfig") => match self.engine.mcp_host.read_config_value_checked() {
+                 Ok(cfg) => cfg.get("mcpServers").cloned().unwrap_or_else(|| json!({})),
+                 Err(error) => json!({"error":format!("{error:#}")}),
+diff -Naur a/resources/ui/capability-workflows.js b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js
++++ b/resources/ui/capability-workflows.js
+@@ -200,7 +200,7 @@
+     // The webview provides no Web Speech API on Linux, so the engine offers voice over HTTP.
+     // Probe once; until the answer arrives, fall back to what the webview reports.
+     const engineVoice = { tts: false, stt: false, probed: false };
+-    fetch("/api/quixi/voice/status").then((r) => r.json())
++    Promise.resolve(rpc("Voice", "getStatus"))
+       .then((s) => { engineVoice.tts = !!s?.tts?.available; engineVoice.stt = !!s?.stt?.available; engineVoice.probed = true; })
+       .catch(() => { engineVoice.probed = true; });
+     const webviewSpeech = () => typeof window.SpeechSynthesisUtterance === "function" && typeof window.speechSynthesis?.speak === "function";
+@@ -226,8 +226,8 @@
+           if (engineVoice.tts) {
+             // One chunk in flight at a time: the endpoint answers when playback finishes, so
+             // ordering holds and "stop reading" takes effect between chunks.
+-            fetch("/api/quixi/voice/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: part }) })
+-              .then((r) => { if (generation !== speechGeneration) return; if (!r.ok) { stopSpeaking(); toast("Read aloud could not play. Check the voice endpoint and audio output.", true); return; } next(); })
++            Promise.resolve(rpc("Voice", "speak", [part]))
++              .then((res) => { if (generation !== speechGeneration) return; if (!res || res.ok === false) { stopSpeaking(); toast("Read aloud could not play: " + String(res?.error || "check the voice endpoint and audio output.").split("\n")[0], true); return; } next(); })
+               .catch(() => { if (generation === speechGeneration) { stopSpeaking(); toast("Read aloud could not reach the voice service.", true); } });
+             return;
+           }
+@@ -246,16 +246,19 @@
+     function dictationControl(textarea) {
+       const node = button("Dictate", () => {
+         if (activeRecognition) { activeRecognition.stop(); return; }
++        if (engineSttStop) { engineSttStop(); return; }
+         const Recognition = recognitionConstructor();
+-        if (typeof Recognition !== "function" && engineVoice.stt) { startEngineDictation(); return; }
+-        if (typeof Recognition !== "function") {
+-          dialog("Use system dictation", [el("p", {}, "This webview does not provide in-app speech recognition. You can still use your operating system’s dictation in the prompt."),
+-            el("p", {}, "Focus the prompt, then use Dictation from macOS Keyboard settings, Windows voice typing (Win+H), or your Linux desktop’s speech-input tool."),
+-            el("p", { class: "hint" }, "QuixiDesk has not started recording audio.")]);
+-          return;
+-        }
++        if (typeof Recognition === "function") {
+         const notice = dialog("Dictate into your prompt", [el("p", {}, "Your webview’s speech service will transcribe your microphone. Depending on the platform, audio may be processed by an online speech service. Review the text before sending."),
+           button("Start dictation", () => { notice.close(); start(Recognition); }, "primary")]);
++          return;
++        }
++        // No webview recogniser: WebKitGTK implements none of the Web Speech API, so there is
++        // nothing to negotiate with. The engine owns the microphone — a streaming STT service or a
++        // command — and polling it is the only path that exists. Waiting for a probe first meant a
++        // slow or unreachable endpoint turned Dictate into a dialog telling a Linux user to use
++        // macOS dictation.
++        startEngineDictation();
+       }, "quiet");
+       node.title = typeof recognitionConstructor() === "function" ? "Dictate text into the prompt" : "System dictation help";
+       function start(Recognition) {
+@@ -294,6 +297,7 @@
+       node.setAttribute("aria-pressed", "true");
+       let seen = "";
+       let stopped = false;
++      let warned = false;
+       const cleanup = () => { stopped = true; engineSttStop = null; node.textContent = "Dictate"; node.setAttribute("aria-pressed", "false"); };
+       engineSttStop = cleanup;
+       const insert = (spoken) => {
+@@ -308,18 +312,19 @@
+         if (stopped) return;
+         if (!textarea.isConnected) { cleanup(); return; }
+         try {
+-          const r = await fetch("/api/quixi/voice/transcript");
+-          if (r.ok) {
+-            const { transcript } = await r.json();
+-            const full = typeof transcript === "string" ? transcript : "";
+-            if (!seen) { seen = full; }
+-            else if (full.length > seen.length) {
+-              const fresh = full.slice(seen.length).trim();
+-              seen = full;
+-              if (fresh) insert(fresh);
+-            } else if (full.length < seen.length) { seen = full; }
++          const payload = await rpc("Voice", "getTranscript");
++          if (payload && payload.error && !warned) {
++            warned = true;
++            toast("Dictation could not reach the speech service: " + String(payload.error).split("\n")[0], true);
+           }
+-        } catch { /* service down; keep polling while the control stays active */ }
++          const full = typeof payload?.transcript === "string" ? payload.transcript : "";
++          if (!seen) { seen = full; }
++          else if (full.length > seen.length) {
++            const fresh = full.slice(seen.length).trim();
++            seen = full;
++            if (fresh) insert(fresh);
++          } else if (full.length < seen.length) { seen = full; }
++        } catch { /* bridge hiccup; keep polling while the control stays active */ }
+         if (!stopped) setTimeout(tick, 700);
+       };
+       tick();

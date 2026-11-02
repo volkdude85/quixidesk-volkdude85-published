@@ -1,0 +1,26 @@
+Less white in the text
+=====================
+
+Body text was #d9d9d9 — a neutral near-white — so the window read as white type on black with green
+trim, instead of a green-on-black terminal. Both tones move toward the palette:
+
+  --text   #d9d9d9 -> #b7cfbe     a pale grey-green, still high enough contrast on #040d08
+  --muted  #7fb18c -> #82a891     one step greener, so secondary text belongs to the same family
+
+Contrast against the background stays above 7:1 for body text, so this is tone, not a legibility
+trade. The accent (#02d63a) and the headings that use it are unchanged — the point is that the accent
+is the only thing shouting.
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -26,8 +26,8 @@
+   --raised: #13251a;
+   --sidebar: #020702;
+   --line: #17492a;
+-  --text: #d9d9d9;
+-  --muted: #7fb18c;
++  --text: #b7cfbe;
++  --muted: #82a891;
+   --accent: #02d63a;
+   --ink: #02150a;
+   --danger: #ff6b6b;

@@ -1,0 +1,115 @@
+The automation bridge finally answers
+===================================
+
+`crates/quixi-app/src/main.rs` has had an automation bridge since upstream: a loopback HTTP server
+where `GET /state` evals
+
+    window.__quixi_automation__ ? JSON.stringify(window.__quixi_automation__.getState()) : {ok:false}
+
+and `POST /action` evals `performAction(<payload>)`. Nothing in the page ever defined that object, so
+both endpoints answered `{ok:false}` for everyone — and the only way to press a button was the system
+pointer.
+
+It exists now, and it is enough to drive the UI without touching a mouse:
+
+  * `getState()` — page, title, which nav row is active, which sidebar groups are open, the visible
+    panel heading, the composer text, and the labels of the first 40 buttons
+  * `click` — by CSS selector, or by visible text (exact match first, then substring)
+  * `type` — set a value and fire `input`, so the app's own listeners run
+  * `open-group` / `navigate` — the two things a sidebar needs
+  * `state` — the same read, through the action endpoint
+
+Every action returns what it actually touched (`tag`, `text`, `class`, `connected`), so a driver can
+tell a click that landed from one that silently missed.
+
+Why this matters beyond convenience: pointer synthesis on Linux drives **the** cursor — there is one
+per seat, and a second `uinput` device does not create a second one. Any agent that clicks by moving
+the pointer is moving the human's mouse. Talking to the app through its own bridge is the only way to
+operate this UI that structurally cannot do that.
+diff -Naur /tmp/mk35/a43/resources/ui/app.js /tmp/mk35/b/resources/ui/app.js
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -735,6 +735,83 @@
+     });
+     return handle;
+   }
++  // The automation bridge in main.rs already evals into the page: GET /state asks for getState(),
++  // POST /action calls performAction(payload). Nothing defined those, so both answered {ok:false} and
++  // the only way to press a button was the system pointer — which is somebody else's mouse.
++  //
++  // This is a loopback-only surface (127.0.0.1, the app's own port): it clicks by selector or by
++  // visible text, types, navigates, opens a sidebar group and reads back what the page shows. No
++  // pointer, no coordinates, nothing that can land on the wrong window.
++  function automationRoot() { return document; }
++  function findTarget(spec) {
++    if (!spec) return null;
++    if (spec.selector) return automationRoot().querySelector(spec.selector);
++    const want = String(spec.text || "").trim().toLocaleLowerCase();
++    if (!want) return null;
++    const candidates = [...automationRoot().querySelectorAll("button, a, [role='button'], .nav-child, .nav-label, label")];
++    return candidates.find((node) => (node.textContent || "").trim().toLocaleLowerCase() === want)
++      || candidates.find((node) => (node.textContent || "").trim().toLocaleLowerCase().includes(want))
++      || null;
++  }
++  function describe(node) {
++    if (!node) return null;
++    return {
++      tag: node.tagName.toLowerCase(),
++      text: (node.textContent || "").trim().slice(0, 80),
++      cls: node.className || "",
++      connected: node.isConnected,
++    };
++  }
++  window.__quixi_automation__ = {
++    getState() {
++      const active = automationRoot().querySelector(".sidebar nav button.active, .sidebar nav button[aria-current='page']");
++      return {
++        ok: true,
++        page: state.page,
++        title: document.title,
++        activeNav: active ? (active.textContent || "").trim() : null,
++        groupsOpen: [...automationRoot().querySelectorAll(".nav-group.is-open .nav-label")].map((n) => n.textContent.trim()),
++        panel: (automationRoot().querySelector("h1, .settings-content h2, .skill-library h2") || {}).textContent?.trim() || null,
++        composer: (automationRoot().querySelector("#prompt") || {}).value ?? null,
++        buttons: [...automationRoot().querySelectorAll("button")].slice(0, 40).map((b) => (b.textContent || "").trim()).filter(Boolean),
++      };
++    },
++    performAction(payload) {
++      const action = String((payload && (payload.action || payload.type)) || "").toLocaleLowerCase();
++      try {
++        if (action === "state") return JSON.stringify(this.getState());
++        if (action === "click") {
++          const target = findTarget(payload);
++          if (!target) return JSON.stringify({ ok: false, error: "no target", asked: payload });
++          target.click();
++          return JSON.stringify({ ok: true, clicked: describe(target) });
++        }
++        if (action === "type" || action === "fill") {
++          const target = findTarget(payload) || automationRoot().querySelector("#prompt");
++          if (!target) return JSON.stringify({ ok: false, error: "no input" });
++          target.focus();
++          target.value = String(payload.text ?? payload.value ?? "");
++          target.dispatchEvent(new Event("input", { bubbles: true }));
++          return JSON.stringify({ ok: true, typed: describe(target) });
++        }
++        if (action === "open-group" || action === "toggle-group") {
++          const label = String(payload.label || payload.text || "");
++          const groups = [...automationRoot().querySelectorAll(".nav-group")];
++          const group = groups.find((g) => (g.querySelector(".nav-label")?.textContent || "").trim().toLocaleLowerCase() === label.toLocaleLowerCase());
++          if (!group) return JSON.stringify({ ok: false, error: "no group", asked: label });
++          group.querySelector(".nav-disclosure")?.click();
++          return JSON.stringify({ ok: true, group: label, nowOpen: group.classList.contains("is-open") });
++        }
++        if (action === "navigate") {
++          navigate(String(payload.page || ""));
++          return JSON.stringify({ ok: true, page: payload.page });
++        }
++        return JSON.stringify({ ok: false, error: "unknown action", action });
++      } catch (error) {
++        return JSON.stringify({ ok: false, error: String(error) });
++      }
++    },
++  };
+   function renderPage() {
+     const host = document.getElementById("page-host");
+     if (!host) return;
