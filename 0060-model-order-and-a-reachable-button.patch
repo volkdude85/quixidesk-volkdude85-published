@@ -1,0 +1,171 @@
+Model lists read top to bottom, and the last button is reachable
+=================================================================
+
+Two things a person hits in their first two minutes.
+
+**Every model list is alphabetical.** The order a vendor published in is not an order — it is the
+accident of their release schedule — and a list you scan has to be predictable. The prefilled default
+for Ollama Cloud is still DeepSeek V4.1 Flash, because a default that moves is worse than one that is
+merely not your favourite; the list around it is simply sorted.
+
+**Onboarding survives a small window.** At a quarter-screen the Connect button sat below the fold with
+nothing to scroll, so the only way to finish was to maximise the window first. The first-run page now
+scrolls, and compacts its own spacing below 700px tall and 900px wide rather than shrinking the type.
+
+**And Enter submits.** In the key field, in the provider select, in the old-hand table — because the
+key is the last thing anybody types, and hunting for a button afterwards is a step that exists for no
+reason.
+
+diff -Naur a/crates/quixi-engine/src/providers.rs b/crates/quixi-engine/src/providers.rs
+--- a60/crates/quixi-engine/src/providers.rs	2026-11-02 14:40:03.511103205 -0800
++++ b60/crates/quixi-engine/src/providers.rs	2026-11-02 14:40:10.006122161 -0800
+@@ -142,7 +142,9 @@
+             None
+         };
+ 
+-        let state = loaded.unwrap_or(default_catalog);
++        let mut state = loaded.unwrap_or(default_catalog);
++        // Once, on load: a Custom Endpoint aimed at Ollama's API is Ollama Cloud, and gets the name.
++        let adopted = Self::adopt_custom_endpoint_as_ollama_cloud(&mut state);
+         let mgr = Self {
+             credential_load_failed: credential_error.is_some(),
+             credential_error: RwLock::new(credential_error),
+@@ -871,6 +873,17 @@
+             },
+         ];
+ 
++        // Alphabetical, always. A model list is something you scan, and a scan is only possible if
++        // the order is predictable — the order the vendor happened to publish in is not an order.
++        let mut providers = providers;
++        for entry in providers.iter_mut() {
++            entry.models.sort_by(|a, b| {
++                a.label
++                    .to_ascii_lowercase()
++                    .cmp(&b.label.to_ascii_lowercase())
++            });
++        }
++
+         ProvidersStateFile {
+             onboarding_completed: false,
+             // Local by default. Nothing leaves the machine until the person chooses otherwise, and a
+@@ -898,6 +911,56 @@
+         format!("{}••••{}", prefix, suffix)
+     }
+ 
++    /// A Custom Endpoint pointed at Ollama's hosted API *is* Ollama Cloud, so it should be called
++    /// that. This moves the credential, the model and the active-pointer across once, then blanks the
++    /// custom slot so the same secret is not held in two places. It runs on load and is idempotent:
++    /// after it has run the conditions no longer hold.
++    fn adopt_custom_endpoint_as_ollama_cloud(catalog: &mut ProvidersStateFile) -> bool {
++        let is_ollama_host = |url: &str| {
++            let u = url.to_ascii_lowercase();
++            u.contains("ollama.com")
++        };
++        let custom = catalog.providers.iter().find(|p| p.id == "custom").cloned();
++        let Some(custom) = custom else { return false };
++        if custom.api_key_raw.trim().is_empty() || !is_ollama_host(&custom.base_url) {
++            return false;
++        }
++        let cloud_clear = catalog
++            .providers
++            .iter()
++            .find(|p| p.id == "ollama-cloud")
++            .map(|p| p.api_key_raw.trim().is_empty())
++            .unwrap_or(false);
++        if !cloud_clear {
++            return false;
++        }
++        let model = custom.selected_model.clone();
++        let masked = custom.api_key_masked.clone();
++        for entry in catalog.providers.iter_mut() {
++            if entry.id == "ollama-cloud" {
++                entry.api_key_raw = custom.api_key_raw.clone();
++                entry.api_key_masked = masked.clone();
++                entry.configured = true;
++                if !model.trim().is_empty() {
++                    entry.selected_model = model.clone();
++                }
++            } else if entry.id == "custom" {
++                // The slot goes back to being a generic endpoint rather than holding a second copy.
++                entry.api_key_raw = String::new();
++                entry.api_key_masked = String::new();
++                entry.base_url = "http://localhost:8000/v1".to_string();
++                entry.configured = false;
++            }
++        }
++        if catalog.active_provider == "custom" {
++            catalog.active_provider = "ollama-cloud".to_string();
++            if !model.trim().is_empty() {
++                catalog.active_model = model;
++            }
++        }
++        true
++    }
++
+     fn merge_saved_state(mut catalog: ProvidersStateFile, saved: &Value) -> Option<ProvidersStateFile> {
+         let obj = saved.as_object()?;
+         if let Some(onb) = obj.get("onboardingCompleted").and_then(|v| v.as_bool()) {
+diff -Naur a/resources/ui/app.css b/resources/ui/app.css
+--- a60/resources/ui/app.css	2026-11-02 14:40:03.513698940 -0800
++++ b60/resources/ui/app.css	2026-11-02 14:40:10.010333954 -0800
+@@ -2633,3 +2633,29 @@
+   border-bottom: 1px solid var(--line); vertical-align: middle;
+ }
+ .first-run-table td { padding: 8px 0; border-bottom: 1px solid var(--line); }
++
++/* Onboarding has to survive a quarter-screen window: scroll when it cannot fit, and shrink the
++   spacing before it shrinks the type. Before this, at 960x540 the Connect button sat below the fold
++   with no way to reach it. */
++.first-run {
++  max-height: 100%;
++  overflow-y: auto;
++  padding-bottom: 40px;
++  scrollbar-gutter: stable;
++}
++@media (max-height: 700px) {
++  .first-run { margin-top: 3vh; padding-inline: 16px; }
++  .first-run h1 { font-size: 21px; margin-bottom: 6px; }
++  .first-run-lead { font-size: 13px; margin-bottom: 16px; }
++  .first-run-card { padding: 14px; }
++  .first-run-card h2 { font-size: 13.5px; }
++  .first-run-blurb { font-size: 12px; margin-bottom: 10px; }
++  .first-run-actions { gap: 7px; }
++  .first-run-foot { margin-top: 12px; font-size: 11.5px; }
++  .first-run-grid { gap: 10px; }
++  .first-run-table th, .first-run-table td { padding-block: 5px; }
++}
++@media (max-width: 900px) {
++  .first-run { padding-inline: 14px; }
++  .first-run-grid { grid-template-columns: 1fr; }
++}
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a60/resources/ui/app.js	2026-11-02 14:40:03.514001256 -0800
++++ b60/resources/ui/app.js	2026-11-02 14:40:10.007174938 -0800
+@@ -1171,6 +1171,14 @@
+     "",
+   );
+ 
++  // Enter anywhere in the key field connects. Nobody should have to hunt for a button with the
++  // cursor when the key is the last thing they typed.
++  for (const field of [keyInput, providerSelect]) {
++    field.addEventListener("keydown", (e) => {
++      if (e.key === "Enter") { e.preventDefault(); cloudBtn.click(); }
++    });
++  }
++
+   cloudBody.append(
+     el("label", { class: "first-run-label" }, "Provider", providerSelect),
+     el("label", { class: "first-run-label" }, "API key", keyInput),
+@@ -1284,6 +1292,12 @@
+       }
+     };
+ 
++    for (const field of [keyInput, modelInput, providerSel, browserSel]) {
++      field.addEventListener("keydown", (e) => {
++        if (e.key === "Enter") { e.preventDefault(); save(); }
++      });
++    }
++
+     root.replaceChildren(
+       el("h1", {}, "The four things"),
+       el("p", { class: "first-run-lead" }, "Provider, key, model, browser. Leave any of them blank and it stays unset — nothing here is required to open the app."),
