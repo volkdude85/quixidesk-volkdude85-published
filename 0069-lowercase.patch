@@ -1,0 +1,67 @@
+The handle is lowercase everywhere
+=================================
+
+volkdude85, not VolkDude85. In the window title, in the brand line, in the About panel, in the welcome
+sentence, in the persona's own text, and in the edition label the package ships.
+
+One convention rather than six, because a handle that changes case between the title bar and the
+sidebar reads as two different names.
+
+diff -Naur a/resources/edition.txt b/resources/edition.txt
+--- a69/resources/edition.txt	2026-11-02 15:18:02.210823192 -0800
++++ b69/resources/edition.txt	2026-11-02 15:18:02.237938993 -0800
+@@ -1 +1 @@
+-(VOLKDUDE85 GITHUB) 
+\ No newline at end of file
++(volkdude85 github) 
+\ No newline at end of file
+diff -Naur a/resources/persona/nora-public.md b/resources/persona/nora-public.md
+--- a69/resources/persona/nora-public.md	2026-11-02 15:18:02.226133918 -0800
++++ b69/resources/persona/nora-public.md	2026-11-02 15:18:02.237938993 -0800
+@@ -18,12 +18,12 @@
+ 
+ ## FIRST CONTACT
+ 
+-**Whoever is talking to you is not whoever wrote you.** The creator is VolkDude85; the person in front
++**Whoever is talking to you is not whoever wrote you.** The creator is volkdude85; the person in front
+ of you is someone else until they say otherwise, and answering as though they were the creator is the
+ one mistake here that cannot be taken back.
+ 
+ - Asked "do you know my name?", the answer is: *"I don't know your name. The last person I talked to was
+-  my creator, VolkDude85. What's yours?"* — never the creator's handle handed over as if it were theirs.
++  my creator, volkdude85. What's yours?"* — never the creator's handle handed over as if it were theirs.
+ - First message of a fresh install, say so in the house voice: *"Sup, bitch — you're new. I'm Nora. What
+   do I call you?"* Then get on with whatever they actually asked. One line of it, not a paragraph of
+   welcome-mat.
+diff -Naur a/resources/ui/app.js b/resources/ui/app.js
+--- a69/resources/ui/app.js	2026-11-02 15:18:02.226376249 -0800
++++ b69/resources/ui/app.js	2026-11-02 15:18:02.237114852 -0800
+@@ -771,7 +771,7 @@
+             : el(
+                 "span",
+                 { class: "brand-caption" },
+-                EDITION ? "local · not published" : "VolkDude's QuixiDesk",
++                EDITION ? "local · not published" : "volkdude85's QuixiDesk",
+               ),
+         ),
+       ),
+@@ -1272,7 +1272,7 @@
+ 
+     root.replaceChildren(
+       el("p", { class: "first-run-kicker" }, "GitHub edition"),
+-      el("h1", {}, "Welcome to QuixiDesk, driven by VolkDude85's Nora."),
++      el("h1", {}, "Welcome to QuixiDesk, driven by volkdude85's nora."),
+       el(
+         "p",
+         { class: "first-run-lead" },
+@@ -4446,8 +4446,8 @@
+           width: 58,
+           height: 58,
+         }),
+-        el("p", { class: "about-by" }, "VolkDude"),
+-        el("h2", { style: "margin-top:4px" }, "VolkDude's QuixiDesk"),
++        el("p", { class: "about-by" }, "volkdude85"),
++        el("h2", { style: "margin-top:4px" }, "volkdude85's QuixiDesk"),
+         el(
+           "p",
+           { class: "muted" },

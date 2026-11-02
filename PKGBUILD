@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=48
+pkgrel=49
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -150,6 +150,7 @@ source=(
   0066-welcome-and-a-memory-folder-that-survives.patch
   0067-stt-tts-conversation.patch
   0068-ask-later.patch
+  0069-lowercase.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -222,6 +223,7 @@ sha256sums=(
   '1b46d0cfd5c5c02af273f3abbd289c0f6ad5765a4936feb5fcbb15055349bde8'
   '1d26534b0a5642e7aa4f3776a7a41be53904ea5772dde9f478615a76d13e9d37'
   '869711499fb97de268cc7c38d2960ef16295543ee0a6964dbad1010a83e9f88c'
+  '226b80cb43a8049d3b8b731e7959dbabb71f661a058d784f4bc0b12fc24990af'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -467,6 +469,7 @@ prepare() {
   patch -Np1 -i "${srcdir}/0066-welcome-and-a-memory-folder-that-survives.patch"
   patch -Np1 -i "${srcdir}/0067-stt-tts-conversation.patch"
   patch -Np1 -i "${srcdir}/0068-ask-later.patch"
+  patch -Np1 -i "${srcdir}/0069-lowercase.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
@@ -475,7 +478,7 @@ build() {
   # Which edition this is, compiled in and shown in the title bar. The published build is the one
   # that must never be mistaken for a machine's local copy: it ships with no persona, no memory
   # entries and no keys, and its name says which one it is.
-  export QUIXI_EDITION_LABEL="(VOLKDUDE85 GITHUB) "
+  export QUIXI_EDITION_LABEL="(volkdude85 github) "
   export CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
   export CARGO_NET_OFFLINE=true
   # Keep the toolchain deterministic: gcc/bfd as the driver, and the same
