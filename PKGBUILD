@@ -135,6 +135,7 @@ source=(
   "0050-context-button-earns-its-place.patch"
   "0051-with-skill.patch"
   "0052-tool-descriptions-know-the-platform.patch"
+  "0056-home-headline.patch"
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -192,6 +193,7 @@ sha256sums=(
   '5a01bbe389e129dd4ee40ae2d12782bddae9f6d0c750d7467a40120852abd1cc'
   '9cb8e388cd141788e6f8e6df3c974ed10d2a776ef6ed9c5b04524b4dd9a1270b'
   'd8c81e161561e55950779153e7b2d9f0752b7da0e0c7f56caa663649647d1a87'
+            'b7dfe7875519de48e4ab55f72008d6c53ed35cf8cdeb385414ea0e802de37d97'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -419,6 +421,9 @@ prepare() {
 
   # Journal: one file per session, appended in place. Input at send, reply on completion.
   patch -Np1 -i "${srcdir}/0053-journal.patch"
+
+  # The line under the greeting, said the way it actually gets said.
+  patch -Np1 -i "${srcdir}/0056-home-headline.patch"
 
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }

@@ -1,0 +1,20 @@
+What are we building, fixing, or destroying today?
+==================================================
+
+The line under the greeting read "Explore a question, work with your files, or make something
+useful." — a product sentence written by somebody imagining a user who needs to be told what a
+workspace is for. What it should say, on a desktop you already know the purpose of, is the question
+that is actually being asked of the machine.
+
+"Sup bitch?" stays. The subtitle is now "What are we building, fixing, or destroying today?"
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -943,7 +943,7 @@
+           el(
+             "p",
+             {},
+-            "Explore a question, work with your files, or make something useful.",
++            "What are we building, fixing, or destroying today?",
+           ),
+           el(
+             "div",
