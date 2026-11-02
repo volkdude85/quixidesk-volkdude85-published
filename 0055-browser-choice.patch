@@ -24,6 +24,9 @@ chooser's answer takes the same path as the saved setting. A `.desktop` id launc
 that entry's own `Exec=` is used; `system` short-circuits to `xdg-open`; a Chromium still gets `--app=`
 so the page arrives as its own window instead of a tab inside a session already open.
 
+**The tools icon is a saw blade** — a rim of hooked teeth on a circle with an arbour hole. The pencil
+with a line through it it replaces read as "tools, disabled" rather than "tools".
+
 diff -Naur a/crates/quixi-app/src/main.rs b/crates/quixi-app/src/main.rs
 --- a/crates/quixi-app/src/main.rs	2026-11-02 13:25:36.726727263 -0800
 +++ b/crates/quixi-app/src/main.rs	2026-11-02 13:26:01.626154270 -0800
@@ -295,8 +298,19 @@ diff -Naur a/resources/ui/app.css b/resources/ui/app.css
 +.browser-chooser-list button { justify-content: flex-start; width: 100%; }
 diff -Naur a/resources/ui/app.js b/resources/ui/app.js
 --- a/resources/ui/app.js	2026-11-02 13:25:36.735975480 -0800
-+++ b/resources/ui/app.js	2026-11-02 13:44:49.617475105 -0800
-@@ -3016,6 +3016,63 @@
++++ b/resources/ui/app.js	2026-11-02 13:49:52.498313270 -0800
+@@ -37,7 +37,9 @@
+     projects: "M3 6h7l2 3h9v11H3zM3 6V4h7l2 2",
+     artifacts: "M4 3h12l4 4v14H4zM8 12h8M8 16h5",
+     schedule: "M12 7v5l4 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+-    tools: "M5 4l15 15M16 4l4 4L8 20H4v-4z",
++    // A saw blade: twelve teeth and a centre hole. It replaces a pencil with a line through it, which
++    // read as "tools, disabled" rather than "tools".
++    tools: "M12 3.9a8.1 8.1 0 1 0 0 16.2 8.1 8.1 0 0 0 0-16.2 M20.10 12.00L21.66 14.16 M19.48 15.10L20.10 17.69 M17.73 17.73L17.30 20.36 M15.10 19.48L13.70 21.75 M12.00 20.10L9.84 21.66 M8.90 19.48L6.31 20.10 M6.27 17.73L3.64 17.30 M4.52 15.10L2.25 13.70 M3.90 12.00L2.34 9.84 M4.52 8.90L3.90 6.31 M6.27 6.27L6.70 3.64 M8.90 4.52L10.30 2.25 M12.00 3.90L14.16 2.34 M15.10 4.52L17.69 3.90 M17.73 6.27L20.36 6.70 M19.48 8.90L21.75 10.30 M12 10.4a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2",
+     settings: "M4 7h16M4 17h16M8 4v6M16 14v6",
+     sidebar: "M3 4h18v16H3zM8 4v16",
+     arrow: "M5 12h14M13 6l6 6-6 6",
+@@ -3016,6 +3018,63 @@
              el("td", {}, el("code", {}, f.path)),
              el("td", {}, f.exists ? `${f.bytes} B` : el("span", { class: "muted" }, "not created yet"))))));
    }
@@ -360,7 +374,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
    function settingsPage(host) {
      const tabs = [
        ["general", "General"],
-@@ -3047,6 +3104,7 @@
+@@ -3047,6 +3106,7 @@
        ),
      );
      if (state.settingsTab === "general") {
@@ -368,7 +382,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
        content.append(
          el("h2", {}, "Appearance"),
          el(
-@@ -3985,11 +4043,56 @@
+@@ -3985,11 +4045,56 @@
      }
      draw();
    }
@@ -427,7 +441,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
    }
    async function toggleBrowser() {
      state.browser = !state.browser;
-@@ -4006,8 +4109,95 @@
+@@ -4006,8 +4111,95 @@
      renderBrowser(host);
    }
    let browserRenderVersion = 0;
@@ -523,7 +537,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
      const data = state.browserState || (await api("/api/quixi/browser"));
      state.browserState = data;
      const selected = (data.tabs || []).find(
-@@ -4036,17 +4226,17 @@
+@@ -4036,17 +4228,17 @@
      const frame = el(
        "div",
        { class: "browser-handoff", id: "browser-frame" },
@@ -545,7 +559,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
            } catch (error) {
              toast(String(error && error.message ? error.message : error), true);
            }
-@@ -4067,6 +4257,7 @@
+@@ -4067,6 +4259,7 @@
          { class: "browser-head" },
          icon("browser", 16),
          el("strong", {}, "QuixiDesk Browser"),
