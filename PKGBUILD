@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=54
+pkgrel=55
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -156,6 +156,7 @@ source=(
   0072-desktop-pickers-and-documents.patch
   0073-cancel-is-not-a-choice.patch
   0074-opacity-voice-and-tasks.patch
+  0075-provider-choice-and-the-task-widget.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -234,6 +235,7 @@ sha256sums=(
   'b013a82d1fc14e9e25577d9b80d2596baf112e5563cdb48105a03449d06c8c32'
   'e01534de901f57622d7e9463789315a5d3accfaab968a334ff04d388526ec2c6'
   '94a36daf1877e749f7dea37f88deb17b5c9f41c8830aedf699ebc019b62c6f2a'
+  'daf57a2de473a23993031639c28b54168b2c77c17879060c0490c96874be7ff4'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -488,6 +490,10 @@ prepare() {
   # One dial that tells the truth: the window is opaque at 100%, the compositor does the blending
   # below it, onboarding only appears on an install with no history, and there is a task list.
   patch -Np1 -i "${srcdir}/0074-opacity-voice-and-tasks.patch"
+
+  # A clean install knows it is clean: nothing pre-selected, the cloud fields actually hidden, the
+  # task list in the conversation, and an onboarding gate that needs an explicit yes to skip.
+  patch -Np1 -i "${srcdir}/0075-provider-choice-and-the-task-widget.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

@@ -1,0 +1,500 @@
+A clean install knows it is clean
+=================================
+
+Everything here is about the first ten minutes: what a new person is asked, in what order, and
+what the app decides on their behalf before they have decided anything.
+
+**Nothing is pre-selected.** The choice object was born holding `ollama-cloud`, the setup table
+selected it explicitly on load, and the status line fell back to the first catalog entry when the
+dropdown was untouched — so a clean install displayed "Ollama Cloud" and read as already
+configured. All three are gone. The provider select opens on `Choose a provider…`, there is no
+status line until something is chosen, and Connect refuses with "Choose a provider first."
+
+**The provider and key fields really are hidden now.** They were created with `hidden` and shown
+anyway, because `.first-run-cloud { display: flex }` in the stylesheet beats the attribute — which
+is only a suggestion from the browser's own sheet. An explicit `[hidden] { display: none
+!important }` makes hidden mean hidden, so the two fields do not exist on screen until the card is
+chosen.
+
+**The section reads as a sequence.** "Choose a provider" heads it, with one paragraph of real
+guidance — Ollama Cloud is the cheapest way in because it is a small monthly allowance rather than
+per-token billing, which matters when a budget is fixed; a local model costs nothing after the
+download; anything OpenAI-compatible works. The key page is a clickable `Get a key ↗` instead of a
+URL printed inside a sentence.
+
+**Nous Portal is a provider.** `https://inference-api.nousresearch.com/v1` answers with a normal
+OpenAI model list, so it needed no special case: one base URL, one key, the models the portal
+actually serves.
+
+**The task list moved into the conversation.** It is no longer a page in the sidebar; it is a widget
+under the composer, numbered from zero, with a status button that cycles, and it keeps its frame
+when the list is empty so clearing the list does not clear the widget.
+
+**The onboarding gate** now requires an explicit `completed: true` to be skipped, rather than
+anything-but-false. Back navigation therefore lands on onboarding on an install with no history,
+because the last history entry is the new-instance page and that page is now the gate. The back
+arrow asks the gate rather than the history stack, so repeated backs cannot run out of entries and
+strand somebody in an empty chat.
+
+**Nothing offers a model before there is a provider.** The Choose model control — in the top bar
+and in the composer — is absent until setup is answered. A picker that opens onto an empty catalog
+is a dead end, and first run is exactly when somebody is most likely to press it.
+
+**The task widget resizes.** Vertical only: how much of the list to keep in view is a judgement
+about the work, and dragging its width would fight the composer underneath.
+
+**A way back in.** "Onboarding (development)" sits above Settings, so seeing the wizard again does
+not require deleting a profile.
+
+diff -Naur --exclude target A/crates/quixi-engine/src/providers.rs B/crates/quixi-engine/src/providers.rs
+diff -Naur --exclude target A/crates/quixi-engine/src/providers.rs B/crates/quixi-engine/src/providers.rs
+diff -Naur --exclude target A/crates/quixi-engine/src/providers.rs B/crates/quixi-engine/src/providers.rs
+--- a/crates/quixi-engine/src/providers.rs	2026-11-02 17:33:22.984219494 -0800
++++ b/crates/quixi-engine/src/providers.rs	2026-11-02 17:57:46.188063428 -0800
+@@ -251,6 +251,42 @@
+                 last_tested_ok: None,
+                 last_latency_ms: None,
+             },
++            // Nous Portal. Its inference endpoint speaks the OpenAI shape (GET /v1/models answers
++            // with a normal model list), so it is an ordinary keyed provider here rather than a
++            // special case — one base URL, one key, every model the portal serves.
++            ProviderEntry {
++                id: "nous".to_string(),
++                name: "Nous Portal".to_string(),
++                subtitle: "Nous Research's portal — OpenAI-compatible inference at inference-api.nousresearch.com".to_string(),
++                badge: "Cloud · key required".to_string(),
++                category: "cloud".to_string(),
++                priority_rank: 3,
++                supports_oauth: false,
++                oauth_label: None,
++                auth_mode: "api_key".to_string(),
++                api_format: "openai".to_string(),
++                base_url: "https://inference-api.nousresearch.com/v1".to_string(),
++                api_key_masked: String::new(),
++                api_key_raw: String::new(),
++                oauth_access_token: String::new(),
++                oauth_refresh_token: String::new(),
++                oauth_account_label: None,
++                oauth_expires_ms: None,
++                key_placeholder: "Paste your Nous Portal API key".to_string(),
++                env_var: "NOUS_API_KEY".to_string(),
++                docs_url: "https://portal.nousresearch.com".to_string(),
++                configured: false,
++                selected_model: String::new(),
++                models: vec![
++                    Self::model("moonshotai/kimi-k3.1-pro", "Kimi K3.1 Pro (via Nous)", 262_144, true, false),
++                    Self::model("minimax/minimax-m3.1-flash", "MiniMax M3.1 Flash (via Nous)", 262_144, true, false),
++                    Self::model("openai/gpt-6.1-terra", "GPT-6.1 Terra (via Nous)", 200_000, true, false),
++                ],
++                custom_models: vec![],
++                context_window: 262_144,
++                last_tested_ok: None,
++                last_latency_ms: None,
++            },
+             // 3. OpenAI (Third on the list — supports OAuth!)
+             ProviderEntry {
+                 id: "openai".to_string(),
+diff -Naur --exclude target A/resources/ui/app.css B/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 17:59:39.769846114 -0800
++++ b/resources/ui/app.css	2026-11-02 18:06:07.721269861 -0800
+@@ -2508,6 +2508,77 @@
+ 
+ /* Tasks: the number is the handle. Monospace so a two-digit index does not shift the column, and
+    the row keeps its height when a status changes, so the list does not jump under the pointer. */
++/* Task widget: the agent's own list, in the conversation surface. Numbers in a fixed monospace
++   gutter so a two-digit index does not shift the column, and a row keeps its height when the
++   status changes so the list does not jump under the pointer. */
++.task-widget {
++  margin: 22px 0 4px;
++  border: 1px solid var(--line);
++  border-radius: 12px;
++  background: var(--panel);
++  padding: 10px 12px 8px;
++  max-width: 700px;
++  /* Resizable, because how much of the list you want in view is a judgement about the work, not a
++     design decision. Vertical only: dragging the width would fight the composer underneath. */
++  resize: vertical;
++  overflow: auto;
++  min-height: 92px;
++  height: 148px;
++  max-height: 60vh;
++}
++/* The grab corner is nearly invisible on a dark field by default. */
++.task-widget::-webkit-resizer { background: transparent; }
++.task-widget:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
++.task-widget-head {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  font-size: 11px;
++  letter-spacing: .12em;
++  text-transform: uppercase;
++  color: var(--muted);
++  margin-bottom: 6px;
++}
++.task-widget-add {
++  width: 22px; height: 22px; padding: 0;
++  border-radius: 6px; border: 1px solid var(--line);
++  background: transparent; color: var(--muted);
++  font-size: 15px; line-height: 1; cursor: pointer;
++}
++.task-widget-add:hover { color: var(--accent); border-color: var(--accent); }
++.task-widget-rows { display: flex; flex-direction: column; gap: 2px; }
++.task-widget-row {
++  display: grid;
++  grid-template-columns: 22px minmax(0, 1fr) 96px;
++  align-items: center;
++  gap: 10px;
++  padding: 5px 2px;
++  border-radius: 7px;
++}
++.task-widget-row:hover { background: var(--raised); }
++.task-widget-index { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--muted); text-align: right; }
++.task-widget-text { font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
++.task-widget-text.is-done { color: var(--muted); text-decoration: line-through; }
++.task-widget-status {
++  justify-self: end;
++  width: 96px; padding: 2px 0;
++  font: inherit; font-size: 10.5px; letter-spacing: .04em;
++  border-radius: 999px; border: 1px solid var(--line);
++  background: transparent; color: var(--muted); cursor: pointer;
++}
++.task-widget-status:hover { border-color: var(--accent); color: var(--text); }
++.task-widget-status.in_progress { border-color: var(--accent); color: var(--accent); }
++.task-widget-status.completed { border-color: color-mix(in srgb, #59c07a 55%, var(--line)); color: #59c07a; }
++.task-widget-status.cancelled { opacity: .55; }
++.task-widget-empty { margin: 2px 0 6px; font-size: 12.5px; color: var(--muted); }
++.task-widget-input {
++  width: 100%; margin-top: 6px; height: 28px;
++  padding: 0 8px; border-radius: 7px;
++  border: 1px solid var(--line); background: var(--raised);
++  color: var(--text); font: inherit; font-size: 12.5px;
++}
++.task-widget-input:focus-visible { border-color: var(--accent); outline: none; }
++
+ .task-rows { display: flex; flex-direction: column; gap: 4px; margin: 14px 0 30px; }
+ .task-row {
+   display: grid;
+@@ -2620,6 +2691,11 @@
+ .first-run-blurb { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 0 0 16px; }
+ .first-run-actions { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+ .first-run-status { color: var(--muted); font-size: 12.5px; margin: 0; min-height: 1em; }
++/* `hidden` loses to any later display rule. The cloud fields were created hidden and then shown
++   anyway, because this class sets display:flex in the stylesheet and the element's own hidden
++   attribute is only a UA-stylesheet suggestion. So the rule is explicit: hidden means hidden, and
++   the provider and API key do not exist on screen until the card is chosen. */
++[hidden] { display: none !important; }
+ .first-run-cloud { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 6px; }
+ .first-run-label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); width: 100%; }
+ .first-run-select, .first-run-key {
+@@ -2642,6 +2718,22 @@
+ }
+ .first-run-select:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+ .first-run-select:focus-visible { border-color: var(--accent); outline: none; }
++
++/* The heading inside a revealed section: the card already said "Over the internet", so this is the
++   next instruction, not another title. */
++.first-run-subhead {
++  margin: 16px 0 6px;
++  font-size: 14px;
++  letter-spacing: .01em;
++  color: var(--text);
++}
++/* The line under a first-run field that says what the field is for. Small, muted, and one
++   sentence — a control with no explanation beside it is a guess. */
++.first-run-hint { margin: 2px 0 10px; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 52em; }
++/* A key-page link sitting inline in the status line under the provider field. Underlined and in
++   the accent colour so it cannot be mistaken for more helper text. */
++.first-run-status a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
++.first-run-status a:hover { text-decoration-thickness: 2px; }
+ .first-run-foot { color: var(--muted); font-size: 12.5px; margin-top: 22px; line-height: 1.55; }
+ 
+ /* The sidebar sits on the desktop too, so it carries the same alpha. Declared last so it wins the
+diff -Naur --exclude target A/resources/ui/app.js B/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 17:59:39.770174439 -0800
++++ b/resources/ui/app.js	2026-11-02 18:06:47.049164339 -0800
+@@ -679,7 +679,6 @@
+       ["artifacts", "Artifacts", "artifacts"],
+       ["schedules", "Cron jobs", "schedule"],
+       ["daemons", "Daemons", "daemon"],
+-      ["tasks", "Tasks", "tasks"],
+       ["tools", "Tools & skills", "tools"],
+     ];
+     // Every branch must have leaves. An expansion that opens onto nothing reads as broken, so each
+@@ -810,6 +809,18 @@
+       el(
+         "footer",
+         {},
++        // A way back into first run without wiping a profile. It is a development affordance and is
++        // labelled as one: the page is otherwise unreachable once setup has been answered, and
++        // "delete your config to see the wizard again" is not a test loop.
++        navigationButton(
++          "Onboarding (development)",
++          "spark",
++                    () => {
++            state.setupDismissed = false;
++            navigate("onboarding");
++          },
++          "quiet dev-entry",
++        ),
+         navigationButton(
+           "Settings",
+           "settings",
+@@ -844,10 +855,15 @@
+     const top = el(
+       "header",
+       { class: "topbar" },
+-      ib("Back", "back", () => history.back()),
++      // On an install with no history, "back" from the new-instance page is onboarding — there is
++      // nothing behind it but the same page, and walking the browser history just runs out of
++      // entries. So the arrow asks the gate rather than the history stack.
++      ib("Back", "back", () => { if (needsOnboarding()) { state.setupDismissed = false; navigate("onboarding"); } else { history.back(); } }),
+       el("div", { class: "crumb" }, el("strong", {}, crumb)),
+-      personaChip(),
+-      providersChip(),
++      // Nothing to pick from yet. A model picker before a provider exists is a button that opens a
++      // dead end, and first run is exactly when a person is most likely to press it.
++      needsOnboarding() ? null : personaChip(),
++      needsOnboarding() ? null : providersChip(),
+       ib("Toggle QuixiDesk Browser", "browser", () => toggleBrowser()),
+     );
+     root.replaceChildren(
+@@ -1106,8 +1122,8 @@
+     providerSel.replaceChildren(
+       ...list.map((p) => el("option", { value: p.id }, p.name)),
+     );
+-    const cloud = list.find((p) => p.id === "ollama-cloud");
+-    if (cloud) providerSel.value = "ollama-cloud";
++    // Deliberately no default. This table is reachable on a fresh install, and pre-selecting a
++    // provider here made the first thing a new user sees look like a decision they had made.
+     const sync = () => {
+       const p = list.find((x) => x.id === providerSel.value);
+       modelInput.value = (p && p.selectedModel) || "";
+@@ -1214,7 +1230,10 @@
+   // whichever of the two is actually sitting there.
+   let step = "intro";
+ 
+-  const chosen = { mode: null, provider: "ollama-cloud", key: "" };
++  // Nothing is chosen until the person chooses it. A clean install that already has a provider
++  // selected is a clean install that looks configured, and then "it just went to Ollama" is the
++  // only honest description of what happened.
++  const chosen = { mode: null, provider: "", key: "" };
+ 
+   const card = (title, blurb, body) =>
+     el(
+@@ -1300,7 +1319,7 @@
+   // <select> looks exactly like a control that does not open. These two entries are always present
+   // so there is something to pick while the full list is still loading.
+   const FALLBACK_CLOUD = [
+-    { id: "ollama-cloud", name: "Ollama Cloud", keyPlaceholder: "Paste your API key", baseUrl: "", docsUrl: "" },
++    { id: "ollama-cloud", name: "Ollama Cloud", keyPlaceholder: "Paste your API key", baseUrl: "https://ollama.com/v1", docsUrl: "https://ollama.com/settings/keys" },
+     { id: "custom", name: "Custom endpoint (OpenAI-compatible)", keyPlaceholder: "Paste your API key", baseUrl: "", docsUrl: "" },
+   ];
+ 
+@@ -1308,18 +1327,39 @@
+     const list = (state.providers && state.providers.providers) || [];
+     const fromCatalog = list.filter((p) => p.category !== "local");
+     const cloud = fromCatalog.length ? fromCatalog : FALLBACK_CLOUD;
+-    providerSelect.replaceChildren(
+-      ...cloud.map((p) => {
+-        const o = el("option", { value: p.id }, p.name);
+-        if (p.id === chosen.provider) o.selected = true;
+-        return o;
+-      }),
+-    );
+-    const active = cloud.find((p) => p.id === providerSelect.value) || cloud[0];
++    // A select that silently shows the first provider reads as "already chosen". The placeholder
++    // makes it a question with an answer missing, which is what it is.
++    const placeholder = el("option", { value: "" }, "Choose a provider…");
++    providerSelect.replaceChildren(placeholder, ...cloud.map((p) => {
++      const o = el("option", { value: p.id }, p.name);
++      if (p.id === chosen.provider) o.selected = true;
++      return o;
++    }));
++    if (!chosen.provider) providerSelect.value = "";
++    // No `|| cloud[0]` any more: that fallback is what printed Ollama Cloud under an untouched
++    // dropdown. With nothing selected there is no active provider and nothing to describe.
++    const active = cloud.find((p) => p.id === providerSelect.value);
+     keyInput.placeholder = active ? active.keyPlaceholder || "Paste your API key" : "Paste your API key";
+-    cloudStatus.textContent = active
+-      ? `${active.name} · ${active.baseUrl} — get a key at ${active.docsUrl}`
+-      : "";
++    // A key page that is printed as text cannot be clicked, and asking somebody to copy a URL out
++    // of a paragraph is a small tax on every single setup. Both the provider it is talking about and
++    // the link to its key page are here, and the link opens in the browser the app already uses.
++    cloudStatus.replaceChildren();
++    if (active) {
++      cloudStatus.append(el("span", {}, `${active.name}${active.baseUrl ? " · " + active.baseUrl : ""}`));
++      if (active.docsUrl) {
++        cloudStatus.append(
++          el("span", {}, " · "),
++          el(
++            "a",
++            {
++              href: "#",
++              onclick: (event) => { event.preventDefault(); openExternal(active.docsUrl); },
++            },
++            "Get a key ↗",
++          ),
++        );
++      }
++    }
+   }
+   providerSelect.addEventListener("change", () => {
+     chosen.provider = providerSelect.value;
+@@ -1330,6 +1370,7 @@
+     "Connect and start",
+     async () => {
+       const key = keyInput.value.trim();
++      if (!providerSelect.value) { cloudStatus.textContent = "Choose a provider first."; providerSelect.focus(); return; }
+       if (!key) { cloudStatus.textContent = "That provider needs a key before it can answer."; return; }
+       cloudStatus.textContent = "Saving and testing…";
+       try {
+@@ -1366,7 +1407,14 @@
+   }
+ 
+   cloudBody.append(
++    el("h2", { class: "first-run-subhead" }, "Choose a provider"),
++    el(
++      "p",
++      { class: "first-run-hint" },
++      "Ollama Cloud is the cheapest way in: a small monthly allowance instead of per-token billing, which matters when the budget is fixed rather than flexible. A local model on this machine costs nothing after the download, if the machine can hold one. Any OpenAI-compatible endpoint works as well — nothing here locks you to a single provider.",
++    ),
+     el("label", { class: "first-run-label" }, "Provider", providerSelect),
++    el("p", { class: "first-run-hint" }, "The key stays in this app's own store, not in the memory folder."),
+     el("label", { class: "first-run-label" }, "API key", keyInput),
+     cloudBtn,
+     cloudStatus,
+@@ -1782,6 +1830,15 @@
+   paint();
+ }
+ 
++  // One answer to "is this install still in first run", used by the page router and by anything that
++  // should not exist yet. The Choose model control is the one that matters: offering a model picker
++  // on a machine with no provider configured is an invitation to a dead end.
++  function needsOnboarding() {
++    const hasHistory = (state.sessions || []).length > 0;
++    const setupDone = !!(state.providers && state.providers.onboardingCompleted === true);
++    return !hasHistory && !setupDone && !state.setupDismissed;
++  }
++
+   function renderPage() {
+     const host = document.getElementById("page-host");
+     if (!host) return;
+@@ -1808,12 +1865,12 @@
+     // into an install that already has weeks of conversation in it, and re-asking somebody who has
+     // been using the app for a month is the fastest way to look broken. If there is history, this
+     // is not a first run, whatever the flag says.
+-    const hasHistory = (state.sessions || []).length > 0;
+-    const unanswered =
+-      !hasHistory &&
+-      state.providers &&
+-      state.providers.onboardingCompleted === false &&
+-      !state.setupDismissed;
++    // Only an explicit "yes, this install has been through setup" skips it. Anything else — a
++    // missing field, a reset preferences file, a migration that dropped the key — is treated as a
++    // first run, because the failure that matters is somebody landing in a chat that cannot answer
++    // with no way back to the question. Back navigation lands here too: the last history entry is
++    // "new instance", so with no history that is the onboarding screen.
++    const unanswered = needsOnboarding();
+     if (unanswered && (state.page === "new" || state.page === "chat")) {
+       firstRunPage(host);
+     } else {
+@@ -2141,6 +2198,11 @@
+     return el(
+       "div",
+       { class: "composer-wrap" },
++      // The task list is docked above the composer rather than living on the empty screen. Sending
++      // a message replaces the empty state with the transcript, and a list that disappears exactly
++      // when the work starts is not a list anybody works from — it has to stay while the agent is
++      // thinking, and while it is answering.
++      tasksWidget(),
+       el(
+         "div",
+         { class: "composer" },
+@@ -2165,7 +2227,7 @@
+           ),
+           mode,
+           el("span", { class: "spacer" }),
+-          el("span", { class: "model-control" }, chooseModel),
++          el("span", { class: "model-control" }, needsOnboarding() ? null : chooseModel),
+           stop,
+           send,
+           options,
+@@ -3280,6 +3342,76 @@
+   // number is the point — "task 3" is unambiguous between two people looking at the same screen,
+   // and a list that renumbers itself on every status change is not a list anybody can point at.
+   // Status is a button, not a checkbox: it cycles, so a row can go back without a second control.
++  // The task list as a thing you can see while you work, not a page you navigate to. Numbered
++  // from zero like the agent's own list, one line per task, status cycles on click. It sits in the
++  // conversation surface because that is where the work is, and a list you have to leave the work
++  // to look at is a list you stop looking at.
++  function tasksWidget() {
++    const rows = el("div", { class: "task-widget-rows" });
++    const input = el("input", {
++      class: "task-widget-input",
++      placeholder: "Add a task…",
++      spellcheck: false,
++    });
++    const ORDER = ["pending", "in_progress", "completed", "cancelled"];
++    const LABEL = { pending: "pending", in_progress: "in progress", completed: "done", cancelled: "cancelled" };
++
++    const draw = (tasks) => {
++      const list = tasks || [];
++      rows.replaceChildren();
++      if (!list.length) {
++        rows.append(el("p", { class: "task-widget-empty" }, "No tasks yet."));
++        return;
++      }
++      list.forEach((task, index) => {
++        const status = task.status || "pending";
++        rows.append(
++          el(
++            "div",
++            { class: "task-widget-row" },
++            el("span", { class: "task-widget-index" }, String(index)),
++            el("span", { class: "task-widget-text" + (status === "completed" ? " is-done" : "") }, task.text || ""),
++            el(
++              "button",
++              {
++                class: "task-widget-status " + status,
++                title: "Click to move it on",
++                onclick: async () => {
++                  const next = ORDER[(ORDER.indexOf(status) + 1) % ORDER.length];
++                  const res = await api("/api/quixi/tasks/update", { id: task.id, status: next }).catch(() => null);
++                  if (res && res.tasks) draw(res.tasks);
++                },
++              },
++              LABEL[status] || status,
++            ),
++          ),
++        );
++      });
++    };
++
++    const add = async () => {
++      const text = input.value.trim();
++      if (!text) { input.focus(); return; }
++      const res = await api("/api/quixi/tasks", { text }).catch(() => null);
++      if (res && res.tasks) { input.value = ""; draw(res.tasks); }
++    };
++    input.addEventListener("keydown", (event) => {
++      if (event.key === "Enter") { event.preventDefault(); add(); }
++    });
++
++    api("/api/quixi/tasks").then((res) => draw(res && res.tasks)).catch(() => draw([]));
++
++    return el(
++      "section",
++      { class: "task-widget", "aria-label": "Tasks" },
++      el("div", { class: "task-widget-head" },
++        el("span", {}, "Tasks"),
++        el("button", { class: "task-widget-add", title: "Add a task", onclick: add }, "+")),
++      rows,
++      input,
++    );
++  }
++
+   async function tasksPage(host) {
+     const rows = el("div", { class: "task-rows" });
+     const input = el("input", {
