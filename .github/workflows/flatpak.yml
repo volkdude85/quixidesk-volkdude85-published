@@ -17,16 +17,16 @@ permissions:
 
 jobs:
   build:
+    # Not in the flathub build container. That image carries the SDK but not the host-side libraries a
+    # normal cargo build needs (javascriptcoregtk-4.1 and friends), and its filesystem had 894 MB free
+    # against a 1.7 GB dependency delta. The action below installs flatpak and the runtime itself, so
+    # the job runs where the disk and the toolchain both exist.
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
-      options: --privileged
     steps:
       - uses: actions/checkout@v4
 
-      # The runner image carries toolchains this build never touches, and the GNOME SDK plus the Rust
-      # extension need more room than the default free space leaves. 894 MB was the difference between
-      # a build and a failed dependency install.
+      # The runner image carries toolchains this build never touches, and the GNOME SDK plus the
+      # application's build dependencies need more room than the default free space leaves.
       - name: Free disk space
         run: |
           set -e
@@ -34,6 +34,17 @@ jobs:
             [ -d "$d" ] && rm -rf "$d" || true
           done
           df -h / | tail -1
+
+      # What the application links against. This is a Tauri-shaped Rust desktop app: webkit2gtk,
+      # gtk3, and the tray/indicator libraries. Without these the cargo build dies in
+      # javascriptcore-rs-sys looking for a .pc file.
+      - name: Install the libraries the binary links against
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libssl-dev patchelf
 
       # The manifest sources the application tree, and a checkout of this repository does not contain one:
       # the repository carries the patch series, so this turns the series into a tree. Same order as
