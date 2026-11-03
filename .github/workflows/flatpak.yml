@@ -38,8 +38,10 @@ jobs:
       # The manifest sources the application tree, and a checkout of this repository does not contain one:
       # the repository carries the patch series, so this turns the series into a tree. Same order as
       # prepare(), because that order is what ships.
-      # The vendoring step needs cargo on the runner; the Flatpak image ships the Rust SDK inside the
-      # build sandbox, not on the PATH outside it.
+      # The binary is compiled here, on the runner, and handed to the manifest as a prebuilt file. The
+      # Rust SDK extension would be the only reason to compile inside the sandbox, and installing it
+      # needs 1.7 GB of delta space that this container does not have. A packager that compiles is a
+      # packager that can fail on a toolchain; this one should only be able to fail on packaging.
       - name: Make sure cargo exists on the runner
         run: |
           set -e
@@ -62,12 +64,13 @@ jobs:
             path=$(find ../patches -name "$p" | head -1)
             patch -Np1 -s -i "$path"
           done
-          # The sandbox has no network, so the registry travels with the source.
-          cargo vendor --locked vendor >/dev/null
-          for d in vendor/*/; do
-            [ -f "$d/.cargo-checksum.json" ] || printf '{"files":{},"package":null}' > "$d/.cargo-checksum.json"
-          done
-          mkdir -p .cargo && cp ../flatpak/cargo-config.toml .cargo/config.toml
+          # No sandbox compile, so no vendored registry: cargo fetches the locked crates here, where
+          # there is a network, and the tree carries the finished binary.
+          echo "== building the binary on the runner"
+          cargo build --release -p quixi-app
+          mkdir -p prebuilt
+          cp target/release/QuixiDesk prebuilt/QuixiDesk
+          ls -l prebuilt/QuixiDesk
 
       - name: Build volkdude85's QuixiCore
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6

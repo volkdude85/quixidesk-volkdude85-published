@@ -43,6 +43,16 @@ if [ ! -d "$TREE/vendor" ]; then
   ( cd "$TREE" && cargo vendor --locked vendor >/dev/null )
 fi
 
+# The manifest packages a prebuilt binary rather than compiling inside the sandbox — the Rust SDK
+# extension does not fit the Flatpak build container, and a packager should not be able to fail on a
+# toolchain. Compile here, hand it in.
+if [ ! -x "$TREE/prebuilt/QuixiDesk" ]; then
+  echo "== building the binary"
+  ( cd "$TREE" && cargo build --release -p quixi-app )
+  mkdir -p "$TREE/prebuilt"
+  cp "$TREE/target/release/QuixiDesk" "$TREE/prebuilt/QuixiDesk"
+fi
+
 echo "== staging the source archive"
 # A dir source does not carry dotfiles, and a vendored crate without .cargo-checksum.json cannot build.
 # So the tree is archived and the manifest is staged beside it with an archive source.
@@ -65,8 +75,12 @@ python3 - "$REPO/flatpak/org.quixidesk.QuixiDesk.yml" "$STAGE/manifest.yml" <<'P
 import re, sys
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src).read()
-text = re.sub(r"    sources:\n      - type: dir\n        path: \.\.",
-              "    sources:\n      - type: archive\n        path: quixidesk-src.tar.gz", text)
+# Everything from "sources:" to the end of the module is replaced with the staged archive. Matching the
+# block rather than one spelled-out path, because the source line has changed shape more than once and a
+# stale pattern is how this failed the last two times.
+text = re.sub(r"(?ms)^    sources:.*\Z",
+              "    sources:\n      - type: archive\n        path: quixidesk-src.tar.gz\n",
+              text, count=1)
 open(dst, "w").write(text)
 PY
 
