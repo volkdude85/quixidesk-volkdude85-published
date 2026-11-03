@@ -158,6 +158,7 @@ source=(
   0074-opacity-voice-and-tasks.patch
   0075-provider-choice-and-the-task-widget.patch
   0076-approvals-voice-and-a-real-reset.patch
+  0077-mic-and-speaker-are-switches.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -238,6 +239,7 @@ sha256sums=(
   '94a36daf1877e749f7dea37f88deb17b5c9f41c8830aedf699ebc019b62c6f2a'
   'daf57a2de473a23993031639c28b54168b2c77c17879060c0490c96874be7ff4'
   '86a7c612f60d4a538d2e90df1743c3b558ae0fd303ef2a4efa02badcbaa5fd8b'
+  'a90f53ac3466de75c67a1be0b36bc0725d60ae78c2059e0e9d1a0cf248de8f17'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -500,6 +502,9 @@ prepare() {
   # Approvals that explain themselves and can act on history, a microphone and a speaker with
   # device lists, a reading column you can widen, and a dev door that clears credentials.
   patch -Np1 -i "${srcdir}/0076-approvals-voice-and-a-real-reset.patch"
+
+  # Device choice belongs in Settings, so the composer carries switches instead of two dropdowns.
+  patch -Np1 -i "${srcdir}/0077-mic-and-speaker-are-switches.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

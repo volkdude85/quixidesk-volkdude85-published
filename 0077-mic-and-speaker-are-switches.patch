@@ -1,0 +1,268 @@
+Mic and Speaker are switches
+============================
+
+The composer carried two device dropdowns. They were a worse copy of Settings → Voice, they made the
+toolbar look like a control panel, and the raw ALSA identifiers they had to show ("alsa_input.usb-
+FuZhou_Kingwayinfo_CO_LTD_TONOR_TC30_Audio_Device …") are keys, not names anybody recognises.
+
+Both are plain switches again: Mic opens the microphone, Speaker reads replies aloud, and with both
+on the toolbar says Conversation. Which input and which output they use is chosen once, in Settings,
+where the lists already live and where the label says what the device is.
+
+The microphone also gets a glyph of its own. `icon()` falls back to `icons.file` for any name it does
+not know, so a missing `mic` key drew a sheet of paper next to the word — a placeholder that reads as
+the wrong control rather than an unfinished one.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest3/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 19:18:42.323979559 -0800
++++ b/resources/ui/app.css	2026-11-02 19:28:02.470353226 -0800
+@@ -820,10 +820,8 @@
+   background: color-mix(in srgb, var(--accent) 12%, transparent);
+ }
+ 
+-/* Mic and Speaker: each is a device list with Off as a row, and the pair announces itself as a
+-   conversation when both are live. */
++/* Mic and Speaker are switches. Which device they use is chosen in Settings → Voice. */
+ .voice-controls { display: inline-flex; align-items: center; gap: 6px; }
+-.device-dd { position: relative; display: inline-flex; }
+ .composer-tools .device-button {
+   display: inline-flex;
+   align-items: center;
+@@ -842,7 +840,6 @@
+   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+   background: color-mix(in srgb, var(--accent) 12%, transparent);
+ }
+-.device-caret { font-size: 11px; line-height: 1; opacity: 0.8; }
+ .conversation-chip {
+   font-size: 9px;
+   letter-spacing: 0.12em;
+@@ -854,48 +851,6 @@
+   background: color-mix(in srgb, var(--accent) 10%, transparent);
+ }
+ 
+-.device-menu {
+-  position: absolute;
+-  bottom: calc(100% + 6px);
+-  left: 0;
+-  min-width: 268px;
+-  max-height: 320px;
+-  overflow: auto;
+-  padding: 5px;
+-  border: 1px solid var(--line);
+-  border-radius: 9px;
+-  background: var(--panel);
+-  box-shadow: 0 8px 24px #00000066;
+-  z-index: 40;
+-  display: grid;
+-  gap: 2px;
+-}
+-.device-menu-head {
+-  font-size: 9px;
+-  letter-spacing: 0.12em;
+-  text-transform: uppercase;
+-  color: var(--muted);
+-  padding: 4px 8px 2px;
+-}
+-.device-option {
+-  display: grid;
+-  grid-template-columns: 1fr auto;
+-  gap: 10px;
+-  align-items: center;
+-  width: 100%;
+-  padding: 7px 8px;
+-  border: 0;
+-  border-radius: 6px;
+-  background: transparent;
+-  color: var(--text);
+-  text-align: left;
+-  cursor: pointer;
+-}
+-.device-option:hover { background: var(--raised); }
+-.device-option.is-current { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+-.device-option-name { font-size: 12px; font-weight: 600; }
+-.device-option-note { font-size: 10px; color: var(--muted); }
+-.device-menu-empty { font-size: 11px; color: var(--muted); margin: 6px 8px; }
+ 
+ .composer-note {
+   font-size: 10px;
+diff -ruN '--exclude=target' '--exclude=.git' qtest3/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 19:18:42.324293086 -0800
++++ b/resources/ui/app.js	2026-11-02 19:30:14.060522756 -0800
+@@ -59,6 +59,10 @@
+     // button used to wear, and it read as "disabled" on a control that adds context.
+     link: "M10 13.5a4.5 4.5 0 006.4 0l3.1-3.1a4.5 4.5 0 00-6.4-6.4l-1.4 1.4M14 10.5a4.5 4.5 0 00-6.4 0l-3.1 3.1a4.5 4.5 0 006.4 6.4l1.4-1.4",
+       // Speaker glyphs. Filled-ish wave for on, crossed for off, so the state reads without a label.
++    // A microphone, not the file glyph. `icon()` falls back to icons.file for any name it does not
++    // know, so a missing "mic" key draws a sheet of paper — which is what it drew.
++    mic: "M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7",
++    micOff: "M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-4.5 2.6M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7M4 3l16 18",
+     speaker: "M4 9v6h4l5 4V5L8 9H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12",
+     speakerOff: "M4 9v6h4l5 4V5L8 9H4zM16 9l5 6M21 9l-5 6",
+ };
+@@ -2527,22 +2531,11 @@
+     return wrap;
+   }
+ 
+-  // --- Mic and Speaker, as two doors into the same machine --------------------
+-  // Both are device lists first and switches second: "which input" is the question people actually
+-  // have, and on/off falls out of answering it. Off is a row in the list, not a separate button.
+-  // With a microphone and a speaker both live, this is a conversation — so it says so.
+-  let audioCache = null;
+-  function audioDevices() {
+-    if (audioCache) return audioCache;
+-    audioCache = rpc("AudioDevices", "list")
+-      .then((res) => ({
+-        sources: ((res && res.sources) || []).filter((d) => !/\.monitor$/.test(d.name)),
+-        sinks: (res && res.sinks) || [],
+-        defaultSink: (res && res.defaultSink) || "",
+-      }))
+-      .catch(() => ({ sources: [], sinks: [], defaultSink: "" }));
+-    return audioCache;
+-  }
++  // --- Mic and Speaker, as two switches ---------------------------------------
++  // Device choice lives in Settings → Voice, where the input and output lists already are. Two
++  // dropdowns in the composer repeated that list in a worse place and made the toolbar look like a
++  // control panel; what belongs next to the message is a switch. Both on is a conversation, and it
++  // says so.
+   function voiceControls(ta) {
+     const bar = el("div", { class: "voice-controls" });
+     const dictation = capabilityUI.dictationControl(ta);
+@@ -2550,102 +2543,39 @@
+     dictation.setAttribute("aria-hidden", "true");
+     bar.append(dictation);
+ 
+-    const stateNow = () => ({
+-      micOn: localStorage.getItem("quixi.micOn") === "1",
+-      speakerOn: localStorage.getItem("quixi.speak") === "1",
+-    });
++    const chip = el("span", { class: "conversation-chip", hidden: true }, "Conversation");
++    const mic = el("button", { class: "device-button", type: "button", "aria-pressed": "false" });
++    const speaker = el("button", { class: "device-button", type: "button", "aria-pressed": "false" });
+ 
+-    const conversationChip = el("span", { class: "conversation-chip", hidden: true }, "Conversation");
+-    const paintChip = () => {
+-      const { micOn, speakerOn } = stateNow();
+-      conversationChip.hidden = !(micOn && speakerOn);
+-    };
+-
+-    const deviceMenu = ({ key, label, store, listKey, offLabel, onPick }) => {
+-      const wrap = el("div", { class: "device-dd" });
+-      const button = el("button", { class: "device-button", type: "button", "aria-haspopup": "listbox", "aria-expanded": "false" });
+-      const menu = el("div", { class: "device-menu", role: "listbox", hidden: true });
+-      const paintButton = () => {
+-        const chosen = localStorage.getItem(store) || "";
+-        const on = localStorage.getItem(key) === "1";
+-        button.replaceChildren(
+-          el("span", { class: "device-name" }, label),
+-          el("span", { class: "device-caret", "aria-hidden": "true" }, "\u2304"),
+-        );
+-        button.classList.toggle("is-on", on);
+-        button.title = on
+-          ? `${label}: ${chosen || "system default"}`
+-          : `${label}: off — pick an input to turn it on`;
+-      };
+-      const paintMenu = async () => {
+-        const devices = await audioDevices();
+-        const items = devices[listKey] || [];
+-        const chosen = localStorage.getItem(store) || "";
+-        menu.replaceChildren(
+-          el("div", { class: "device-menu-head" }, label),
+-          el("button", {
+-            class: "device-option" + (!localStorage.getItem(key) || localStorage.getItem(key) === "0" ? " is-current" : ""),
+-            type: "button",
+-            role: "option",
+-            onclick: () => { onPick(""); menu.hidden = true; paintButton(); paintChip(); },
+-          }, el("span", { class: "device-option-name" }, offLabel), el("span", { class: "device-option-note" }, "off")),
+-          ...items.map((device) =>
+-            el("button", {
+-              class: "device-option" + (device.name === chosen && localStorage.getItem(key) === "1" ? " is-current" : ""),
+-              type: "button",
+-              role: "option",
+-              onclick: () => { onPick(device.name); menu.hidden = true; paintButton(); paintChip(); },
+-            }, el("span", { class: "device-option-name" }, device.label || device.name), el("span", { class: "device-option-note" }, device.name)),
+-          ),
+-          items.length ? null : el("p", { class: "device-menu-empty" }, "No devices were found. PipeWire or PulseAudio was not reachable."),
+-        );
+-      };
+-      button.addEventListener("click", async (event) => {
+-        event.stopPropagation();
+-        const opening = menu.hidden;
+-        menu.hidden = !opening;
+-        button.setAttribute("aria-expanded", opening ? "true" : "false");
+-        if (opening) await paintMenu();
+-      });
+-      const outside = (event) => { if (!wrap.contains(event.target) && !menu.hidden) { menu.hidden = true; button.setAttribute("aria-expanded", "false"); } };
+-      document.addEventListener("pointerdown", outside);
+-      paintButton();
+-      wrap.append(button, menu);
+-      return { wrap, paintButton };
++    const paint = () => {
++      const micOn = localStorage.getItem("quixi.micOn") === "1";
++      const speakerOn = localStorage.getItem("quixi.speak") === "1";
++      mic.replaceChildren(icon("mic", 14), el("span", {}, micOn ? "Listening" : "Mic"));
++      mic.classList.toggle("is-on", micOn);
++      mic.setAttribute("aria-pressed", micOn ? "true" : "false");
++      mic.title = micOn ? "Microphone is open — click to stop" : "Dictate into the prompt";
++      speaker.replaceChildren(icon(speakerOn ? "speaker" : "speakerOff", 14), el("span", {}, speakerOn ? "Speaking" : "Speaker"));
++      speaker.classList.toggle("is-on", speakerOn);
++      speaker.setAttribute("aria-pressed", speakerOn ? "true" : "false");
++      speaker.title = speakerOn ? "Replies are read aloud — click to stop" : "Read replies aloud";
++      chip.hidden = !(micOn && speakerOn);
+     };
+ 
+-    const mic = deviceMenu({
+-      key: "quixi.micOn",
+-      label: "Mic",
+-      store: "quixi.audioInput",
+-      listKey: "sources",
+-      offLabel: "Microphone off",
+-      onPick: (name) => {
+-        localStorage.setItem("quixi.audioInput", name);
+-        rememberPreferenceSoon("audioInput", name);
+-        const wasOn = localStorage.getItem("quixi.micOn") === "1";
+-        localStorage.setItem("quixi.micOn", name ? "1" : "0");
+-        if (name && !wasOn) dictation.click();       // the real control does the real work
+-        if (!name && wasOn) dictation.click();
+-      },
++    mic.addEventListener("click", () => {
++      const on = localStorage.getItem("quixi.micOn") === "1";
++      localStorage.setItem("quixi.micOn", on ? "0" : "1");
++      dictation.click();               // the real control does the real work
++      paint();
+     });
+-    const speaker = deviceMenu({
+-      key: "quixi.speak",
+-      label: "Speaker",
+-      store: "quixi.audioOutput",
+-      listKey: "sinks",
+-      offLabel: "Speaker off",
+-      onPick: (name) => {
+-        localStorage.setItem("quixi.audioOutput", name);
+-        rememberPreferenceSoon("audioOutput", name);
+-        const wasOn = localStorage.getItem("quixi.speak") === "1";
+-        localStorage.setItem("quixi.speak", name ? "1" : "0");
+-        if (!name && wasOn) stopSpeaking();
+-      },
++    speaker.addEventListener("click", () => {
++      const on = localStorage.getItem("quixi.speak") === "1";
++      localStorage.setItem("quixi.speak", on ? "0" : "1");
++      if (on) stopSpeaking();
++      paint();
+     });
+ 
+-    bar.append(mic.wrap, conversationChip, speaker.wrap);
+-    queueMicrotask(paintChip);
++    bar.append(mic, chip, speaker);
++    paint();
+     return bar;
+   }
+ 
+@@ -5131,6 +5061,8 @@
+       el("label", { class: "settings-field" }, el("span", {}, "Input"), sourceSelect),
+       el("label", { class: "settings-field" }, el("span", {}, "Engine"), sttEngine),
+ 
++      el("p", { class: "muted", style: "margin-top:22px" }, "The Mic and Speaker switches beside the composer follow what is chosen here. Nothing here is repeated in the toolbar."),
++
+       el("h2", { style: "margin-top:28px" }, "Text to speech"),
+       el("p", { class: "muted" }, "Reading replies aloud. Locally this is Kokoro, a small voice model that runs on this machine and needs no account; the voice is a name, not a preset list, because the voices are files."),
+       el("label", { class: "settings-field" }, el("span", {}, "Output"), sinkSelect),
