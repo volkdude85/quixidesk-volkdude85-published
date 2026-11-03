@@ -1,0 +1,1364 @@
+Approvals it can explain, a real reset, and a mic and a speaker
+===============================================================
+
+The composer's approval control is one button that names itself — `APPROVALS ⌄` — opening a menu of
+three modes with a line of plain English under each. The old pair made the caption look like the
+label and the value look like the control, and the caret sat on top of the word because a generic
+`.composer-tools select` padding rule flattened its gutter.
+
+**Smart is a record, not a mood.** Every approval you grant is fingerprinted (tool plus what it acts
+on) and the last 200 are kept. In Smart a request matching something already allowed goes through
+without a card; anything new still stops and asks. Manual asks every time. YOLO never asks, and the
+engine now accepts `bypassPermissions` — the approval path already understood it and only the
+session validator was refusing it, so the third mode could not be offered even though it worked.
+
+**Mic and Speaker replace one Dictate button and one Speak button.** Each is a device list with Off
+as a row, because "which input" is the question people actually have and on/off falls out of
+answering it. With both live the toolbar says **Conversation**, which is the honest name for it. The
+microphone drives the same dictation control that already existed — the list chooses the input, the
+existing engine path does the work.
+
+**Speak is wired to the engine, not the webview.** WebKitGTK implements none of the Web Speech API,
+so `speechSynthesis` is `undefined` on Linux and a Speak button built on it is decorative. Replies
+are chunked by sentence and sent to `/api/quixi/voice/speak`, which is synchronous per chunk — that
+is what lets Stop take effect between sentences instead of after the whole reply.
+
+**Resizing, honestly.** The reading column was capped at 740px inside a padding calculation, so no
+window size ever widened the text: it is `--chat-width` now, with a grab strip on the column's right
+edge. The task list and the composer resize on both axes. No corner ticks are drawn — the drag
+regions are transparent and the cursor does the talking.
+
+**A dev door that actually resets.** Onboarding (development) used to reopen the wizard over a live
+install, which is a rehearsal and not a first run: a stranger has no keys. It asks, then calls
+`POST /api/quixi/first-run/reset` → `ProviderManager::reset_first_run()`, clearing every provider's
+key, both OAuth tokens, the account label and the tested flags, unsetting the active provider and
+model, and marking setup unanswered. Verified in a container by seeding a live key into
+`providers.json`, clicking both buttons through the automation bridge, and reading the file back:
+onboarding false, active provider empty, zero configured providers, key gone.
+
+**Smaller things that are still things.** The provider dropdown sorts alphabetically instead of by
+catalog rank, because a list is scanned in order. The memory folder says what it means: "append-only:
+the app never deletes. You can still delete the files yourself in any file manager."
+
+diff -ruN '--exclude=target' '--exclude=.git' qbase2/QuixiDesk-3.6556.12/crates/quixi-engine/src/lib.rs qcur/QuixiDesk-3.6556.12/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs	2026-11-02 19:13:55.141685098 -0800
++++ b/crates/quixi-engine/src/lib.rs	2026-11-02 18:46:15.492720799 -0800
+@@ -1502,7 +1502,12 @@
+             .unwrap_or("default")
+             .to_string();
+ 
+-        if !matches!(permission_mode.as_str(), "default" | "auto") { return json!({"error":"Choose Manual or Auto permissions."}); }
++        // Three real modes, and the engine already implements all three: "default" asks, "auto"
++        // permits tool actions, "bypassPermissions" is the honest YOLO. The old list here rejected
++        // the third one, so the UI could not offer it even though the approval path understood it.
++        if !matches!(permission_mode.as_str(), "default" | "auto" | "bypassPermissions") {
++            return json!({"error":"Choose Manual, Smart or YOLO permissions."});
++        }
+ 
+         let now_ms = Utc::now().timestamp_millis() as u64;
+         let created_at = existing
+@@ -2119,6 +2124,9 @@
+             self.sync_sessions_to_connected_models();
+             return Self::json_resp(200, &res);
+         }
++        if clean_path == "/api/quixi/first-run/reset" && method == "POST" {
++            return Self::json_resp(200, &self.provider_manager.reset_first_run());
++        }
+         if clean_path == "/api/quixi/providers/complete-onboarding" {
+             let res = self.provider_manager.complete_onboarding(&body_json);
+             self.sync_sessions_to_connected_models();
+diff -ruN '--exclude=target' '--exclude=.git' qbase2/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs qcur/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs
+--- a/crates/quixi-engine/src/providers.rs	2026-11-02 19:16:30.291288169 -0800
++++ b/crates/quixi-engine/src/providers.rs	2026-11-02 18:46:15.491581347 -0800
+@@ -1333,6 +1333,36 @@
+         result
+     }
+ 
++    /// Wipe every credential and mark onboarding unanswered.
++    ///
++    /// This is what the development entry is for: putting a used install back into first run, so it
++    /// can be seen the way a stranger sees it. A stranger has no keys, no active provider and no
++    /// completed flag, so this clears all three rather than only reopening the wizard — reopening
++    /// the questions while the old key is still in the store is a rehearsal, not a first run.
++    pub fn reset_first_run(&self) -> Value {
++        {
++            let mut st = self.state.write();
++            for p in st.providers.iter_mut() {
++                p.configured = false;
++                p.api_key_raw.clear();
++                p.api_key_masked.clear();
++                p.oauth_access_token.clear();
++                p.oauth_refresh_token.clear();
++                p.oauth_account_label = None;
++                p.oauth_expires_ms = None;
++                p.last_tested_ok = None;
++                p.last_latency_ms = None;
++            }
++            st.onboarding_completed = false;
++            st.active_provider = String::new();
++            st.active_model = String::new();
++            st.subagent_provider = String::new();
++            st.subagent_model = String::new();
++        }
++        self.persist();
++        json!({"ok": true})
++    }
++
+     pub fn remove_provider(&self, body: &Value) -> Value {
+         let provider_id = body
+             .get("providerId")
+diff -ruN '--exclude=target' '--exclude=.git' qbase2/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 19:16:30.291570878 -0800
++++ b/resources/ui/app.css	2026-11-02 19:17:29.058969767 -0800
+@@ -176,7 +176,10 @@
+   width: 100%;
+   min-height: 38px;
+   background: var(--raised);
+-  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
++  /* Neutral at rest. An accent-tinted border made every secondary action read as green next to the
++     real primary, so the hierarchy was "green, green, green" in different sizes. Only the hover
++     state carries the accent now, and every one of these is the same surface as its neighbours. */
++  border-color: var(--line);
+   color: var(--text);
+   font-weight: 600;
+ }
+@@ -465,13 +468,55 @@
+   display: inline-block;
+   margin-right: 6px;
+ }
++/* "Approvals" sits before the select so the three words inside it mean something. An unlabelled
++   dropdown reading "Manual" could be anything. */
++.approval-control { display: inline-flex; align-items: center; gap: 6px; }
++.approval-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
++.approval-control select {
++  font-size: 12px;
++  appearance: none;
++  -webkit-appearance: none;
++  /* The arrow needs a gutter of its own. It was sitting at 7px from the right with 22px of padding,
++     which on a select sized to its contents put the caret straight through the word. */
++  min-width: 118px;
++  padding: 3px 28px 3px 9px;
++  border-radius: 6px;
++  border: 1px solid var(--line);
++  background-color: var(--raised);
++  color: var(--text);
++  cursor: pointer;
++  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2382a891' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
++  background-repeat: no-repeat;
++  background-position: right 9px center;
++  background-size: 9px 6px;
++}
++.approval-control select:hover { border-color: var(--accent); }
++
+ .sidebar footer {
+   border-top: 1px solid var(--line);
+   padding-top: 10px;
+   display: flex;
++  flex-wrap: wrap;
+   gap: 4px;
+   align-items: center;
+ }
++/* The development door takes its own row, above Settings. Flex-wrap alone would put it beside
++   Settings whenever the rail is wide enough, which is exactly the layout it should not have. */
++.sidebar footer .footer-rows {
++  flex: 0 0 100%;
++  display: flex;
++  margin-bottom: 2px;
++}
++.sidebar footer .dev-entry {
++  flex: 1;
++  justify-content: flex-start;
++  text-align: left;
++  font-size: 12px;
++  color: var(--muted);
++  border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
++  border-radius: 8px;
++}
++.sidebar footer .dev-entry:hover { color: var(--accent); border-color: var(--accent); }
+ .sidebar footer button:first-child {
+   flex: 1;
+   text-align: left;
+@@ -556,12 +601,42 @@
+   min-width: 0;
+   display: flex;
+   flex-direction: column;
++  position: relative;
+ }
++/* Sits exactly on the right edge of the reading column, wherever that column currently ends. */
++.chat-resizer {
++  position: absolute;
++  top: 0;
++  bottom: 0;
++  left: calc(50% + (var(--chat-width, 740px) / 2));
++  transform: translateX(-50%);
++  width: 9px;
++  cursor: col-resize;
++  z-index: 3;
++  background: transparent;
++}
++.chat-resizer:hover,
++.chat-resizer:active {
++  background: color-mix(in srgb, var(--accent) 35%, transparent);
++}
++.chat-resizer::after {
++  content: "";
++  position: absolute;
++  top: 50%;
++  left: 50%;
++  transform: translate(-50%, -50%);
++  width: 3px;
++  height: 34px;
++  border-radius: 2px;
++  background: color-mix(in srgb, var(--muted) 45%, transparent);
++}
++.chat-resizer:hover::after { background: var(--accent); }
++
+ .conversation {
+   flex: 1;
+   overflow: auto;
+   scroll-behavior: auto;
+-  padding: 28px max(26px, calc((100% - 740px) / 2));
++  padding: 28px max(26px, calc((100% - var(--chat-width, 740px)) / 2));
+   min-height: 0;
+   scrollbar-gutter: stable;
+ }
+@@ -616,7 +691,20 @@
+ .composer-wrap {
+   padding: 12px max(24px, calc((100% - 764px) / 2)) 16px;
+ }
++/* A drawn corner grip. Three diagonal ticks, sized to be seen rather than inferred. */
++.resize-grip {
++  position: absolute;
++  right: 0;
++  bottom: 0;
++  width: 18px;
++  height: 18px;
++  cursor: nwse-resize;
++  background: transparent;
++  opacity: 0;
++}
++
+ .composer {
++  position: relative;
+   border: 1px solid color-mix(in srgb, var(--muted), transparent 60%);
+   background: var(--panel);
+   border-radius: 16px;
+@@ -628,9 +716,13 @@
+   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent), transparent 94%);
+ }
+ .composer textarea {
+-  resize: none;
++  /* Both axes, same as the task list above it. It still autosizes while typing; the handle lets it
++     be bigger than the auto-size would choose. */
++  resize: both;
++  min-width: 180px;
++  max-width: 100%;
+   min-height: 70px;
+-  max-height: 210px;
++  max-height: 60vh;
+   height: 82px;
+   background: transparent;
+   border: 0;
+@@ -661,6 +753,150 @@
+   padding: 6px 8px;
+   border-radius: 7px;
+ }
++/* Approvals: one button that says its own name, with the mode shown beside it and a menu under it. */
++.approval-dd { position: relative; display: inline-flex; }
++.composer-tools .approval-button {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  padding: 5px 9px;
++  border: 1px solid var(--line);
++  border-radius: 7px;
++  background: var(--raised);
++  color: var(--text);
++  font-size: 11px;
++  cursor: pointer;
++}
++.composer-tools .approval-button:hover { border-color: var(--accent); }
++.approval-name { color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; font-size: 10px; }
++.approval-value { font-weight: 600; }
++.approval-caret { color: var(--muted); font-size: 11px; line-height: 1; }
++
++.approval-menu {
++  position: absolute;
++  bottom: calc(100% + 6px);
++  right: 0;
++  min-width: 246px;
++  padding: 5px;
++  border: 1px solid var(--line);
++  border-radius: 9px;
++  background: var(--panel);
++  box-shadow: 0 8px 24px #00000066;
++  z-index: 40;
++  display: grid;
++  gap: 2px;
++}
++.approval-option {
++  display: grid;
++  grid-template-columns: 70px 1fr 14px;
++  align-items: center;
++  gap: 8px;
++  width: 100%;
++  padding: 7px 8px;
++  border: 0;
++  border-radius: 6px;
++  background: transparent;
++  color: var(--text);
++  text-align: left;
++  cursor: pointer;
++}
++.approval-option:hover { background: var(--raised); }
++.approval-option.is-current { background: color-mix(in srgb, var(--accent) 12%, transparent); }
++.approval-option-name { font-weight: 600; font-size: 12px; }
++.approval-option-note { color: var(--muted); font-size: 11px; }
++.approval-option svg { color: var(--accent); }
++
++/* Speak sits between Dictate and Approvals and shows its state rather than hiding it. */
++.speak-toggle {
++  display: inline-flex;
++  align-items: center;
++  gap: 5px;
++  border: 1px solid transparent;
++  color: var(--muted);
++}
++.speak-toggle.is-on {
++  color: var(--accent);
++  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
++  background: color-mix(in srgb, var(--accent) 12%, transparent);
++}
++
++/* Mic and Speaker: each is a device list with Off as a row, and the pair announces itself as a
++   conversation when both are live. */
++.voice-controls { display: inline-flex; align-items: center; gap: 6px; }
++.device-dd { position: relative; display: inline-flex; }
++.composer-tools .device-button {
++  display: inline-flex;
++  align-items: center;
++  gap: 5px;
++  padding: 5px 9px;
++  border: 1px solid transparent;
++  border-radius: 7px;
++  background: transparent;
++  color: var(--muted);
++  font-size: 11px;
++  cursor: pointer;
++}
++.composer-tools .device-button:hover { border-color: var(--line); color: var(--text); }
++.composer-tools .device-button.is-on {
++  color: var(--accent);
++  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
++  background: color-mix(in srgb, var(--accent) 12%, transparent);
++}
++.device-caret { font-size: 11px; line-height: 1; opacity: 0.8; }
++.conversation-chip {
++  font-size: 9px;
++  letter-spacing: 0.12em;
++  text-transform: uppercase;
++  padding: 3px 7px;
++  border-radius: 999px;
++  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
++  color: var(--accent);
++  background: color-mix(in srgb, var(--accent) 10%, transparent);
++}
++
++.device-menu {
++  position: absolute;
++  bottom: calc(100% + 6px);
++  left: 0;
++  min-width: 268px;
++  max-height: 320px;
++  overflow: auto;
++  padding: 5px;
++  border: 1px solid var(--line);
++  border-radius: 9px;
++  background: var(--panel);
++  box-shadow: 0 8px 24px #00000066;
++  z-index: 40;
++  display: grid;
++  gap: 2px;
++}
++.device-menu-head {
++  font-size: 9px;
++  letter-spacing: 0.12em;
++  text-transform: uppercase;
++  color: var(--muted);
++  padding: 4px 8px 2px;
++}
++.device-option {
++  display: grid;
++  grid-template-columns: 1fr auto;
++  gap: 10px;
++  align-items: center;
++  width: 100%;
++  padding: 7px 8px;
++  border: 0;
++  border-radius: 6px;
++  background: transparent;
++  color: var(--text);
++  text-align: left;
++  cursor: pointer;
++}
++.device-option:hover { background: var(--raised); }
++.device-option.is-current { background: color-mix(in srgb, var(--accent) 12%, transparent); }
++.device-option-name { font-size: 12px; font-weight: 600; }
++.device-option-note { font-size: 10px; color: var(--muted); }
++.device-menu-empty { font-size: 11px; color: var(--muted); margin: 6px 8px; }
++
+ .composer-note {
+   font-size: 10px;
+   color: var(--muted);
+@@ -2517,17 +2753,21 @@
+   border-radius: 12px;
+   background: var(--panel);
+   padding: 10px 12px 8px;
+-  max-width: 700px;
+-  /* Resizable, because how much of the list you want in view is a judgement about the work, not a
+-     design decision. Vertical only: dragging the width would fight the composer underneath. */
+-  resize: vertical;
++  width: 100%;
++  /* Resizable on both axes. The earlier vertical-only rule was my caution about the composer
++     underneath, but a control that resizes one way and not the other is a control that argues with
++     the hand. Both, or neither. */
++  resize: both;
+   overflow: auto;
++  min-width: 150px;
++  max-width: 100%;
+   min-height: 92px;
+   height: 148px;
+   max-height: 60vh;
+ }
+ /* The grab corner is nearly invisible on a dark field by default. */
+-.task-widget::-webkit-resizer { background: transparent; }
++.task-widget::-webkit-resizer,
++.composer textarea::-webkit-resizer { background: transparent; }
+ .task-widget:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+ .task-widget-head {
+   display: flex;
+@@ -2546,6 +2786,26 @@
+   font-size: 15px; line-height: 1; cursor: pointer;
+ }
+ .task-widget-add:hover { color: var(--accent); border-color: var(--accent); }
++/* The grip is the resize handle people actually reach for. Six pixels, a hairline, and a cursor
++   that says what it does before the drag. */
++/* A list with nothing in it is a header and a +. No "no tasks yet", no input line, no grip — the
++   whole thing is one row tall, and it grows only when there is something to show. */
++.task-widget.is-empty {
++  height: auto;
++  min-height: 0;
++  padding: 4px 10px 4px;
++  margin: 10px 0 2px;
++  /* Same width as the conversation column, empty or not. One row tall, but the same measure as the
++     messages and the composer — a narrow bar above a wide composer looks like a different control. */
++  width: 100%;
++  min-width: 0;
++  max-width: 100%;
++}
++.task-widget.is-empty .task-widget-head { margin-bottom: 0; }
++
++/* A short bar in the middle, not a hairline across the whole width: it reads as a handle at a
++   glance, which the first version did not. */
++
+ .task-widget-rows { display: flex; flex-direction: column; gap: 2px; }
+ .task-widget-row {
+   display: grid;
+diff -ruN '--exclude=target' '--exclude=.git' qbase2/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 19:16:30.291969257 -0800
++++ b/resources/ui/app.js	2026-11-02 19:17:21.583037944 -0800
+@@ -58,7 +58,10 @@
+     // Something attached from outside, rather than a pencil struck through — which is what this
+     // button used to wear, and it read as "disabled" on a control that adds context.
+     link: "M10 13.5a4.5 4.5 0 006.4 0l3.1-3.1a4.5 4.5 0 00-6.4-6.4l-1.4 1.4M14 10.5a4.5 4.5 0 00-6.4 0l-3.1 3.1a4.5 4.5 0 006.4 6.4l1.4-1.4",
+-  };
++      // Speaker glyphs. Filled-ish wave for on, crossed for off, so the state reads without a label.
++    speaker: "M4 9v6h4l5 4V5L8 9H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12",
++    speakerOff: "M4 9v6h4l5 4V5L8 9H4zM16 9l5 6M21 9l-5 6",
++};
+   function icon(name, size = 18) {
+     const node = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+     for (const [k, v] of Object.entries({
+@@ -809,17 +812,54 @@
+       el(
+         "footer",
+         {},
+-        // A way back into first run without wiping a profile. It is a development affordance and is
+-        // labelled as one: the page is otherwise unreachable once setup has been answered, and
+-        // "delete your config to see the wizard again" is not a test loop.
+-        navigationButton(
+-          "Onboarding (development)",
+-          "spark",
+-                    () => {
+-            state.setupDismissed = false;
+-            navigate("onboarding");
+-          },
+-          "quiet dev-entry",
++        // A way back into first run without wiping a profile. It gets its own row above Settings
++        // rather than sitting beside it: it is not a peer of Settings, it is a development door, and
++        // the row it shares with Settings made it look like one more nav item.
++        el(
++          "div",
++          { class: "footer-rows" },
++          navigationButton(
++            "Onboarding (development)",
++            "spark",
++            async () => {
++              // Clears the keys as well as the questions. A first run with somebody's live API key
++              // still in the store is not a first run — it is the old install wearing a wizard.
++              const ok = await new Promise((resolve) => {
++                let answered = false;
++                const dlg = dialog(
++                  "Clear credentials and start over?",
++                  el(
++                    "div",
++                    { class: "browser-chooser" },
++                    el("p", {}, "This clears every saved API key and OAuth token, unsets the active provider and model, and marks setup unanswered. Conversations, memory and projects are not touched."),
++                    el("p", { class: "muted" }, "It exists so this edition can be seen the way somebody downloading it would see it."),
++                    el("div", { class: "first-run-actions" },
++                      button("Clear and open onboarding", async () => {
++                        answered = true;
++                        resolve(true);
++                        dlg.close();
++                      }, "primary"),
++                      button("Cancel", () => { answered = true; resolve(false); dlg.close(); }, "reveal"),
++                    ),
++                  ),
++                );
++                dlg.addEventListener("close", () => { if (!answered) resolve(false); });
++              });
++              if (!ok) return;
++              try {
++                await api("/api/quixi/first-run/reset", {});
++                await loadProviders();
++                state.setupDismissed = false;
++                state.sessions = [];
++                localStorage.removeItem("quixi.panelOpacity");
++                navigate("onboarding");
++                toast("Credentials cleared. This is what a fresh install looks like.");
++              } catch (e) {
++                toast(`Could not reset: ${e.message}`, true);
++              }
++            },
++            "quiet dev-entry",
++          ),
+         ),
+         navigationButton(
+           "Settings",
+@@ -1094,10 +1134,11 @@
+   } catch (e) {
+     table.append(el("p", { class: "first-run-warn" }, `Could not build the table: ${e && e.message ? e.message : e}`));
+   }
++  // One way back, not two. The table already offers "← Back to onboarding" under Save and start;
++  // a second copy in the exit row read as a different action with the same words.
+   root.append(
+     el("div", { class: "first-run-actions first-run-exit" },
+-      button("← Back to onboarding", () => { state.setupDismissed = false; navigate("onboarding"); }, "primary"),
+-      button("Skip to the app", () => { state.setupDismissed = true; state.page = "new"; render(); }, "quiet"),
++      button("Skip to the app", () => { state.setupDismissed = true; state.page = "new"; render(); }, "reveal"),
+     ),
+   );
+ }
+@@ -1211,7 +1252,7 @@
+           state.setupDismissed = false;
+           navigate("onboarding");
+         }
+-      }, "quiet")),
++      }, "reveal")),
+     status,
+   );
+ }
+@@ -1274,7 +1315,7 @@
+         localStatus.textContent = `Could not finish: ${err.message}`;
+       }
+     },
+-    "",
++    "reveal",
+   );
+ 
+   // A file dialog that shows "Computer -> /" and hides every drive people actually keep models on is
+@@ -1326,7 +1367,11 @@
+   function fillCloud() {
+     const list = (state.providers && state.providers.providers) || [];
+     const fromCatalog = list.filter((p) => p.category !== "local");
+-    const cloud = fromCatalog.length ? fromCatalog : FALLBACK_CLOUD;
++    // Alphabetical, because a list somebody has to scan should be in the order they scan it in. The
++    // catalog's own order is a priority ranking, which is useful in Settings and useless in a
++    // dropdown where the person is looking for a name they already know.
++    const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
++    const cloud = fromCatalog.length ? [...fromCatalog].sort(byName) : FALLBACK_CLOUD;
+     // A select that silently shows the first provider reads as "already chosen". The placeholder
+     // makes it a question with an answer missing, which is what it is.
+     const placeholder = el("option", { value: "" }, "Choose a provider…");
+@@ -1411,7 +1456,7 @@
+     el(
+       "p",
+       { class: "first-run-hint" },
+-      "Ollama Cloud is the cheapest way in: a small monthly allowance instead of per-token billing, which matters when the budget is fixed rather than flexible. A local model on this machine costs nothing after the download, if the machine can hold one. Any OpenAI-compatible endpoint works as well — nothing here locks you to a single provider.",
++      "Ollama Cloud is one of the cheapest ways in — a small monthly allowance rather than per-token billing, which matters when the budget is fixed rather than flexible — and it is what this edition is built and tested against, so it is the one least likely to surprise you. A local model on this machine costs nothing after the download, if the machine can hold one. Any OpenAI-compatible endpoint works as well; nothing here locks you to a single provider.",
+     ),
+     el("label", { class: "first-run-label" }, "Provider", providerSelect),
+     el("p", { class: "first-run-hint" }, "The key stays in this app's own store, not in the memory folder."),
+@@ -1485,6 +1530,44 @@
+       ),
+     );
+ 
++    // Written for somebody who has never used a tool like this and may be doing it while tired,
++    // in pain, or under a deadline that nobody else can see. Nothing is assumed, nothing is
++    // simplified into uselessness, and no step is timed. This is the edition for that person.
++    let howOpen = false;
++    const how = el("div", { class: "first-run-about", hidden: true });
++    how.append(
++      el("h2", {}, "A model is the part that writes"),
++      el(
++        "p",
++        {},
++        "It is the thing that turns what you type into what you get back. It is either a file on this machine — a few gigabytes you download once — or a service somewhere else that you reach with a key. Nothing else in this app does anything without one, which is why it is the first question.",
++      ),
++      el("h2", {}, "A provider is where that model lives"),
++      el(
++        "p",
++        {},
++        "\"On this machine\" means the file is yours and it runs on your hardware: no account, no bill, nothing leaves the computer. \"Over the internet\" means somebody else runs it and you reach it with a key, which works on a laptop far too small for the model itself.",
++      ),
++      el("h2", {}, "An API key is a password that pays for it"),
++      el(
++        "p",
++        {},
++        "It is not your account password, and it is not your email password. It is a long string the provider gives you, and it is what the service counts when you use it. It goes into this app's own store, not into the memory folder, and you can replace or remove it at any time.",
++      ),
++      el("h2", {}, "The memory folder is a folder"),
++      el(
++        "p",
++        {},
++        "Markdown files in a directory you choose. You can open them in any text editor, copy them, back them up, put them in git, or delete them. Nothing in it needs this app to be readable — that is the point of it being a folder.",
++      ),
++      el("h2", {}, "There is no clock on any of this"),
++      el(
++        "p",
++        { class: "muted" },
++        "Every step can be skipped, every answer can be changed later in Settings, and nothing here expires while you think. If you would rather read all of it as one table instead of walking through it, \"Just give me the table\" does that.",
++      ),
++    );
++
+     const aboutBtn = button(
+       "About Nora",
+       () => {
+@@ -1494,6 +1577,15 @@
+       },
+       "quiet",
+     );
++    const howBtn = button(
++      "New to tools like this?",
++      () => {
++        howOpen = !howOpen;
++        how.hidden = !howOpen;
++        howBtn.textContent = howOpen ? "Hide that" : "New to tools like this?";
++      },
++      "quiet",
++    );
+ 
+     root.replaceChildren(
+       el("p", { class: "first-run-kicker" }, "GitHub edition"),
+@@ -1508,6 +1600,7 @@
+         { class: "first-run-actions" },
+         button("Let's set it up", () => { step = "choose"; paint(); }, "primary"),
+         aboutBtn,
++        howBtn,
+       ),
+       el("div", { class: "first-run-actions first-run-exit" },
+         button("Skip setup — straight to the app", () => {
+@@ -1521,6 +1614,7 @@
+         }, "quiet"),
+       ),
+       about,
++      how,
+       el(
+         "p",
+         { class: "first-run-foot" },
+@@ -1570,7 +1664,7 @@
+     const modeSel = el("select", { class: "first-run-select" });
+     const encSel = el("select", { class: "first-run-select" });
+     modeSel.append(
+-      el("option", { value: "sealed" }, "Sealed archive — append-only, nothing deletes"),
++      el("option", { value: "sealed" }, "Sealed archive — append-only: the app never deletes. You can still delete the files yourself in any file manager"),
+       el("option", { value: "folder" }, "Ordinary folder — you can delete anything"),
+     );
+     // Three real choices and an honest fourth. Each says what it protects and what it costs, and
+@@ -1692,7 +1786,7 @@
+       warn,
+       el("div", { class: "first-run-actions" },
+         button("Save and finish", save, "primary"),
+-        button("Leave the default", async () => { await save(); }, "quiet")),
++        button("Leave the default", async () => { await save(); }, "reveal")),
+     );
+   }
+ 
+@@ -1738,7 +1832,7 @@
+       el(
+         "p",
+         { class: "first-run-lead" },
+-        "QuixiDesk does not assume. Both answers work; they need different things from you. You can change this later in Settings.",
++        "This edition does not assume. Both answers work; they need different things from you. You can change this later in Settings.",
+       ),
+       el(
+         "div",
+@@ -1939,6 +2033,40 @@
+   function chatPage(host) {
+     const s = session();
+     const main = el("section", { class: "chat-main" + (s ? "" : " is-new") });
++
++    // The text column is capped at 740px so long lines stay readable, and that cap was fixed — the
++    // window could be 4000px wide and the chat stayed 740. This puts a handle on the right edge of
++    // the column itself: grab the edge of the text and pull. --chat-width drives both the padding on
++    // .conversation and this handle's position, so they can never disagree.
++    const chatResizer = el("div", {
++      class: "chat-resizer",
++      title: "Drag to change the reading width",
++      "aria-hidden": "true",
++    });
++    const applyChatWidth = (px) => {
++      const w = Math.max(420, Math.min(window.innerWidth - 200, Math.round(px)));
++      document.documentElement.style.setProperty("--chat-width", `${w}px`);
++      localStorage.setItem("quixi.chatWidth", String(w));
++    };
++    const savedWidth = Number(localStorage.getItem("quixi.chatWidth") || 0);
++    if (savedWidth) document.documentElement.style.setProperty("--chat-width", `${savedWidth}px`);
++    chatResizer.addEventListener("pointerdown", (event) => {
++      event.preventDefault();
++      chatResizer.setPointerCapture(event.pointerId);
++      const rect = main.getBoundingClientRect();
++      const centre = rect.left + rect.width / 2;
++      const move = (ev) => {
++        // Symmetric: the column is centred, so its width is twice the nearer edge distance.
++        applyChatWidth(Math.abs(ev.clientX - centre) * 2);
++      };
++      const up = () => {
++        chatResizer.removeEventListener("pointermove", move);
++        chatResizer.removeEventListener("pointerup", up);
++      };
++      chatResizer.addEventListener("pointermove", move);
++      chatResizer.addEventListener("pointerup", up);
++    });
++    main.append(chatResizer);
+     if (s)
+       main.append(
+         el(
+@@ -2156,19 +2284,25 @@
+         saveDraft(); renderChips(); e.target.value = "";
+       },
+     });
++    // Approvals: three modes, named for what they do to your day rather than for the flag in the
++    // engine. Manual asks every time. Smart lets the agent act and keeps asking about the things
++    // that write or run. YOLO never asks — it is the honest name for bypassPermissions, and it is
++    // in the list because pretending it does not exist only sends people looking for it.
+     const mode = select(
+       [
+         ["default", "Manual"],
+-        ["acceptEdits", "Allow file edits"],
+-        ["auto", "Auto"],
++        ["auto", "Smart"],
++        ["bypassPermissions", "YOLO"],
+       ],
+       s?.permissionMode || state.permission,
+       async (v) => {
+         state.permission = v;
++        localStorage.setItem("quixi.permission", v);
+         if (s) await rpc(service(s), "setPermissionMode", [s.sessionId, v]);
+       },
+-      { "aria-label": "Tool permission mode" },
++      { "aria-label": "Approvals", title: "Manual asks every time. Smart decides from what you have already allowed. YOLO never asks." },
+     );
++
+     const send = button(running(s) ? "Queue" : "Send", () => sendPrompt(), "primary", "arrow");
+     send.id = "send-button";
+     const stop = button("Stop", () => stopTask(), "quiet", "stop");
+@@ -2201,31 +2335,58 @@
+       // The task list is docked above the composer rather than living on the empty screen. Sending
+       // a message replaces the empty state with the transcript, and a list that disappears exactly
+       // when the work starts is not a list anybody works from — it has to stay while the agent is
+-      // thinking, and while it is answering.
+-      tasksWidget(),
++      // thinking, and while it is answering. It can be turned off in Settings → Visuals.
++      localStorage.getItem("quixi.showTasks") === "0" ? null : tasksWidget(),
+       el(
+         "div",
+         { class: "composer" },
++        (() => {
++          // An explicit corner grip, because the native one WebKit draws for a resizable textarea is
++          // invisible against these panels — which is exactly what "I don't see that this is
++          // resizable" means. This one is a real element and it drags both axes.
++          const grip = el("div", { class: "resize-grip", title: "Drag to resize", "aria-hidden": "true" });
++          grip.addEventListener("pointerdown", (event) => {
++            event.preventDefault();
++            grip.setPointerCapture(event.pointerId);
++            const startW = ta.getBoundingClientRect().width;
++            const startH = ta.getBoundingClientRect().height;
++            const startX = event.clientX;
++            const startY = event.clientY;
++            const move = (ev) => {
++              ta.style.width = `${Math.max(180, Math.min(ta.parentElement.clientWidth - 26, startW + (ev.clientX - startX)))}px`;
++              const maxH = Math.round(window.innerHeight * 0.6);
++              ta.style.height = `${Math.max(70, Math.min(maxH, startH + (ev.clientY - startY)))}px`;
++            };
++            const up = () => {
++              grip.removeEventListener("pointermove", move);
++              grip.removeEventListener("pointerup", up);
++              localStorage.setItem("quixi.composerH", ta.style.height);
++              localStorage.setItem("quixi.composerW", ta.style.width);
++            };
++            grip.addEventListener("pointermove", move);
++            grip.addEventListener("pointerup", up);
++          });
++          const h = localStorage.getItem("quixi.composerH");
++          const w = localStorage.getItem("quixi.composerW");
++          if (h) ta.style.height = h;
++          if (w) ta.style.width = w;
++          return grip;
++        })(),
+         el("div", { class: "chips", id: "attachment-chips" }),
+         ta,
+         fileInput,
+         el(
+           "div",
+           { class: "composer-tools" },
+-          ib("Attach images or text files", "plus", () => fileInput.click()),
+-          capabilityUI.dictationControl(ta),
++          ib("Attach files", "plus", () => fileInput.click()),
++          voiceControls(ta),
+           mcpContextButton(),
+-          button(
+-            [
+-              icon("folder", 14),
+-              currentFolder()
+-                ? currentFolder().split(/[\\/]/).filter(Boolean).pop()
+-                : "Choose folder",
+-            ],
+-            () => folderDialog(),
+-            "workspace-switch",
+-          ),
+-          mode,
++
++          approvalDropdown(s?.permissionMode || state.permission, async (v) => {
++            state.permission = v;
++            localStorage.setItem("quixi.permission", v);
++            if (s) await rpc(service(s), "setPermissionMode", [s.sessionId, v]);
++          }),
+           el("span", { class: "spacer" }),
+           el("span", { class: "model-control" }, needsOnboarding() ? null : chooseModel),
+           stop,
+@@ -2238,6 +2399,272 @@
+         running(s) ? "Enter to queue · Shift+Enter for a new line" : "Enter to send · Shift+Enter for a new line"),
+     );
+   }
++  // --- Speaking replies aloud -------------------------------------------------
++  // A toggle, not a settings trip. It reads the reply that just landed, and it stops the moment you
++  // click it again or send something new — a voice that keeps going after you have moved on is the
++  // worst kind of assistant.
++  let speaking = false;
++  function speakOn() { return localStorage.getItem("quixi.speak") === "1"; }
++  function speakableText(raw) {
++    return String(raw || "")
++      .replace(/```[\s\S]*?```/g, " code block. ")
++      .replace(/`([^`]*)`/g, "$1")
++      .replace(/!\[[^\]]*\]\([^)]*\)/g, "image")
++      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
++      .replace(/^\s{0,3}#{1,6}\s*/gm, "")
++      .replace(/[*_>#|]/g, " ")
++      .replace(/\s+/g, " ")
++      .trim()
++      .slice(0, 6000);
++  }
++  let speakGeneration = 0;
++  async function speakReply(raw) {
++    if (!speakOn()) return;
++    const text = speakableText(raw);
++    if (!text) return;
++    // WebKitGTK has no speechSynthesis at all — the engine's own voice service is the only way to
++    // make sound here, so this goes through /api/quixi/voice/speak. It is synchronous per chunk by
++    // design: that is what lets "stop" take effect between sentences instead of after the reply.
++    const generation = ++speakGeneration;
++    speaking = true;
++    syncSpeakButton();
++    const chunks = text.match(/[^.!?]{1,240}[.!?]?/g) || [text];
++    for (const chunk of chunks) {
++      if (generation !== speakGeneration) return;
++      const line = chunk.trim();
++      if (!line) continue;
++      try {
++        await api("/api/quixi/voice/speak", { text: line });
++      } catch (error) {
++        toast(`Speech: ${error.message}`, true);
++        break;
++      }
++    }
++    if (generation === speakGeneration) {
++      speaking = false;
++      syncSpeakButton();
++    }
++  }
++  function stopSpeaking() {
++    // Bumping the generation abandons the remaining chunks; the engine finishes only the one it is
++    // already speaking, which is at most a sentence.
++    speakGeneration += 1;
++    speaking = false;
++    syncSpeakButton();
++  }
++  function syncSpeakButton() {
++    const btn = document.getElementById("speak-toggle");
++    if (!btn) return;
++    const on = speakOn();
++    btn.classList.toggle("is-on", on);
++    btn.setAttribute("aria-pressed", on ? "true" : "false");
++    btn.title = on ? "Replies are read aloud — click to stop" : "Read replies aloud";
++    btn.replaceChildren(icon(on ? "speaker" : "speakerOff", 14), el("span", {}, on ? "Speak" : "Speak"));
++  }
++  // Approvals as one control that names itself. The word "Approvals" is IN the button — a bare
++  // "Manual" sitting next to a tiny uppercase caption made people ask what the caption was for, and
++  // a caption is not a label when the value beside it is the only thing that looks clickable.
++  function approvalDropdown(initial, onPick) {
++    const NAMES = { default: "Manual", auto: "Smart", bypassPermissions: "YOLO" };
++    let value = NAMES[initial] ? initial : "default";
++    const wrap = el("div", { class: "approval-dd" });
++    const button = el("button", { class: "approval-button", type: "button", "aria-haspopup": "listbox", "aria-expanded": "false" });
++    const menu = el("div", { class: "approval-menu", role: "listbox", hidden: true });
++    const paint = () => {
++      // Closed, the button says only APPROVALS and a caret. The mode word belongs in the menu: a
++      // control that answers its own question before it is opened reads as a label, not a control.
++      button.replaceChildren(
++        el("span", { class: "approval-name" }, "Approvals"),
++        el("span", { class: "approval-caret", "aria-hidden": "true" }, "\u2304"),
++      );
++      button.classList.toggle("is-open", !menu.hidden);
++      menu.replaceChildren(
++        ...Object.entries(NAMES).map(([key, label]) =>
++          el(
++            "button",
++            {
++              class: "approval-option" + (key === value ? " is-current" : ""),
++              type: "button",
++              role: "option",
++              "aria-selected": key === value ? "true" : "false",
++              onclick: () => {
++                value = key;
++                menu.hidden = true;
++                button.setAttribute("aria-expanded", "false");
++                paint();
++                onPick(key);
++              },
++            },
++            el("span", { class: "approval-option-name" }, label),
++            el("span", { class: "approval-option-note" },
++              key === "default" ? "asks every time"
++                : key === "auto" ? "decides from your history"
++                : "never asks"),
++            key === value ? icon("check", 12) : null,
++          )),
++      );
++    };
++    button.addEventListener("click", (event) => {
++      event.stopPropagation();
++      menu.hidden = !menu.hidden;
++      button.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
++      paint();
++    });
++    const closeOnOutside = (event) => {
++      if (!wrap.contains(event.target)) close();
++    };
++    const close = () => {
++      if (menu.hidden) return;
++      menu.hidden = true;
++      button.setAttribute("aria-expanded", "false");
++      paint();
++    };
++    document.addEventListener("pointerdown", closeOnOutside);
++    wrap.addEventListener("DOMNodeRemovedFromDocument", () => document.removeEventListener("pointerdown", closeOnOutside));
++    menu.hidden = true;
++    paint();
++    wrap.append(button, menu);
++    return wrap;
++  }
++
++  // --- Mic and Speaker, as two doors into the same machine --------------------
++  // Both are device lists first and switches second: "which input" is the question people actually
++  // have, and on/off falls out of answering it. Off is a row in the list, not a separate button.
++  // With a microphone and a speaker both live, this is a conversation — so it says so.
++  let audioCache = null;
++  function audioDevices() {
++    if (audioCache) return audioCache;
++    audioCache = rpc("AudioDevices", "list")
++      .then((res) => ({
++        sources: ((res && res.sources) || []).filter((d) => !/\.monitor$/.test(d.name)),
++        sinks: (res && res.sinks) || [],
++        defaultSink: (res && res.defaultSink) || "",
++      }))
++      .catch(() => ({ sources: [], sinks: [], defaultSink: "" }));
++    return audioCache;
++  }
++  function voiceControls(ta) {
++    const bar = el("div", { class: "voice-controls" });
++    const dictation = capabilityUI.dictationControl(ta);
++    dictation.hidden = true;
++    dictation.setAttribute("aria-hidden", "true");
++    bar.append(dictation);
++
++    const stateNow = () => ({
++      micOn: localStorage.getItem("quixi.micOn") === "1",
++      speakerOn: localStorage.getItem("quixi.speak") === "1",
++    });
++
++    const conversationChip = el("span", { class: "conversation-chip", hidden: true }, "Conversation");
++    const paintChip = () => {
++      const { micOn, speakerOn } = stateNow();
++      conversationChip.hidden = !(micOn && speakerOn);
++    };
++
++    const deviceMenu = ({ key, label, store, listKey, offLabel, onPick }) => {
++      const wrap = el("div", { class: "device-dd" });
++      const button = el("button", { class: "device-button", type: "button", "aria-haspopup": "listbox", "aria-expanded": "false" });
++      const menu = el("div", { class: "device-menu", role: "listbox", hidden: true });
++      const paintButton = () => {
++        const chosen = localStorage.getItem(store) || "";
++        const on = localStorage.getItem(key) === "1";
++        button.replaceChildren(
++          el("span", { class: "device-name" }, label),
++          el("span", { class: "device-caret", "aria-hidden": "true" }, "\u2304"),
++        );
++        button.classList.toggle("is-on", on);
++        button.title = on
++          ? `${label}: ${chosen || "system default"}`
++          : `${label}: off — pick an input to turn it on`;
++      };
++      const paintMenu = async () => {
++        const devices = await audioDevices();
++        const items = devices[listKey] || [];
++        const chosen = localStorage.getItem(store) || "";
++        menu.replaceChildren(
++          el("div", { class: "device-menu-head" }, label),
++          el("button", {
++            class: "device-option" + (!localStorage.getItem(key) || localStorage.getItem(key) === "0" ? " is-current" : ""),
++            type: "button",
++            role: "option",
++            onclick: () => { onPick(""); menu.hidden = true; paintButton(); paintChip(); },
++          }, el("span", { class: "device-option-name" }, offLabel), el("span", { class: "device-option-note" }, "off")),
++          ...items.map((device) =>
++            el("button", {
++              class: "device-option" + (device.name === chosen && localStorage.getItem(key) === "1" ? " is-current" : ""),
++              type: "button",
++              role: "option",
++              onclick: () => { onPick(device.name); menu.hidden = true; paintButton(); paintChip(); },
++            }, el("span", { class: "device-option-name" }, device.label || device.name), el("span", { class: "device-option-note" }, device.name)),
++          ),
++          items.length ? null : el("p", { class: "device-menu-empty" }, "No devices were found. PipeWire or PulseAudio was not reachable."),
++        );
++      };
++      button.addEventListener("click", async (event) => {
++        event.stopPropagation();
++        const opening = menu.hidden;
++        menu.hidden = !opening;
++        button.setAttribute("aria-expanded", opening ? "true" : "false");
++        if (opening) await paintMenu();
++      });
++      const outside = (event) => { if (!wrap.contains(event.target) && !menu.hidden) { menu.hidden = true; button.setAttribute("aria-expanded", "false"); } };
++      document.addEventListener("pointerdown", outside);
++      paintButton();
++      wrap.append(button, menu);
++      return { wrap, paintButton };
++    };
++
++    const mic = deviceMenu({
++      key: "quixi.micOn",
++      label: "Mic",
++      store: "quixi.audioInput",
++      listKey: "sources",
++      offLabel: "Microphone off",
++      onPick: (name) => {
++        localStorage.setItem("quixi.audioInput", name);
++        rememberPreferenceSoon("audioInput", name);
++        const wasOn = localStorage.getItem("quixi.micOn") === "1";
++        localStorage.setItem("quixi.micOn", name ? "1" : "0");
++        if (name && !wasOn) dictation.click();       // the real control does the real work
++        if (!name && wasOn) dictation.click();
++      },
++    });
++    const speaker = deviceMenu({
++      key: "quixi.speak",
++      label: "Speaker",
++      store: "quixi.audioOutput",
++      listKey: "sinks",
++      offLabel: "Speaker off",
++      onPick: (name) => {
++        localStorage.setItem("quixi.audioOutput", name);
++        rememberPreferenceSoon("audioOutput", name);
++        const wasOn = localStorage.getItem("quixi.speak") === "1";
++        localStorage.setItem("quixi.speak", name ? "1" : "0");
++        if (!name && wasOn) stopSpeaking();
++      },
++    });
++
++    bar.append(mic.wrap, conversationChip, speaker.wrap);
++    queueMicrotask(paintChip);
++    return bar;
++  }
++
++  function speakControl() {
++    const btn = el("button", {
++      id: "speak-toggle",
++      class: "speak-toggle",
++      type: "button",
++      onclick: () => {
++        const next = !speakOn();
++        localStorage.setItem("quixi.speak", next ? "1" : "0");
++        if (!next) stopSpeaking();
++        syncSpeakButton();
++      },
++    });
++    queueMicrotask(syncSpeakButton);
++    return btn;
++  }
++
+   function renderChips() {
+     const target = document.getElementById("attachment-chips");
+     target?.replaceChildren(
+@@ -2669,6 +3096,31 @@
+     }
+     return box;
+   }
++  // --- Smart mode: decide from history ----------------------------------------
++  // "Smart" is not a mood, it is a record. Every approval you give is fingerprinted (tool + the
++  // thing it acts on) and kept; in Smart, a request that matches something you have already allowed
++  // goes straight through, and anything new still stops and asks. That is the whole rule, so it can
++  // be explained in one sentence and predicted before it acts.
++  function approvalFingerprint(request) {
++    const input = request.input || {};
++    const target = input.file_path || input.path || input.command || input.url || input.description || input.server || "";
++    return `${request.toolName}::${String(target).trim().replace(/\/+$/, "")}`;
++  }
++  function approvalHistory() {
++    try { return JSON.parse(localStorage.getItem("quixi.approvalHistory") || "[]"); }
++    catch { return []; }
++  }
++  function rememberApproval(request) {
++    const key = approvalFingerprint(request);
++    const history = approvalHistory().filter((k) => k !== key);
++    history.unshift(key);
++    localStorage.setItem("quixi.approvalHistory", JSON.stringify(history.slice(0, 200)));
++  }
++  function approvedBefore(request) {
++    return approvalHistory().includes(approvalFingerprint(request));
++  }
++  const autoApproving = new Set();
++
+   function permissionCard(request, s) {
+     const edit = ["Write", "Edit"].includes(request.toolName) && !request.outsideWorkspace;
+     const input = request.input || {};
+@@ -2710,6 +3162,7 @@
+         : null,
+     );
+     const decide = async (decision) => {
++      if (decision !== "deny") rememberApproval(request);
+       const buttons = [...card.querySelectorAll("button")];
+       buttons.forEach((b) => (b.disabled = true));
+       try {
+@@ -3020,8 +3473,18 @@
+         }, "quiet")));
+       result.push(panel);
+     }
+-    for (const request of state.approvals.get(s.sessionId) || [])
++    for (const request of state.approvals.get(s.sessionId) || []) {
++      const mode = s.permissionMode || state.permission;
++      if (mode === "auto" && approvedBefore(request) && !autoApproving.has(request.requestId)) {
++        autoApproving.add(request.requestId);
++        rpc(service(s), "resolveToolPermission", [s.sessionId, request.requestId, "allow_once"])
++          .then(() => refreshSession(s.sessionId))
++          .then(() => { renderTranscript(); updateSendButton(); })
++          .catch(() => autoApproving.delete(request.requestId));
++        continue;
++      }
+       result.push(permissionCard(request, s));
++    }
+     if (state.stopped.has(s.sessionId) && !running(s))
+       result.push(
+         el(
+@@ -3356,13 +3819,27 @@
+     const ORDER = ["pending", "in_progress", "completed", "cancelled"];
+     const LABEL = { pending: "pending", in_progress: "in progress", completed: "done", cancelled: "cancelled" };
+ 
++    let section = null;
++    let liveHeight = null;   // set by a drag in this session; survives the empty/!empty switch
++    // Empty means a header and nothing else. "No tasks yet." plus an input plus a header is three
++    // lines of furniture around a list with nothing in it, when the + is already the invitation.
++    let editing = false;
+     const draw = (tasks) => {
+       const list = tasks || [];
+       rows.replaceChildren();
++      section.classList.toggle("is-empty", list.length === 0);
+       if (!list.length) {
+-        rows.append(el("p", { class: "task-widget-empty" }, "No tasks yet."));
++        editing = false;
++        input.hidden = true;
++        // One row is the RESTING state, not a rule: a height somebody dragged to is theirs and
++        // stays theirs, empty or not. Only the default is small.
++        // One row is the resting state. A height dragged a moment ago is honoured; one remembered
++        // from a previous session is not, because an empty list should not come back tall.
++        section.style.height = liveHeight || "";
+         return;
+       }
++      const remembered = liveHeight || localStorage.getItem("quixi.tasksHeight");
++      if (remembered) section.style.height = remembered;
+       list.forEach((task, index) => {
+         const status = task.status || "pending";
+         rows.append(
+@@ -3393,7 +3870,7 @@
+       const text = input.value.trim();
+       if (!text) { input.focus(); return; }
+       const res = await api("/api/quixi/tasks", { text }).catch(() => null);
+-      if (res && res.tasks) { input.value = ""; draw(res.tasks); }
++      if (res && res.tasks) { input.value = ""; editing = false; input.hidden = true; draw(res.tasks); }
+     };
+     input.addEventListener("keydown", (event) => {
+       if (event.key === "Enter") { event.preventDefault(); add(); }
+@@ -3401,15 +3878,30 @@
+ 
+     api("/api/quixi/tasks").then((res) => draw(res && res.tasks)).catch(() => draw([]));
+ 
+-    return el(
++    // Resize from the TOP edge as well as the corner. A corner handle that nobody notices is not a
++    // resizable panel, it is a resizable panel for people who already knew; dragging the top edge is
++    // the gesture most people try first, and it is the one this now answers.
++    section = el(
+       "section",
+-      { class: "task-widget", "aria-label": "Tasks" },
++      { class: "task-widget is-empty", "aria-label": "Tasks" },
+       el("div", { class: "task-widget-head" },
+         el("span", {}, "Tasks"),
+-        el("button", { class: "task-widget-add", title: "Add a task", onclick: add }, "+")),
++        el("button", {
++          class: "task-widget-add",
++          title: "Add a task",
++          onclick: () => {
++            editing = true;
++            input.hidden = false;
++            input.focus();
++          },
++        }, "+")),
+       rows,
+       input,
+     );
++    input.hidden = true;
++    const remembered = localStorage.getItem("quixi.tasksHeight");
++    if (remembered) section.style.height = remembered;
++    return section;
+   }
+ 
+   async function tasksPage(host) {
+@@ -4456,6 +4948,29 @@
+             colourControl("text", "Text"),
+             colourControl("accent", "Accent"),
+           ),
++          el("h2", { style: "margin-top:30px" }, "Task list"),
++          el(
++            "p",
++            { class: "muted" },
++            "The numbered list of tasks that sits above the composer. It stays visible while the agent works and shrinks to a single line when there is nothing on it.",
++          ),
++          el(
++            "div",
++            { class: "toggle-row" },
++            el(
++              "label",
++              { class: "toggle" },
++              el("input", {
++                type: "checkbox",
++                checked: localStorage.getItem("quixi.showTasks") !== "0",
++                onchange: (event) => {
++                  rememberPreference("showTasks", event.target.checked ? "1" : "0");
++                  render();
++                },
++              }),
++              el("span", {}, "Show the task list above the composer"),
++            ),
++          ),
+           el("h2", { style: "margin-top:30px" }, "Surfaces"),
+           el(
+             "p",
+@@ -4686,6 +5201,7 @@
+       ["visuals", "Visuals"],
+       ["audio", "Audio"],
+       ["providers", "Providers"],
++      ["onboarding", "Onboarding"],
+       ["privacy", "Privacy & data"],
+       ["about", "About"],
+     ];
+@@ -4721,8 +5237,8 @@
+           select(
+             [
+               ["default", "Manual"],
+-              ["acceptEdits", "Allow file edits"],
+-              ["auto", "Auto"],
++              ["auto", "Smart"],
++              ["bypassPermissions", "YOLO"],
+             ],
+             state.permission,
+             (v) => {
+@@ -4730,7 +5246,7 @@
+               localStorage.setItem("quixi.permission", v);
+             },
+           ),
+-          "Manual asks before file changes and commands. Allow file edits permits changes for the task; commands still ask. Auto permits tool actions.",
++          "Manual asks before anything that changes a file or runs a command. Smart answers from your history: an action you have already allowed once goes through without asking, and anything you have not seen before still stops and asks. YOLO never asks — every action is approved as it arrives, which is fast, and is exactly as safe as it sounds.",
+         ),
+         el(
+           "div",
+@@ -4749,6 +5265,40 @@
+         el("p", {}, `${state.providers?.configuredCount || 0} configured`),
+         button("Manage providers", () => providerDirectory(), "primary"),
+       );
++    } else if (state.settingsTab === "onboarding") {
++      // A legitimate home for first run. The star entry in the sidebar is the development door and
++      // stays exactly as it is; this is the one a person can find without being told it exists, and
++      // it explains what the wizard decides rather than just offering to show it again.
++      const setupDone = !!(state.providers && state.providers.onboardingCompleted === true);
++      const answered = state.providers?.configuredCount || 0;
++      content.append(
++        el("h2", {}, "First run"),
++        el(
++          "p",
++          {},
++          setupDone
++            ? `Setup was answered on this install, and ${answered} provider${answered === 1 ? " is" : "s are"} configured.`
++            : "Setup has not been answered on this install yet.",
++        ),
++        el(
++          "p",
++          { class: "muted" },
++          "The wizard asks two things: where the models run, and where your memory lives. Neither answer is permanent — the provider list and the memory folder are both here in Settings, and the persona is a file you own. Running it again does not clear any of that; it only asks the questions.",
++        ),
++        el(
++          "div",
++          { class: "first-run-actions" },
++          button(
++            setupDone ? "Run the setup again" : "Open setup",
++            () => {
++              state.setupDismissed = false;
++              navigate("onboarding");
++            },
++            "reveal",
++          ),
++          button("Just give me the table", () => { state.setupDismissed = true; navigate("setup"); }, "reveal"),
++        ),
++      );
+     } else if (state.settingsTab === "privacy") {
+       // Paths, counts and files — not a promise that things are "stored on this device".
+       content.append(
+@@ -5888,6 +6438,10 @@
+       if (state.id === id) scheduleStreamRender();
+       return;
+     }
++    if (message?.type === "assistant") {
++      const finished = state.streams.get(id);
++      speakReply(finished?.text || message?.message?.content || "");
++    }
+     if (
+       message?.type === "assistant" ||
+       payload.type === "close" ||
