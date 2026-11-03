@@ -166,6 +166,7 @@ source=(
   0082-no-words-left-behind.patch
   0083-ctrl-f-and-no-second-conversation-mode.patch
   0084-personas-are-a-settings-section.patch
+  0085-the-greeting-is-sup.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -254,6 +255,7 @@ sha256sums=(
   '58f63448fe6fd0d0a8980e9693baeb683c13b547e0d757f3027a716ea5e2f4c8'
   '95c0db024cad4c7f241f0f250804ec7268c94d0231511f1a7aad5232d21667c1'
   'a230ed090394ac1c433fe4307c3fbdb0945f511b886e64d83ca77bc90790f1e9'
+  'a94c706e583d162c9f37f61558e7222e4831ad1b91b73ffe553f8c45cdcd94c5'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -540,6 +542,9 @@ prepare() {
 
   # Personas live in settings, and the persona text can be read there.
   patch -Np1 -i "${srcdir}/0084-personas-are-a-settings-section.patch"
+
+  # The greeting is "Sup" — the first word should set a register, not make a claim.
+  patch -Np1 -i "${srcdir}/0085-the-greeting-is-sup.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
