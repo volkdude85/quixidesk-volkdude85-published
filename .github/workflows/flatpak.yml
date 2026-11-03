@@ -1,21 +1,18 @@
 name: flatpak
 
-# Builds the Flatpak on a tag and attaches the bundle to the release, so a Deck or Debian user can
-# `flatpak install ./quixidesk.flatpak` without a store review. Also runs on demand: a packaging job
-# that only fires at release time is a packaging job nobody has tested.
+# Builds the Flatpak so it can be tested and installed by hand. NOTHING is published: no tag trigger,
+# no release asset, no Pages repository, no store submission. Run it from the Actions tab with
+# "Run workflow"; the bundle comes back as a workflow artifact you can download and
+# `flatpak install ./quixidesk.flatpak`.
 #
-# What is deliberately NOT here yet, and why:
-#  * publishing an OSTree repository to GitHub Pages — Pages for a private repository needs a paid
-#    plan, and flatpak refuses an unsigned repository without --no-gpg-verify. Both are fixable
-#    (sign with a key in secrets, publish from the public repo or a paid plan); neither is worth
-#    pretending is done.
+# To publish later, three things have to exist first and none of them do: a signing key in repository
+# secrets, a public (or paid-plan) host for the OSTree repository, and a Flathub submission that has
+# passed review.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -26,23 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build the bundle
+      - name: Build volkdude85's QuixiCore
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: quixidesk.flatpak
           manifest-path: flatpak/org.quixidesk.QuixiDesk.yml
-          cache-key: flatpak-quixidesk-${{ github.sha }}
+          cache-key: flatpak-org-quixidesk-QuixiDesk-${{ github.sha }}
           run-tests: false
 
-      - name: Attach the bundle to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: quixidesk.flatpak
-
-      - name: Keep the bundle as a workflow artifact too
+      - name: Keep the bundle as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: quixidesk-flatpak
+          name: quixidesk-bundle
           path: quixidesk.flatpak
           retention-days: 30
