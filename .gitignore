@@ -16,3 +16,12 @@
 *.bak-*
 *.orig
 *.rej
+
+# Runtime state is never source. A key somebody pasted, the mask of it, the sealed store and the voice
+# config all live in the user's data directory — if one of them is ever copied into the tree, this
+# keeps it out of a commit.
+providers.json
+credentials.key
+preferences.json
+voice.json
+.quixi/
