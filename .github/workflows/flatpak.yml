@@ -92,6 +92,11 @@ jobs:
           mkdir -p prebuilt
           cp target/release/QuixiDesk prebuilt/QuixiDesk
           ls -l prebuilt/QuixiDesk
+          # The packaging files live in this repository, not in the application tree, so the manifest
+          # cannot find its desktop entry, its metainfo or its launcher without them being put there.
+          cd ..
+          cp -a flatpak flatpak-src/flatpak
+          ls -l flatpak-src/flatpak
 
       - name: Build volkdude85's QuixiCore
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
