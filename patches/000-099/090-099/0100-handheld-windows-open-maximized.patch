@@ -1,0 +1,29 @@
+--- a/crates/quixi-app/src/main.rs
++++ b/crates/quixi-app/src/main.rs
+@@ -978,10 +978,25 @@
+         win_h = win_h.min(screen.height - 80.0).max(360.0);
+     }
+ 
++    // A window smaller than the panel floats in black in Game Mode: that compositor runs one
++    // application and gives it the whole display, undecorated and unmaximized. So on a handheld-sized
++    // panel — 1280x800 is a Steam Deck in either mode — ask to be maximized as well. A desktop window
++    // manager honours the same hint and nothing is lost there.
++    let handheld = {
++        match event_loop.primary_monitor() {
++            Some(monitor) => {
++                let screen = monitor.size().to_logical::<f64>(monitor.scale_factor());
++                screen.width <= 1366.0 && screen.height <= 900.0
++            }
++            None => false,
++        }
++    };
++
+     let mut win_builder = WindowBuilder::new()
+         .with_title(window_title)
+         .with_inner_size(LogicalSize::new(win_w, win_h))
+-        .with_min_inner_size(LogicalSize::new(480.0, 360.0));
++        .with_min_inner_size(LogicalSize::new(480.0, 360.0))
++        .with_maximized(handheld);
+ 
+     // Linux: the window is NOT declared transparent. A window that is declared transparent is an
+     // ARGB surface, and an ARGB surface cannot be made fully opaque from the stylesheet — measured at

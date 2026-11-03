@@ -11,6 +11,9 @@
 > that survive. Desktop mode is where you use it. Game mode is a launcher, not a home.** Everything
 > below is why, feature by feature, so you can decide before you install instead of after.
 
+Every compatibility wall hit while packaging this, with the cause and the fix for each — including the
+ones that are not fixed yet — is in [`DECK-PROBLEM-LOG.md`](DECK-PROBLEM-LOG.md).
+
 Unlike the `quixidesk-arch` edition — which ships only the PKGBUILD and points Deck users here — this
 edition carries a Flatpak manifest and a workflow that builds it.
 
