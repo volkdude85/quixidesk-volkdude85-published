@@ -1,0 +1,284 @@
+Dictation state survives a repaint
+=================================
+
+The switch looked like it toggled on its own. It did: the recording state lived in the control's
+closure, and the composer is rebuilt on any state change — a task ticking, a provider list refresh, a
+transcript arriving. Each rebuild produced a control that believed it was idle while the engine was
+still recording, so the button said Mic over a live microphone, and pressing it opened a second
+capture instead of stopping the first.
+
+State now lives beside the engine call rather than beside the button: one module-level record, one
+poll loop, and every rendered control registers a painter that reads it. A rebuild in the middle of a
+recording now paints "Listening" because it is true, not because it remembers.
+
+The press also draws before it awaits. Waiting for the engine to release the microphone and then
+repainting leaves the button reading Listening for as long as that takes, which is the other half of
+"it locked up": the button is now Transcribing… the moment you press it, with the stop call itself
+bounded by a timeout so a wedged backend cannot leave the control stuck.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest7/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 19:53:12.494857141 -0800
++++ b/resources/ui/app.css	2026-11-02 19:56:43.827280793 -0800
+@@ -842,6 +842,15 @@
+ }
+ /* A level meter while the microphone is open. Without it the button is a light that says "on"
+    whether or not the microphone can hear anything, which is the complaint it exists to answer. */
++/* While the last sentence is being finished the button has to look different, or the press reads as
++   ignored. */
++.composer-tools .device-button.is-busy {
++  color: var(--muted);
++  border-color: var(--line);
++  animation: device-wait 1s ease-in-out infinite;
++}
++@keyframes device-wait { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
++
+ .mic-meter {
+   display: inline-block;
+   width: 34px;
+diff -ruN '--exclude=target' '--exclude=.git' qtest7/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 19:53:12.495188412 -0800
++++ b/resources/ui/app.js	2026-11-02 19:58:37.965932472 -0800
+@@ -2646,11 +2646,109 @@
+   }
+ 
+   // --- Mic and Speaker, as two switches ---------------------------------------
+-  // Mic is press-to-start, press-to-stop: while it is on it shows the input level so you can see the
+-  // microphone is in the room, and it puts nothing in the box until you stop. Streaming words into a
+-  // draft while somebody is still thinking is worse than useless — it moves the text under them.
++  // The dictation state is MODULE-level, not per-render. It used to live in the control's closure,
++  // and every re-render built a fresh control that knew nothing: the engine was still recording, the
++  // button said Mic again, and pressing it opened a second capture — which is what "the toggle is
++  // not smooth" looks like from the outside.
+   const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+-  function voiceControls(ta) {
++  const withTimeout = (promise, ms, fallback) =>
++    Promise.race([promise, sleepMs(ms).then(() => fallback)]);
++  const DICTATION = { phase: "idle", baseline: "", live: "", level: 0, speech: false, timer: null };
++
++  const dictationPainters = new Set();
++  function repaintDictation() {
++    for (const entry of dictationPainters) {
++      // A re-render leaves the previous control behind; drop it rather than painting a detached node
++      // for the rest of the session.
++      if (!entry.node.isConnected) {
++        dictationPainters.delete(entry);
++        continue;
++      }
++      try { entry.paint(); } catch {}
++    }
++  }
++  function dictationComposer() {
++    return document.getElementById("prompt");
++  }
++  const dictationPoll = async () => {
++    if (DICTATION.phase !== "listening") return;
++    try {
++      const status = await withTimeout(rpc("Voice", "dictationStatus"), 2500, null);
++      if (DICTATION.phase !== "listening") return;
++      if (status) {
++        DICTATION.level = Number(status.level) || 0;
++        DICTATION.speech = Boolean(status.in_speech);
++        if (typeof status.transcript === "string") DICTATION.live = status.transcript;
++        repaintDictation();
++      }
++    } catch {}
++    if (DICTATION.phase === "listening") DICTATION.timer = setTimeout(dictationPoll, 250);
++  };
++  async function startDictation() {
++    if (DICTATION.phase !== "idle") return;
++    DICTATION.phase = "listening";
++    DICTATION.level = 0;
++    DICTATION.speech = false;
++    repaintDictation();
++    const opened = await withTimeout(
++      rpc("Voice", "startDictation").catch((e) => ({ ok: false, error: e.message })),
++      6000,
++      { ok: false, error: "the engine did not answer" },
++    );
++    if (!opened || opened.ok === false) {
++      DICTATION.phase = "idle";
++      repaintDictation();
++      toast(`The microphone did not open: ${(opened && opened.error) || "no answer from the engine"}`, true);
++      return;
++    }
++    try {
++      const before = await withTimeout(rpc("Voice", "getTranscript"), 4000, null);
++      DICTATION.baseline = (before && before.transcript) || "";
++    } catch { DICTATION.baseline = ""; }
++    DICTATION.live = DICTATION.baseline;
++    dictationPoll();
++  }
++  async function stopDictation() {
++    if (DICTATION.phase !== "listening") return;
++    DICTATION.phase = "stopping";
++    clearTimeout(DICTATION.timer);
++    repaintDictation();
++    await withTimeout(rpc("Voice", "stopDictation").catch(() => null), 5000, null);
++    // Wait for the last segment, but on a clock: if transcription is still running after three
++    // seconds, take what exists. A stop that never finishes is worse than a truncated sentence.
++    const deadline = Date.now() + 3000;
++    while (Date.now() < deadline) {
++      const status = await withTimeout(rpc("Voice", "dictationStatus").catch(() => null), 1500, null);
++      if (status && typeof status.transcript === "string") DICTATION.live = status.transcript;
++      if (status && !status.transcribing) break;
++      await sleepMs(200);
++    }
++    const whole = String(DICTATION.live || "");
++    let fresh = DICTATION.baseline && whole.startsWith(DICTATION.baseline)
++      ? whole.slice(DICTATION.baseline.length)
++      : whole;
++    fresh = fresh.trim();
++    DICTATION.baseline = "";
++    DICTATION.live = "";
++    DICTATION.level = 0;
++    DICTATION.speech = false;
++    DICTATION.phase = "idle";
++    repaintDictation();
++    const target = dictationComposer();
++    if (fresh && target) {
++      const at = target.selectionStart ?? target.value.length;
++      const end = target.selectionEnd ?? at;
++      const prefix = at && !/\s/.test(target.value[at - 1] || "") ? " " : "";
++      const suffix = end < target.value.length && !/\s/.test(target.value[end] || "") ? " " : "";
++      target.setRangeText(prefix + fresh + suffix, at, end, "end");
++      target.dispatchEvent(new Event("input", { bubbles: true }));
++      target.focus();
++    } else if (!fresh) {
++      toast("Nothing was transcribed. The meter shows whether the microphone is hearing anything.");
++    }
++  }
++
++  function voiceControls() {
+     const bar = el("div", { class: "voice-controls" });
+     const chip = el("span", { class: "conversation-chip", hidden: true }, "Conversation");
+     const meterFill = el("i");
+@@ -2658,103 +2756,33 @@
+     const mic = el("button", { class: "device-button", type: "button", "aria-pressed": "false" });
+     const speaker = el("button", { class: "device-button", type: "button", "aria-pressed": "false" });
+ 
+-    let collecting = false;
+-    let timer = null;
+-    let baseline = "";
+-    let live = "";
+-    let lastLevel = 0;
+-    let lastSpeech = false;
+-
+     const paint = () => {
+-      const micOn = collecting;
++      const phase = DICTATION.phase;
+       const speakerOn = localStorage.getItem("quixi.speak") === "1";
+-      mic.replaceChildren(icon(micOn ? "mic" : "micOff", 14), el("span", {}, micOn ? "Listening" : "Mic"));
+-      mic.classList.toggle("is-on", micOn);
+-      mic.setAttribute("aria-pressed", micOn ? "true" : "false");
+-      mic.title = micOn ? "Recording — click to stop and put it in the box" : "Dictate: click to start, click again to stop";
+-      meter.hidden = !micOn;
+-      meter.classList.toggle("is-speech", lastSpeech);
+-      meterFill.style.width = `${Math.max(2, Math.min(100, lastLevel))}%`;
++      const label = phase === "listening" ? "Listening" : phase === "stopping" ? "Transcribing…" : "Mic";
++      mic.replaceChildren(icon(phase === "listening" ? "mic" : "micOff", 14), el("span", {}, label));
++      mic.classList.toggle("is-on", phase === "listening");
++      mic.classList.toggle("is-busy", phase === "stopping");
++      mic.setAttribute("aria-pressed", phase === "listening" ? "true" : "false");
++      mic.title =
++        phase === "listening"
++          ? "Recording — click to stop and put it in the box"
++          : phase === "stopping"
++            ? "Finishing the last sentence"
++            : "Dictate: click to start, click again to stop";
++      meter.hidden = phase !== "listening";
++      meter.classList.toggle("is-speech", DICTATION.speech);
++      meterFill.style.width = `${Math.max(2, Math.min(100, DICTATION.level))}%`;
+       speaker.replaceChildren(icon(speakerOn ? "speaker" : "speakerOff", 14), el("span", {}, speakerOn ? "Speaking" : "Speaker"));
+       speaker.classList.toggle("is-on", speakerOn);
+       speaker.setAttribute("aria-pressed", speakerOn ? "true" : "false");
+       speaker.title = speakerOn ? "Replies are read aloud — click to stop" : "Read replies aloud";
+-      chip.hidden = !(micOn && speakerOn);
+-    };
+-
+-    const insertText = (spoken) => {
+-      const at = ta.selectionStart ?? ta.value.length;
+-      const end = ta.selectionEnd ?? at;
+-      const prefix = at && !/\s/.test(ta.value[at - 1] || "") ? " " : "";
+-      const suffix = end < ta.value.length && !/\s/.test(ta.value[end] || "") ? " " : "";
+-      ta.setRangeText(prefix + spoken + suffix, at, end, "end");
+-      ta.dispatchEvent(new Event("input", { bubbles: true }));
+-      ta.focus();
+-    };
+-
+-    const poll = async () => {
+-      if (!collecting) return;
+-      try {
+-        const status = await rpc("Voice", "dictationStatus");
+-        lastLevel = Number(status && status.level) || 0;
+-        lastSpeech = Boolean(status && status.in_speech);
+-        if (status && typeof status.transcript === "string") live = status.transcript;
+-        paint();
+-      } catch {}
+-      if (collecting) timer = setTimeout(poll, 250);
+-    };
+-
+-    const startDictation = async () => {
+-      let opened = null;
+-      try {
+-        opened = await rpc("Voice", "startDictation");
+-      } catch (error) {
+-        toast(`The microphone did not open: ${error.message}`, true);
+-        return;
+-      }
+-      if (opened && opened.ok === false) {
+-        toast(`The microphone did not open: ${opened.error}`, true);
+-        return;
+-      }
+-      try {
+-        const before = await rpc("Voice", "getTranscript");
+-        baseline = (before && before.transcript) || "";
+-      } catch { baseline = ""; }
+-      live = baseline;
+-      collecting = true;
+-      lastLevel = 0;
+-      lastSpeech = false;
+-      paint();
+-      poll();
+-    };
+-
+-    const stopDictation = async () => {
+-      collecting = false;
+-      clearTimeout(timer);
+-      try { await rpc("Voice", "stopDictation"); } catch {}
+-      // Whisper needs a moment on the last segment; wait for it rather than cutting the sentence off.
+-      for (let attempt = 0; attempt < 20; attempt += 1) {
+-        await sleepMs(250);
+-        try {
+-          const status = await rpc("Voice", "dictationStatus");
+-          if (status && typeof status.transcript === "string") live = status.transcript;
+-          if (status && !status.transcribing) break;
+-        } catch { break; }
+-      }
+-      const whole = String(live || "");
+-      let fresh = baseline && whole.startsWith(baseline) ? whole.slice(baseline.length) : whole;
+-      fresh = fresh.trim();
+-      baseline = "";
+-      live = "";
+-      lastLevel = 0;
+-      lastSpeech = false;
+-      paint();
+-      if (fresh) insertText(fresh);
++      chip.hidden = !(phase === "listening" && speakerOn);
+     };
+ 
+     mic.addEventListener("click", () => {
+-      if (collecting) stopDictation();
+-      else startDictation();
++      if (DICTATION.phase === "listening") stopDictation();
++      else if (DICTATION.phase === "idle") startDictation();
+     });
+     speaker.addEventListener("click", () => {
+       const on = localStorage.getItem("quixi.speak") === "1";
+@@ -2763,6 +2791,7 @@
+       paint();
+     });
+ 
++    dictationPainters.add({ node: mic, paint });
+     bar.append(mic, meter, chip, speaker);
+     paint();
+     return bar;

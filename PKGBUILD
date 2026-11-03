@@ -162,6 +162,7 @@ source=(
   0078-a-key-where-the-question-is-asked.patch
   0079-the-microphone-is-actually-opened.patch
   0080-dictation-is-a-toggle-with-a-level-meter.patch
+  0081-dictation-state-survives-a-repaint.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -246,6 +247,7 @@ sha256sums=(
   'ac07c9dfabf0978e0317d54b89dc7f163ec0b1321d9920fc225e6e834257b2e2'
   '02d660759bf16ea5d25271f574460d4b93f9133f96d573e0fb9f825738df5e3b'
   'f1f3221f79c6a42f4f8310a0b8fe5c90e2e6a5accb20ba65dbe2580726393325'
+  '56f0cf710be1412ad6a0d360ab7f5237a98f555ddae02627274796f2195efc74'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -520,6 +522,9 @@ prepare() {
 
   # Dictation is press-to-start, press-to-stop, with a level meter while it is open.
   patch -Np1 -i "${srcdir}/0080-dictation-is-a-toggle-with-a-level-meter.patch"
+
+  # The switch keeps its state across a repaint, and draws before it awaits.
+  patch -Np1 -i "${srcdir}/0081-dictation-state-survives-a-repaint.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
