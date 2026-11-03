@@ -11,6 +11,10 @@
 > that survive. Desktop mode is where you use it. Game mode is a launcher, not a home.** Everything
 > below is why, feature by feature, so you can decide before you install instead of after.
 
+**Open question:** whether the window fills a Deck's panel in Game Mode is not established — see
+[issue #1](https://github.com/volkdude85/quixidesk-volkdude85-published/issues/1) for what was measured
+and what would settle it.
+
 Every compatibility wall hit while packaging this, with the cause and the fix for each — including the
 ones that are not fixed yet — is in [`DECK-PROBLEM-LOG.md`](DECK-PROBLEM-LOG.md).
 

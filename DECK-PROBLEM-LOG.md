@@ -126,7 +126,9 @@ whole display and does not decorate or maximize it.
 **Fix attempted** — the window builder also asks to be maximized when the panel is handheld-sized
 (`width <= 1366 && height <= 900`). A desktop window manager honours the same hint.
 
-**Status — UNVERIFIED, and the harness cannot settle it.**
+**Status — UNVERIFIED, and the harness cannot settle it.** Tracked as
+[issue #1](https://github.com/volkdude85/quixidesk-volkdude85-published/issues/1) so it closes on
+evidence rather than on a paragraph in a markdown file.
 
 What was actually measured, twice, on this machine:
 
