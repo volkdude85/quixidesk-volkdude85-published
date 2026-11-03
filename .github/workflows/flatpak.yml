@@ -1,14 +1,15 @@
 name: flatpak
 
-# Builds the Flatpak so it can be tested and installed by hand. NOTHING is published: no tag trigger,
-# no release asset, no Pages repository, no store submission. Run it from the Actions tab with
-# "Run workflow"; the bundle comes back as a workflow artifact you can download and
-# `flatpak install ./quixidesk.flatpak`.
+# Builds the Flatpak from the repository on every push, and on demand. The bundle is attached to the run
+# as an artifact, so "the Flatpak" means the newest green run on master and nothing else — it cannot drift
+# away from the source, because the source is what built it.
 #
-# To publish later, three things have to exist first and none of them do: a signing key in repository
-# secrets, a public (or paid-plan) host for the OSTree repository, and a Flathub submission that has
-# passed review.
+# Nothing is published: no release asset, no Pages repository, no store submission. Publishing would need
+# three things that do not exist yet — a signing key in repository secrets, a public host for the OSTree
+# repository, and a Flathub submission that has passed review.
 on:
+  push:
+    branches: [master, publish]
   workflow_dispatch:
 
 permissions:
@@ -23,6 +24,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The manifest sources the application tree, and a checkout of this repository does not contain one:
+      # the repository carries the patch series, so this turns the series into a tree. Same order as
+      # prepare(), because that order is what ships.
+      - name: Prepare the source tree from the patch series
+        run: |
+          set -e
+          pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
+          curl -sSL -o "/tmp/QuixiDesk-${pkgver}.tar.gz" \
+            "https://github.com/QuixiAI/QuixiDesk/archive/refs/tags/v${pkgver}.tar.gz"
+          mkdir -p src
+          tar xzf "/tmp/QuixiDesk-${pkgver}.tar.gz" -C /tmp
+          mv "/tmp/QuixiDesk-${pkgver}" flatpak-src
+          cd flatpak-src
+          for p in $(sed -n '/^prepare()/,/^build()/p' ../PKGBUILD \
+                       | grep -oE '[0-9]{4}-[a-z0-9-]+\.patch' | awk '!seen[$0]++'); do
+            path=$(find ../patches -name "$p" | head -1)
+            patch -Np1 -s -i "$path"
+          done
+          # The sandbox has no network, so the registry travels with the source.
+          cargo vendor --locked vendor >/dev/null
+          for d in vendor/*/; do
+            [ -f "$d/.cargo-checksum.json" ] || printf '{"files":{},"package":null}' > "$d/.cargo-checksum.json"
+          done
+          mkdir -p .cargo && cp ../flatpak/cargo-config.toml .cargo/config.toml
+
       - name: Build volkdude85's QuixiCore
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
@@ -34,6 +60,6 @@ jobs:
       - name: Keep the bundle as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: quixidesk-bundle
+          name: quixidesk-bundle-${{ github.sha }}
           path: quixidesk.flatpak
           retention-days: 30

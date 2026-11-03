@@ -42,8 +42,9 @@ modules:
       # the metainfo will advertise.
       - install -Dm644 resources/quixi-mark.svg /app/share/icons/hicolor/scalable/apps/org.quixidesk.QuixiDesk.svg
       - mkdir -p /app/share/quixidesk && cp -a resources /app/share/quixidesk/resources
-    # The source tree is prepared by flatpak/build-flatpak.sh and the manifest is copied into it, so the
-    # tree root is one level up from this file. A dir source is resolved relative to the manifest.
+    # The application tree is not in this repository — the patch series is. Both builders produce the tree
+    # under the same name (flatpak-src/ for CI, a staged archive for build-flatpak.sh), so the manifest never
+    # has to know the version it is being built for.
     sources:
       - type: dir
-        path: ..
+        path: ../flatpak-src
