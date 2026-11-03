@@ -35,7 +35,15 @@ if [ -d "$PREPARED" ]; then
   cp -a "$PREPARED" "$SRC/"
   TREE="$SRC/QuixiDesk-${PKGVER}"
   cp -a "$REPO/flatpak" "$TREE/flatpak"
-  echo "== staging the source archive"
+  # The vendored registry is what makes the build work with no network inside the sandbox. If the tree does
+# not have one — a fresh clone, a clean checkout — make it here, once, from the lockfile. That is the
+# difference between "builds on the machine that made it" and "builds from the repository".
+if [ ! -d "$TREE/vendor" ]; then
+  echo "== vendoring the crate registry"
+  ( cd "$TREE" && cargo vendor --locked vendor >/dev/null )
+fi
+
+echo "== staging the source archive"
 # A dir source does not carry dotfiles, and a vendored crate without .cargo-checksum.json cannot build.
 # So the tree is archived and the manifest is staged beside it with an archive source.
 STAGE="$WORK/stage"
