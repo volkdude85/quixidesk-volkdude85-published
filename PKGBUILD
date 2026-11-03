@@ -164,6 +164,7 @@ source=(
   0080-dictation-is-a-toggle-with-a-level-meter.patch
   0081-dictation-state-survives-a-repaint.patch
   0082-no-words-left-behind.patch
+  0083-ctrl-f-and-no-second-conversation-mode.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -250,6 +251,7 @@ sha256sums=(
   'f1f3221f79c6a42f4f8310a0b8fe5c90e2e6a5accb20ba65dbe2580726393325'
   '56f0cf710be1412ad6a0d360ab7f5237a98f555ddae02627274796f2195efc74'
   '58f63448fe6fd0d0a8980e9693baeb683c13b547e0d757f3027a716ea5e2f4c8'
+  '95c0db024cad4c7f241f0f250804ec7268c94d0231511f1a7aad5232d21667c1'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -530,6 +532,9 @@ prepare() {
 
   # Nothing said is left in an unclosed segment: flush on stop, and show the partial at once.
   patch -Np1 -i "${srcdir}/0082-no-words-left-behind.patch"
+
+  # Ctrl+F searches, and conversation mode lives in the composer instead of being described twice.
+  patch -Np1 -i "${srcdir}/0083-ctrl-f-and-no-second-conversation-mode.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
