@@ -175,6 +175,7 @@ source=(
   patches/000-099/090-099/0091-no-apple-shaped-capabilities-on-linux.patch
   patches/000-099/090-099/0092-the-workspace-is-documents.patch
   patches/000-099/090-099/0093-the-series-rebuilds-what-we-run.patch
+  "patches/000-099/090-099/0094-developer-affordances-are-a-build-flag.patch"
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -271,7 +272,8 @@ sha256sums=(
   'c74e088f03930815bc9c23cc445b63760f4f7aebdb246bdb1855c72a14294ff0'
   '4a63477fe7c59e9eff8b176c586d6704735c7b9dad759f6f944c7f0fce506fae'
   '8fb74337a154e33205a38cf48e5d2cfa37d6f95ccfc4e37d7d846317de10cb14'
-  '86eb9a0f154d272300577129affdf6ada1d13206bcf919e2e1d6a9f370a09da0'
+  'aaf58cd72a30478c7541c1689c65b1b8a43da301b20535f84053738c90c2208b'
+  '04809ee8524177ac0cd2e48b96b658c647a8b30a929af59b307bf6e2910b7cb7'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -585,6 +587,9 @@ prepare() {
 
   # Reconcile the tree with the series: the last edits had never been cut into a patch.
   patch -Np1 -i "${srcdir}/0093-the-series-rebuilds-what-we-run.patch"
+
+  # Developer affordances exist only in a build that says it is a development build.
+  patch -Np1 -i "${srcdir}/0094-developer-affordances-are-a-build-flag.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

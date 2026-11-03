@@ -1,0 +1,66 @@
+Developer affordances are a build flag, not a feature
+====================================================
+
+The key box and the door back into onboarding sat in the bottom-left of every build, in the same corner
+a user looks at to find Settings. They exist to build the thing, not to be shipped with it, and a
+published Flatpak must not have a paste-a-key-here box pretending to be part of the product.
+
+The engine reads `QUIXI_DEVELOPER` from its environment and hands the shell a boolean; the shell
+renders those two controls only when it is true. A build that sets nothing — the Flatpak, the package,
+anything shipped — has neither in the DOM at all, not merely hidden.
+
+Verified both directions in containers: without the variable the automation bridge reports no
+Onboarding (development) control and no dev key field; with `QUIXI_DEVELOPER=1` both return.
+
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv7/QuixiDesk-3.6556.12/crates/quixi-app/src/main.rs /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/crates/quixi-app/src/main.rs
+--- a/crates/quixi-app/src/main.rs	2026-11-02 23:01:18.314949575 -0800
++++ b/crates/quixi-app/src/main.rs	2026-11-02 23:01:26.766207245 -0800
+@@ -722,9 +722,14 @@
+             // Tell the shell which build it is, so the brand line can carry the same label
+             // as the title bar. Injected at serve time because the HTML on disk is identical
+             // in every build — the label is the one thing that is not in the file.
++            // Developer affordances — the key box and the onboarding door — must not be in a
++            // published build. They are not a setting a user turns on; they are a build saying it is
++            // a development build, so the flag is the environment the process was started in.
++            let developer = std::env::var("QUIXI_DEVELOPER").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false);
+             let bootstrap = format!(
+-                "<script>window.__QUIXI_EDITION__={label:?};</script>\n</head>",
++                "<script>window.__QUIXI_EDITION__={label:?};window.__QUIXI_DEVELOPER__={dev};</script>\n</head>",
+                 label = edition_label(resources_dir),
++                dev = developer,
+             );
+             let html = String::from_utf8_lossy(&bytes).replacen("</head>", &bootstrap, 1);
+             build_http_response(200, "text/html; charset=utf-8", html.into_bytes())
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv7/QuixiDesk-3.6556.12/resources/ui/app.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 23:01:18.365640362 -0800
++++ b/resources/ui/app.js	2026-11-02 23:02:09.810274062 -0800
+@@ -110,6 +110,8 @@
+   // Which build this is. The app sets it on the page before the shell loads; a stock
+   // build never sets it, so this is "" and every label below disappears.
+   const EDITION = window.__QUIXI_EDITION__ || "";
++  // True only in a build that was started with QUIXI_DEVELOPER=1. The engine decides; the shell obeys.
++  const IS_DEVELOPER = window.__QUIXI_DEVELOPER__ === true;
+   // Which of the two things is on screen. The local build carries the owner's persona, memory and
+   // keys; this one ships to GitHub and carries none of them. That difference is worth a badge, not
+   // just a subtle prefix, because the two windows look identical otherwise.
+@@ -933,7 +935,10 @@
+         // A way back into first run without wiping a profile. It gets its own row above Settings
+         // rather than sitting beside it: it is not a peer of Settings, it is a development door, and
+         // the row it shares with Settings made it look like one more nav item.
+-        el(
++        // Development affordances: the key box and the door back into onboarding. A published build
++        // ships neither — they are the tools of building it, and a stranger's install should not have
++        // a paste-a-key-here box in the corner pretending to be a feature.
++        IS_DEVELOPER ? el(
+           "div",
+           { class: "footer-rows" },
+           // A key box that does the whole job. Paste, press Enter, and the app is configured: key
+@@ -1053,7 +1058,7 @@
+             },
+             "quiet dev-entry",
+           ),
+-        ),
++        ) : null,
+         navigationButton(
+           "Settings",
+           "settings",
