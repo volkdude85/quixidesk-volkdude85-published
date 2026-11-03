@@ -113,3 +113,48 @@ MemPalace by Milla Jovovich (MIT).
 ## Licence
 
 MIT. See `LICENSE`.
+
+## Install, on a Deck or anywhere else
+
+```sh
+sh install.sh
+```
+
+One script, no root, and it reads `/etc/os-release` before it does anything. On **SteamOS** it says
+so, installs the Flatpak from the signed repository, and then prints the part that is not a command:
+how to get the shortcut into Game Mode, where Steam looks for Flatpak applications, and what to do
+when the entry is not in that list. On Arch it also points at the PKGBUILD; on Debian and Fedora it
+names the one package to install if Flatpak is missing; on anything else it takes the Flatpak path
+anyway, because that is the one that does not care what you are running.
+
+The same install, by hand:
+
+```sh
+flatpak install --user --from https://volkdude85.github.io/quixidesk-volkdude85-published/org.quixidesk.QuixiDesk.flatpakref
+```
+
+That URL is a signed OSTree repository — the key travels in the `.flatpakref`, so `flatpak update`
+keeps working afterwards and every commit it installs is verified.
+
+### The window fits the deck
+
+Upstream opens at 1280x840 logical. A Steam Deck in desktop mode is 1280x800, so the window was forty
+pixels taller than the screen and the composer sat below the bottom edge where nothing scrolls to it.
+Patch `0099-window-fits-the-screen` clamps the default to the monitor it opens on: measured **1240x720**
+on a 1280x800 display, bottom edge visible. On anything larger than 1280x840 nothing changes.
+
+### Artwork for the Game Mode shortcut
+
+Steam will happily show a generic grey tile for a non-Steam app. `steam/` carries the shapes Steam
+looks for, cut from the app's own mark and colours:
+
+| file | where it goes |
+|---|---|
+| `steam/grid-460x215.png` | library capsule (horizontal) |
+| `steam/grid-600x900.png` | library capsule (portrait) |
+| `steam/hero-1920x620.png` | hero banner |
+| `steam/logo-1280x720.png` | logo overlay |
+| `steam/icon-512.png` | shortcut icon |
+
+Right-click the shortcut in Steam → **Properties** → drop each one into its slot. No account, no
+SteamGridDB upload, nothing to install.

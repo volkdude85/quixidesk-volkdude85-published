@@ -1,6 +1,6 @@
 app-id: org.quixidesk.QuixiDesk
 runtime: org.gnome.Platform
-runtime-version: "50"
+runtime-version: "51"
 sdk: org.gnome.Sdk
 # No Rust SDK extension. The binary is compiled before the sandbox runs — in CI by a job with a normal
 # toolchain, locally by build-flatpak.sh — and this manifest only packages it. The extension's delta
