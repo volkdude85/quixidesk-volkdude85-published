@@ -24,11 +24,11 @@ diff -ruN -x .git crates/quixi-engine/src/lib.rs crates/quixi-engine/src/lib.rs
              };
              let mut list: Vec<Value> = Vec::new();
 -            for (name, unit, port, what) in [
--                ("Streaming speech", "nora-talk.service", Some(8791u16), "dictation and transcription"),
--                ("Kokoro voice", "kokoro.service", Some(8765u16), "read aloud"),
--                ("Embedding index", "embeddinggemma.service", Some(42666u16), "memory recall"),
--                ("Model server", "llama-swap.service", Some(8086u16), "local models"),
--                ("Vision", "qwen3vl.service", Some(8100u16), "looking at images"),
+-                ("Streaming speech", "stt.service", Some(8080u16), "dictation and transcription"),
+-                ("Voice line", "tts.service", Some(8081u16), "read aloud"),
+-                ("Embedding index", "embed.service", Some(8082u16), "memory recall"),
+-                ("Model server", "model.service", Some(8083u16), "local models"),
+-                ("Vision", "vision.service", Some(8084u16), "looking at images"),
 -                ("Input injection", "ydotoold", None, "the agent driving mouse and keyboard"),
 -            ] {
 -                let state = if unit.is_empty() { "n/a".to_string() } else { unit_state(unit) };
