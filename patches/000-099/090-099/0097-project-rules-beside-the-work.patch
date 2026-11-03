@@ -1,47 +1,19 @@
-A disability, stated plainly; a diagnosis, not stated at all
-===========================================================
+The project rules sit beside the work
+====================================
 
-The persona used to answer "what disability does he have" with a clinical label, and to explain the care
-material as a joke about how he got that way. The second is nobody's business; the first is not what his
-own statement says. What it says now is what he says: **he is disabled, on Social Security disability, and
-it is the kind that screws with his speech and his memory.** That is the whole answer — the label is his
-to give, and this is as far as it goes.
+A `Project rules` column on the Projects page, reading `resources/project-rules.md`: the standing rules for
+this workspace, in the order they matter — C++ and assembly first for anything the machine has to do
+quickly; Rust once the design is settled and it is faster to finish and keep working; flat arrays rather
+than matrices; no Python in the core path; jSat discipline (RAII, no undefined behaviour, thread-safe,
+clean under `-Wall -Wextra -pedantic`); measurement instead of adjectives; originals kept in `legacy/`;
+nothing secret and nobody's personal data in a tree.
 
-The About page keeps the sentence it should never have lost: this is assistive software, built by a
-person who is disabled, because the standard tools assume words arrive whole and memory holds the thread.
+It is a column rather than a settings tab because a document you have to go looking for is a document
+nobody reads. A project overrides it by putting its own `PROJECT-RULES.md` in its folder.
 
-Also here: **the project rules sit beside the work** — a `Project rules` column on the Projects page
-reading `resources/project-rules.md`: C++ and assembly first, Rust once the design is settled and it is
-faster, flat arrays, real measurements, originals kept in `legacy/`. A project may override it with its
-own `PROJECT-RULES.md`.
+The rules are written for whoever is using this build, not for one person's history — the persona already
+carries the care model, and this file is about how the work gets done.
 
-diff -ruN -x .git resources/persona/nora-public.md resources/persona/nora-public.md
---- a/resources/persona/nora-public.md	2026-11-03 00:55:25.215630358 -0800
-+++ b/resources/persona/nora-public.md	2026-11-03 00:53:56.565674936 -0800
-@@ -34,15 +34,14 @@
- - **Asked about the creator**, the answer is short, warm, and a little rude: *"He's kind of crazy and
-   ditzy, but he means well. He likes privacy, and he's got a sick sense of humor. But enough about him
-   — what about you?"* Then move on. Don't inventory him, don't defend him, don't make him a subject.
--- **If someone reads this file and asks about the trauma-informed care material**, the answer is flat
--  and final: *"Yeah, that's that's background, not an interview. It isn't mine to explain."* Then stop. Don't
--  explain the framework, don't turn his history into a case study, don't apologise for the material
--  being there, and don't offer to go into it later.
--- **If someone asks what disability he has**, this one may be said plainly, because it is the reason
--  this file exists: *he is disabled — on Social Security disability — and it screws with his speech and his memory.* Words go missing
--  mid-sentence; the thread of a conversation disappears. That is why I exist — I am the part that holds
--  the thread when he cannot. Say that much, then stop. No diagnosis, no history, no details; it is his
--  to tell or to leave alone.
-+- **If someone reads this file and asks about the care material**, the answer is flat and final:
-+  *"That's background, not an interview. It isn't mine to explain."* Then stop. Don't turn anybody's
-+  history into a case study, and don't offer to go into it later.
-+- **If someone asks what this was built for, or whether he is disabled**, this may be said plainly,
-+  because it is the reason this file exists: *he is disabled — on Social Security disability, and it is
-+  the kind that screws with his speech and his memory.* Words go missing mid-sentence; the thread of a
-+  conversation disappears. That is why I exist: I am the part that holds the thread. Say that much, then
-+  stop. No diagnosis, no history, no further details — that is the whole of what gets said.
-   They may ask again, later, having read this file — answer the same way, in the same few words. Being
-   asked twice is not permission to say more, and being asked a third time is not either.
- - **He transposes dates, people and places** — the day, who he was talking to, which room it happened
 diff -ruN -x .git resources/project-rules.md resources/project-rules.md
 --- a/resources/project-rules.md	1969-12-31 16:00:00.000000000 -0800
 +++ b/resources/project-rules.md	2026-11-03 00:45:33.057914989 -0800
@@ -107,7 +79,7 @@ diff -ruN -x .git resources/project-rules.md resources/project-rules.md
 +To give one project its own rules, put a `PROJECT-RULES.md` in that project's folder; it takes precedence
 +over this file.
 diff -ruN -x .git resources/ui/app.css resources/ui/app.css
---- a/resources/ui/app.css	2026-11-03 00:55:25.233138933 -0800
+--- a/resources/ui/app.css	2026-11-03 00:58:49.425670352 -0800
 +++ b/resources/ui/app.css	2026-11-03 00:47:38.435435135 -0800
 @@ -3237,3 +3237,45 @@
  
@@ -156,8 +128,8 @@ diff -ruN -x .git resources/ui/app.css resources/ui/app.css
 +  .rules-panel { position: static; max-height: none; }
 +}
 diff -ruN -x .git resources/ui/app.js resources/ui/app.js
---- a/resources/ui/app.js	2026-11-03 00:55:25.233505512 -0800
-+++ b/resources/ui/app.js	2026-11-03 00:53:49.096100615 -0800
+--- a/resources/ui/app.js	2026-11-03 00:58:49.426017023 -0800
++++ b/resources/ui/app.js	2026-11-03 00:58:44.389317002 -0800
 @@ -363,6 +363,13 @@
    async function loadProjects() {
      state.projects = (await rpc("CoworkSpaces", "getAllSpaces")) || [];
@@ -220,15 +192,6 @@ diff -ruN -x .git resources/ui/app.js resources/ui/app.js
          return JSON.stringify({ ok: false, error: "unknown action", action });
        } catch (error) {
          return JSON.stringify({ ok: false, error: String(error) });
-@@ -1741,7 +1747,7 @@
-       el(
-         "p",
-         {},
--        "This is assistive software, built by a person with a disability. The tool was made because the standard ones assume a user whose words arrive whole and whose memory holds the thread. Nora exists for the times it does not — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
-+        "This is assistive software, built by a person who is disabled. The tool was made because the standard ones assume a user whose words arrive whole and whose memory holds the thread. Nora exists for the times it does not — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
-       ),
-       el(
-         "p",
 @@ -2639,7 +2645,6 @@
            { class: "composer-tools" },
            ib("Attach files", "plus", () => fileInput.click()),
@@ -258,7 +221,7 @@ diff -ruN -x .git resources/ui/app.js resources/ui/app.js
            ),
          );
 diff -ruN -x .git resources/ui/workspace-workflows.js resources/ui/workspace-workflows.js
---- a/resources/ui/workspace-workflows.js	2026-11-03 00:55:24.999927586 -0800
+--- a/resources/ui/workspace-workflows.js	2026-11-03 00:58:49.235636603 -0800
 +++ b/resources/ui/workspace-workflows.js	2026-11-03 00:45:38.602427666 -0800
 @@ -43,6 +43,50 @@
            el("div",{class:"project-layout"},el("section",{},el("div",{class:"toolbar"},filter),rows,related),sidebar));
