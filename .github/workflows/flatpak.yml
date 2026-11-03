@@ -98,12 +98,23 @@ jobs:
           cp -a flatpak flatpak-src/flatpak
           ls -l flatpak-src/flatpak
 
+      - name: Import the release signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          set -e
+          printf '%s' "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
+          gpg --list-secret-keys --with-colons | awk -F: '/^sec:/{print "key", $5}'
+
       - name: Build volkdude85's QuixiCore
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: quixidesk.flatpak
           manifest-path: flatpak/org.quixidesk.QuixiDesk.yml
           cache-key: flatpak-org-quixidesk-QuixiDesk-${{ github.sha }}
+          # Signed with the same key the published repository is signed with, so the bundle and the
+          # repository agree and a machine that already trusts the remote will accept the file.
+          gpg-sign: ${{ secrets.FLATPAK_GPG_KEY_ID }}
           run-tests: false
 
       - name: Keep the bundle as a workflow artifact
