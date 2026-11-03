@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=53
+pkgrel=54
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -155,6 +155,7 @@ source=(
   0071-aide.patch
   0072-desktop-pickers-and-documents.patch
   0073-cancel-is-not-a-choice.patch
+  0074-opacity-voice-and-tasks.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -203,7 +204,7 @@ sha256sums=(
   '9eeb6ab5108c7c4f9d6808a23ef6d3f6883f9ebebe848f66441bf20e2705cd29'
   '9ed90b994c87c5e15227a0f880a343a286bc40ec3b44ee6b73d9935b14e9a6a1'
   'f475d5190c04c9b983c19722dbef03b3077ba02c1d5a8ca638bf7768cabeb653'
-  '3deb3bab8414c8fbb5788a15d586194c29a5f517e891928ba7fac8a3aa8dc616'
+  '5797ae1fd38784245b5a0bd2d753af3f69f3480a1a36396fb8604afcd15b139a'
   'd1cd63f978a98028cd9bf5eba05fa32b71899a0c2e6a70ffe5e0c315a2663cce'
   '84d04591e7a9b53a1513c85f6c05784136cdebb3e17226177e8a95879d5b40a0'
   '3751e2225a979046fbffa2aeeded6cb3c807020a568e34f427da61e341141bd4'
@@ -212,7 +213,7 @@ sha256sums=(
   '5a01bbe389e129dd4ee40ae2d12782bddae9f6d0c750d7467a40120852abd1cc'
   '9cb8e388cd141788e6f8e6df3c974ed10d2a776ef6ed9c5b04524b4dd9a1270b'
   'd8c81e161561e55950779153e7b2d9f0752b7da0e0c7f56caa663649647d1a87'
-            'b7dfe7875519de48e4ab55f72008d6c53ed35cf8cdeb385414ea0e802de37d97'
+  'b7dfe7875519de48e4ab55f72008d6c53ed35cf8cdeb385414ea0e802de37d97'
   'eaa1811e9b5cc3a2dad7b2e2a31f66bef47f79b73cda4ce4565189ca1820e58d'
   '506ca2739a04df26515b96f5e9b4a90d279f435ca83f316c984654726fd6f803'
   '92d88fa21948a6def843457b3e623a698feab43a8718ab76e49f702fcef204fb'
@@ -232,6 +233,7 @@ sha256sums=(
   '2a3b213bce9e1d30bbbbb6da84b175a5cb79c7f448fadcb76cf96b137345142c'
   'b013a82d1fc14e9e25577d9b80d2596baf112e5563cdb48105a03449d06c8c32'
   'e01534de901f57622d7e9463789315a5d3accfaab968a334ff04d388526ec2c6'
+  '94a36daf1877e749f7dea37f88deb17b5c9f41c8830aedf699ebc019b62c6f2a'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -482,6 +484,10 @@ prepare() {
   patch -Np1 -i "${srcdir}/0071-aide.patch"
   patch -Np1 -i "${srcdir}/0072-desktop-pickers-and-documents.patch"
   patch -Np1 -i "${srcdir}/0073-cancel-is-not-a-choice.patch"
+
+  # One dial that tells the truth: the window is opaque at 100%, the compositor does the blending
+  # below it, onboarding only appears on an install with no history, and there is a task list.
+  patch -Np1 -i "${srcdir}/0074-opacity-voice-and-tasks.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

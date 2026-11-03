@@ -1,0 +1,739 @@
+Opaque means opaque, one dial, and a task list
+===============================================
+
+Four files, one story: the transparency setting tells the truth, and first run stops asking
+questions it has already been answered.
+
+**The window is not declared transparent any more.** A window declared to the compositor as an
+ARGB surface could not be made fully opaque from the stylesheet — measured, 15 of 255 levels of
+the backdrop came through regardless of the colour painted, identical over white and over black.
+That residue belongs to the surface, not to CSS, so a dial reading 100% over it was lying. It is an
+ordinary opaque window now, which is also what stock upstream builds.
+
+**The dial moves the window.** With an opaque window a stylesheet-only dial had nothing to reveal:
+the panel colour and the background are within a few levels of each other, so 100% and 40% looked
+identical. The slider also writes `windowOpacity` through AppPreferences, and the app applies it
+with `gdk_window_set_opacity` — `_NET_WM_WINDOW_OPACITY` on X11, a no-op on Wayland where the
+surfaces still move over the app's own backdrop. At 100% the property is removed entirely, so 100
+is stock opaque rather than almost.
+
+**Two themes became one, plus a voice.** Matrix and Retro were nearly the same greens; two themes
+that look alike are one theme and a second name. That slot now carries `volkdude85`: the retro
+palette with the app's own copy instead of the neutral default. A brand-new install reads like the
+app unless that theme is chosen, and the "Just give me the table" shortcut is gone from the empty
+state — that belongs to setup, not to a new instance.
+
+**Onboarding is gated on having been used.** The flag alone is not enough: a preferences file can
+be reset, migrated, or shipped empty into an install that already has weeks of conversation in it,
+and re-asking somebody who has been using the app for a month is the fastest way to look broken. If
+there is history, there is no wizard.
+
+**Tasks.** A page in the sidebar, numbered from zero, backed by `tasks.json` through
+`/api/quixi/tasks` and `/api/quixi/tasks/update`. Status cycles on click. The number is the point:
+"task 3" has to keep meaning the same task, so the list does not renumber when a status changes.
+
+**Affordance.** The two card actions in first run ("Use a local model", "Use a cloud provider")
+were drawn with the quiet variant — no background, no border — so they only became a box under the
+pointer; they carry a real surface now. Selects get a drawn chevron and a hover border, because the
+engine's own arrow on a dark field is close to invisible, and the provider list always contains at
+least Ollama Cloud and Custom endpoint so the dropdown is never an empty box while the catalog is
+in flight.
+
+diff -Naur --exclude target A/crates/quixi-app/src/main.rs B/crates/quixi-app/src/main.rs
+--- a/crates/quixi-app/src/main.rs	2026-11-02 17:33:22.977724261 -0800
++++ b/crates/quixi-app/src/main.rs	2026-11-02 17:07:43.159786256 -0800
+@@ -768,6 +768,50 @@
+     }
+ }
+ 
++/// Window opacity, driven by the same number as the surfaces.
++///
++/// A stylesheet cannot make a window see-through, and once the window stopped being declared
++/// transparent there was nothing behind a panel except the app's own background — which in the
++/// dark palettes is within a few levels of the panel colour, so the dial moved a number nobody
++/// could see. The compositor CAN blend the whole window, and 1.0 there is exactly opaque: 100%
++/// stays honest and everything below it is real transparency over the real desktop.
++///
++/// The value arrives through the ordinary AppPreferences IPC (the UI writes `windowOpacity`), and
++/// this watches the preferences file it already reads for the browser choice rather than opening a
++/// second channel for one number. It runs on the GTK main loop, not a worker thread: `gdk::Window`
++/// is not `Send`, and the loop it belongs to is already ticking. A native Wayland surface has no
++/// such property — there the dial still moves the surfaces over the app's own backdrop.
++#[cfg(target_os = "linux")]
++fn start_window_opacity_watcher(window: &tao::window::Window) {
++    use gtk::glib;
++    use gtk::prelude::WidgetExt;
++    use tao::platform::unix::WindowExtUnix;
++
++    // Hold the GTK window, not its GdkWindow: the GdkWindow does not exist until the window is
++    // realized, and at this point in startup it is not. Asking for it again on every tick is the
++    // difference between a dial that works and one that silently does nothing.
++    let gtk_window = window.gtk_window().clone();
++    let path = quixi_proto::paths::data_dir().join("preferences.json");
++    let last = std::rc::Rc::new(std::cell::Cell::new(1.0_f64));
++    glib::timeout_add_local(std::time::Duration::from_millis(200), move || {
++        let pct = std::fs::read_to_string(&path)
++            .ok()
++            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
++            .and_then(|value| value.get("windowOpacity").and_then(|v| v.as_f64()));
++        if let Some(pct) = pct {
++            let alpha = (pct / 100.0).clamp(0.05, 1.0);
++            if (last.get() - alpha).abs() >= 0.004 {
++                if let Some(gdk_window) = gtk_window.window() {
++                    gdk_window.set_opacity(alpha);
++                    last.set(alpha);
++                    tracing::info!("window opacity {:.2}", alpha);
++                }
++            }
++        }
++        glib::ControlFlow::Continue
++    });
++}
++
+ /// Which browser gets an external link is a setting, not an opinion baked into the build.
+ ///
+ /// The privacy crowd runs Firefox; a Chromium-family browser is the only kind the agent tooling can
+@@ -922,13 +966,12 @@
+         .with_inner_size(LogicalSize::new(1280.0, 840.0))
+         .with_min_inner_size(LogicalSize::new(480.0, 360.0));
+ 
+-    // Linux: a compositor only blends the desktop through this window if the window is declared
+-    // capable of transparency. The UI then decides how much with --window-alpha, so "less opaque"
+-    // is a stylesheet number rather than a recompile.
+-    #[cfg(not(target_os = "macos"))]
+-    {
+-        win_builder = win_builder.with_transparent(true);
+-    }
++    // Linux: the window is NOT declared transparent. A window that is declared transparent is an
++    // ARGB surface, and an ARGB surface cannot be made fully opaque from the stylesheet — measured at
++    // 5.9% of the backdrop (15 of 255 levels) coming through no matter what colour was painted,
++    // identical over white and over black. That residue is the surface, not the CSS, so a dial
++    // reading 100% over it is a control that lies. An ordinary opaque window is also what stock
++    // upstream does; the transparency setting moves the app's own surfaces over its own background.
+ 
+     #[cfg(target_os = "macos")]
+     {
+@@ -941,6 +984,11 @@
+ 
+     let window = win_builder.build(&event_loop)?;
+ 
++    // The transparency dial, for real: the window itself is blended by the compositor, so 100%
++    // is exactly opaque and anything below it actually shows the desktop.
++    #[cfg(target_os = "linux")]
++    start_window_opacity_watcher(&window);
++
+     // Only original, repository-owned UI code runs in the main frame.
+     let init_script = include_str!("native_bridge.js").replace("__QUIXI_APP_ORIGIN__", APP_ORIGIN)
+         + include_str!("storage_ui.js");
+diff -Naur --exclude target A/crates/quixi-engine/src/lib.rs B/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs	2026-11-02 17:33:23.014233797 -0800
++++ b/crates/quixi-engine/src/lib.rs	2026-11-02 17:21:42.622986438 -0800
+@@ -1858,6 +1858,83 @@
+             }
+             return Self::json_resp(200, &json!({ "daemons": list }));
+         }
++        // Tasks: a numbered list that the person and the agent both write to. Nothing here is
++        // inferred — it is a file of statements with a status, because a task list that only the
++        // window that drew it can read is a note, not a plan. The agent writes the same file, so
++        // what is on screen is what is being worked on rather than a retelling of it.
++        if clean_path == "/api/quixi/tasks" && method == "GET" {
++            let path = self.data_dir.join("tasks.json");
++            let tasks: Value = std::fs::read_to_string(&path)
++                .ok()
++                .and_then(|text| serde_json::from_str(&text).ok())
++                .unwrap_or_else(|| json!([]));
++            return Self::json_resp(200, &json!({ "ok": true, "tasks": tasks }));
++        }
++        if clean_path == "/api/quixi/tasks" && method == "POST" {
++            let text = body_json
++                .get("text")
++                .and_then(|v| v.as_str())
++                .unwrap_or("")
++                .trim()
++                .to_string();
++            if text.is_empty() {
++                return Self::json_resp(400, &json!({ "ok": false, "error": "A task needs words." }));
++            }
++            let path = self.data_dir.join("tasks.json");
++            let mut list: Vec<Value> = std::fs::read_to_string(&path)
++                .ok()
++                .and_then(|body| serde_json::from_str(&body).ok())
++                .unwrap_or_default();
++            let next = list
++                .iter()
++                .filter_map(|t| t.get("id").and_then(|v| v.as_u64()))
++                .max()
++                .unwrap_or(0)
++                + 1;
++            let created = std::time::SystemTime::now()
++                .duration_since(std::time::UNIX_EPOCH)
++                .map(|d| d.as_secs())
++                .unwrap_or(0);
++            list.push(json!({
++                "id": next,
++                "text": text,
++                "status": "pending",
++                "created": created,
++            }));
++            let _ = std::fs::write(&path, serde_json::to_vec_pretty(&list).unwrap_or_default());
++            return Self::json_resp(200, &json!({ "ok": true, "tasks": list }));
++        }
++        if clean_path == "/api/quixi/tasks/update" && method == "POST" {
++            let id = body_json.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
++            let status = body_json
++                .get("status")
++                .and_then(|v| v.as_str())
++                .unwrap_or("pending")
++                .to_string();
++            if !matches!(status.as_str(), "pending" | "in_progress" | "completed" | "cancelled") {
++                return Self::json_resp(400, &json!({ "ok": false, "error": "Unknown status." }));
++            }
++            let path = self.data_dir.join("tasks.json");
++            let mut list: Vec<Value> = std::fs::read_to_string(&path)
++                .ok()
++                .and_then(|body| serde_json::from_str(&body).ok())
++                .unwrap_or_default();
++            let mut touched = false;
++            for task in list.iter_mut() {
++                if task.get("id").and_then(|v| v.as_u64()) == Some(id) {
++                    if let Some(obj) = task.as_object_mut() {
++                        obj.insert("status".to_string(), json!(status));
++                        touched = true;
++                    }
++                }
++            }
++            if !touched {
++                return Self::json_resp(404, &json!({ "ok": false, "error": "No task with that id." }));
++            }
++            let _ = std::fs::write(&path, serde_json::to_vec_pretty(&list).unwrap_or_default());
++            return Self::json_resp(200, &json!({ "ok": true, "tasks": list }));
++        }
++
+         // Where the data actually is, in paths rather than reassurance. The Privacy page shows this
+         // instead of telling people their conversations are "stored on this device" — they can read
+         // the directory, see the files, and open it in a file manager.
+diff -Naur --exclude target A/resources/ui/app.css B/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 17:33:23.008613926 -0800
++++ b/resources/ui/app.css	2026-11-02 17:32:10.537404476 -0800
+@@ -7,10 +7,13 @@
+   --raised: #2a3036;
+   --sidebar: #15181c;
+   --line: #343a41;
+-  /* How much desktop shows through the window itself. 1 = opaque. Panels and text are NOT
+-     affected — only the surfaces that sit directly on the desktop, which is why this can be turned
+-     down without turning the interface into soup. */
+-  --window-alpha: 0.9;
++  /* 1 = solid. It ships at 1 and stays there: an ARGB window cannot reach 100% from the stylesheet,
++     so the window is not declared transparent at all and this number has nothing to reveal. The
++     dial that actually moves is --panel-alpha, below. */
++  --window-alpha: 1;
++  /* One number for every surface the dial is allowed to touch. 1 means no alpha is mixed in at all,
++     so 100% on the dial is the colour itself rather than the colour plus a little desktop. */
++  --panel-alpha: 1;
+   --text: #edf0f2;
+   --muted: #a2aab3;
+   --accent: #8bd5bd;
+@@ -54,18 +57,21 @@
+ 
+ /* Extra themes. Same variable set as light/dark, so nothing else in the stylesheet has to know they
+    exist: matrix is green on near-black, amber and ice are the same shape at different hues. */
+-:root[data-theme="matrix"] {
++/* volkdude85: the retro palette, with the app's own voice. Matrix used to live here and was
++   nearly the same set of greens; two themes that look alike are one theme and a second name, so
++   this slot carries the difference that matters — the copy. */
++:root[data-theme="volkdude"] {
+   color-scheme: dark;
+-  --bg: #000800;
+-  --panel: #03120a;
+-  --raised: #06200f;
+-  --sidebar: #000400;
+-  --line: #0d4019;
+-  --text: #8dff9f;
+-  --muted: #2f9b4f;
+-  --accent: #00ff41;
+-  --ink: #00210a;
+-  --danger: #ff4d5e;
++  --bg: #040d08;
++  --panel: #0e140f;
++  --raised: #13251a;
++  --sidebar: #020702;
++  --line: #17492a;
++  --text: #b7cfbe;
++  --muted: #82a891;
++  --accent: #02d63a;
++  --ink: #02150a;
++  --danger: #ff6b6b;
+   --shadow: 0 24px 80px #000a, 0 2px 8px #0006;
+ }
+ :root[data-theme="amber"] {
+@@ -160,6 +166,24 @@
+   background: transparent;
+   border-color: transparent;
+ }
++/* A choice that looks like a choice. The two card actions in first run ("Use a local model",
++   "Use a cloud provider") were drawn with the quiet variant: no border, no background, so on a
++   dark card they read as a line of text and only became a box when the pointer happened to sit
++   on them. A control you cannot see is a control nobody clicks, so these get a real surface. */
++button.reveal {
++  display: flex;
++  justify-content: center;
++  width: 100%;
++  min-height: 38px;
++  background: var(--raised);
++  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
++  color: var(--text);
++  font-weight: 600;
++}
++button.reveal:hover {
++  background: color-mix(in srgb, var(--accent) 12%, var(--raised));
++  border-color: var(--accent);
++}
+ button.icon {
+   padding: 7px;
+   display: inline-grid;
+@@ -275,7 +299,10 @@
+ }
+ .shell {
+   display: grid;
+-  background: color-mix(in srgb, var(--bg) calc(var(--window-alpha) * 100%), transparent);
++  /* Transparent on purpose: the body paints the background, and the dial's backdrop layer sits
++     between the two. Re-painting here made two layers of the same colour and left the dial with
++     nothing to reveal. */
++  background: transparent;
+   grid-template-columns: var(--sidebar-width, 228px) minmax(0, 1fr);
+   height: 100dvh;
+   overflow: hidden;
+@@ -1713,9 +1740,9 @@
+ .theme-swatch.retro { background: #040d08; border-color: #0d2312; }
+ .theme-swatch.retro > span:first-child { background: #111911; }
+ .theme-swatch.retro > span:last-child { background: #02d63a; }
+-.theme-swatch.matrix { background: #000800; border-color: #0d4019; }
+-.theme-swatch.matrix > span:first-child { background: #06200f; }
+-.theme-swatch.matrix > span:last-child { background: #00ff41; }
++.theme-swatch.volkdude { background: #040d08; border-color: #17492a; }
++.theme-swatch.volkdude > span:first-child { background: #0e140f; }
++.theme-swatch.volkdude > span:last-child { background: #02d63a; }
+ .theme-swatch.amber { background: #0a0600; border-color: #3a2c0d; }
+ .theme-swatch.amber > span:first-child { background: #1e1808; }
+ .theme-swatch.amber > span:last-child { background: #ffb000; }
+@@ -2328,31 +2355,20 @@
+ /* The big line is the one thing on this screen that should carry the accent, not body white. */
+ .hero-heading { color: var(--accent); }
+ 
+-/* ---- appearance options: translucency and heavier boxing ---- */
+-/* Panels can be translucent where the compositor supports it; where it does not, the same colours
+-   are simply opaque and nothing breaks. */
+-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+-  :root[data-translucent="on"] .sidebar {
+-    background: color-mix(in srgb, var(--sidebar) 82%, transparent);
+-    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+-    backdrop-filter: blur(14px) saturate(1.1);
+-  }
+-  :root[data-translucent="on"] .panel,
+-  :root[data-translucent="on"] .settings-content,
+-  :root[data-translucent="on"] .toolbar {
+-    -webkit-backdrop-filter: blur(10px);
+-    backdrop-filter: blur(10px);
+-  }
+-}
+-
+-/* Panel opacity is its own control, not a side effect of the translucency toggle. It used to live
+-   inside the `data-translucent="on"` block, so with translucency off — the default — the slider
+-   moved, saved, and changed nothing at all. */
++/* ---- appearance options: one dial, no second opinion ---- */
++/* There used to be a `data-translucent` switch here that hard-coded the sidebar to 82% and put a
++   backdrop blur on every panel. It predated the opacity slider, so the two disagreed: with that
++   switch on, the slider sat at 100% while the sidebar stayed see-through. Deleted. */
+ .panel,
+ .settings-content,
+ .toolbar {
+   background: color-mix(in srgb, var(--panel) calc(var(--panel-alpha, 1) * 100%), transparent);
+ }
++/* The sidebar is a different colour from a panel but the same rule, so there is exactly one number
++   behind every see-through surface. */
++.sidebar {
++  background: color-mix(in srgb, var(--sidebar) calc(var(--panel-alpha, 1) * 100%), transparent);
++}
+ /* Boxing: everything that holds content gets a defined edge, so the page has structure instead of
+    floating text on a black field. */
+ :root[data-boxing="on"] .composer,
+@@ -2465,11 +2481,71 @@
+ /* the app's own surfaces sit above the backdrop */
+ .shell { position: relative; z-index: 1; }
+ 
++/* What the dial has to reveal.
++   The window is opaque, so nothing behind a panel is the desktop — it is this app's own
++   background. In this palette the panel (#0e140f) and the background (#040d08) are within ten
++   levels of each other, so fading one into the other from 100% to 40% changes nothing a person
++   can see, and a control that changes nothing is broken even when the number is right. This
++   layer is what a panel fades into: absent at 100%, fully present at 40%. 100 therefore means
++   exactly what it says — no glow, no glass, the colour and nothing else. */
++html::before {
++  content: "";
++  position: fixed;
++  inset: 0;
++  pointer-events: none;
++  z-index: 0;
++  opacity: calc(1 - var(--panel-alpha, 1));
++  background:
++    radial-gradient(58% 48% at 22% 24%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 72%),
++    radial-gradient(54% 46% at 78% 74%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 74%),
++    linear-gradient(180deg, color-mix(in srgb, var(--sidebar) 55%, transparent), transparent 60%);
++}
++
+ /* settings rows */
+ .slider-row { display: grid; grid-template-columns: 130px 1fr 54px; align-items: center; gap: 12px; margin: 8px 0 4px; font-size: 13px; }
+ .slider-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+ .slider-value { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); text-align: right; }
+ 
++/* Tasks: the number is the handle. Monospace so a two-digit index does not shift the column, and
++   the row keeps its height when a status changes, so the list does not jump under the pointer. */
++.task-rows { display: flex; flex-direction: column; gap: 4px; margin: 14px 0 30px; }
++.task-row {
++  display: grid;
++  grid-template-columns: 34px minmax(0, 1fr) 108px;
++  align-items: center;
++  gap: 12px;
++  padding: 9px 12px;
++  border: 1px solid var(--line);
++  border-radius: 10px;
++  background: var(--raised);
++}
++.task-row.is-done .task-text { color: var(--muted); text-decoration: line-through; }
++.task-index {
++  font-family: ui-monospace, monospace;
++  font-size: 12px;
++  color: var(--muted);
++  text-align: right;
++}
++.task-text { font-size: 13.5px; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
++.task-status {
++  justify-self: end;
++  width: 108px;
++  text-align: center;
++  font: inherit;
++  font-size: 11.5px;
++  letter-spacing: .04em;
++  padding: 4px 0;
++  border-radius: 999px;
++  border: 1px solid var(--line);
++  background: transparent;
++  color: var(--muted);
++  cursor: pointer;
++}
++.task-status:hover { border-color: var(--accent); color: var(--text); }
++.task-status.in_progress { border-color: var(--accent); color: var(--accent); }
++.task-status.completed { border-color: color-mix(in srgb, #59c07a 60%, var(--line)); color: #59c07a; }
++.task-status.cancelled { opacity: .55; }
++
+ /* Daemons: a light on the row, and the thing it is attached to. */
+ .daemon-list { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+ .daemon-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 10px; border-radius: 10px;
+@@ -2550,12 +2626,28 @@
+   width: 100%; height: 32px; padding: 0 9px; border-radius: 7px;
+   border: 1px solid var(--line); background: var(--raised); color: var(--text); font: inherit; font-size: 13px;
+ }
++
++/* A select that looks like a select. The engine draws its own arrow, and on a dark field behind a
++   1px border that arrow is nearly invisible — which is what "it is not clear there is a drop box"
++   looks like. The arrow is drawn here instead, the field lifts on hover, and the pointer changes,
++   so the control announces itself before it is touched. */
++.first-run-select {
++  appearance: none;
++  -webkit-appearance: none;
++  padding-right: 30px;
++  cursor: pointer;
++  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2382a891' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
++  background-repeat: no-repeat;
++  background-position: right 10px center;
++}
++.first-run-select:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
++.first-run-select:focus-visible { border-color: var(--accent); outline: none; }
+ .first-run-foot { color: var(--muted); font-size: 12.5px; margin-top: 22px; line-height: 1.55; }
+ 
+ /* The sidebar sits on the desktop too, so it carries the same alpha. Declared last so it wins the
+    cascade over the theme's opaque gradient — the gradient is a nicety, seeing through is the ask. */
+ .sidebar {
+-  background: color-mix(in srgb, var(--sidebar) calc(var(--window-alpha) * 100%), transparent);
++  background: color-mix(in srgb, var(--sidebar) calc(var(--panel-alpha, 1) * 100%), transparent);
+ }
+ 
+ /* Settings fields: one label per row, control beneath it. */
+diff -Naur --exclude target A/resources/ui/app.js B/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 17:33:23.015110768 -0800
++++ b/resources/ui/app.js	2026-11-02 17:28:12.459397802 -0800
+@@ -608,6 +608,7 @@
+       "artifacts",
+       "schedules",
+       "daemons",
++      "tasks",
+       "tools",
+       "settings",
+       "setup",
+@@ -678,6 +679,7 @@
+       ["artifacts", "Artifacts", "artifacts"],
+       ["schedules", "Cron jobs", "schedule"],
+       ["daemons", "Daemons", "daemon"],
++      ["tasks", "Tasks", "tasks"],
+       ["tools", "Tools & skills", "tools"],
+     ];
+     // Every branch must have leaves. An expansion that opens onto nothing reads as broken, so each
+@@ -835,6 +837,7 @@
+             artifacts: "Private artifacts",
+             schedules: "Cron jobs",
+             daemons: "Daemons",
++            tasks: "Tasks",
+             tools: "Tools & skills",
+             settings: "Settings",
+           }[state.page];
+@@ -1274,7 +1277,7 @@
+             localStatus.textContent = "Models at:";
+             localStatus.append(el("code", { class: "first-run-cmd" }, chosenPath));
+           },
+-          "quiet",
++          "reveal",
+         ),
+       );
+     }
+@@ -1292,9 +1295,19 @@
+   });
+   const cloudStatus = el("p", { class: "first-run-status" }, "");
+ 
++  // A dropdown with nothing in it is not a dropdown. The catalog normally arrives from the engine
++  // before this screen is reached, but on a fresh install it can still be in flight — and an empty
++  // <select> looks exactly like a control that does not open. These two entries are always present
++  // so there is something to pick while the full list is still loading.
++  const FALLBACK_CLOUD = [
++    { id: "ollama-cloud", name: "Ollama Cloud", keyPlaceholder: "Paste your API key", baseUrl: "", docsUrl: "" },
++    { id: "custom", name: "Custom endpoint (OpenAI-compatible)", keyPlaceholder: "Paste your API key", baseUrl: "", docsUrl: "" },
++  ];
++
+   function fillCloud() {
+     const list = (state.providers && state.providers.providers) || [];
+-    const cloud = list.filter((p) => p.category !== "local");
++    const fromCatalog = list.filter((p) => p.category !== "local");
++    const cloud = fromCatalog.length ? fromCatalog : FALLBACK_CLOUD;
+     providerSelect.replaceChildren(
+       ...cloud.map((p) => {
+         const o = el("option", { value: p.id }, p.name);
+@@ -1365,9 +1378,12 @@
+       chosen.mode = "cloud";
+       cloudBody.hidden = false;
+       fillCloud();
++      // Fill again once the catalog lands, so the fallback list is replaced by the real one
++      // without the dropdown ever being empty in between.
++      loadProviders().then(fillCloud).catch(() => {});
+       keyInput.focus();
+     },
+-    "quiet",
++    "reveal",
+   );
+ 
+   const root = el("div", { class: "first-run" });
+@@ -1780,6 +1796,7 @@
+       artifacts: workspaceUI.artifactsPage,
+       schedules: schedulesPage,
+       daemons: daemonsPage,
++      tasks: tasksPage,
+       tools: capabilityUI.renderTools,
+       settings: settingsPage,
+       persona: personaPage,
+@@ -1787,7 +1804,13 @@
+     // First run, unanswered: ask where the models run before showing a chat that cannot answer. The
+     // gate has a door in it — skipping holds for the session, because setup you cannot leave is a trap
+     // rather than a setup.
++    // The flag is not the whole test. A preferences file can be reset, migrated, or shipped empty
++    // into an install that already has weeks of conversation in it, and re-asking somebody who has
++    // been using the app for a month is the fastest way to look broken. If there is history, this
++    // is not a first run, whatever the flag says.
++    const hasHistory = (state.sessions || []).length > 0;
+     const unanswered =
++      !hasHistory &&
+       state.providers &&
+       state.providers.onboardingCompleted === false &&
+       !state.setupDismissed;
+@@ -1895,19 +1918,20 @@
+             { class: "eyebrow" },
+             project() ? project().name : "NEW INSTANCE",
+           ),
+-          el("h1", { class: "hero-heading" }, "Sup bitch?"),
++          // Two voices, and the loud one is opt-in. A brand-new install should read like the app,
++          // not like somebody else's running joke; pick the volkdude85 theme and you get the
++          // version with the teeth in it.
+           el(
+-            "div",
+-            { class: "hero-quick" },
+-            button("Just give me the table", () => {
+-              state.setupDismissed = true;
+-              navigate("setup");
+-            }, "quiet"),
++            "h1",
++            { class: "hero-heading" },
++            volkdudeVoice() ? "Sup bitch?" : "Ready when you are",
+           ),
+           el(
+             "p",
+             {},
+-            "What are we building, fixing, or destroying today?",
++            volkdudeVoice()
++              ? "What are we building, fixing, or destroying today?"
++              : "Ask for something, or start from one of these.",
+           ),
+           el(
+             "div",
+@@ -3252,6 +3276,80 @@
+   }
+   // What is actually running on this machine, asked rather than assumed: systemd unit state plus a
+   // connect to the port it would be listening on.
++  // Tasks: numbered from zero, the same shape as the list the agent keeps while it works. The
++  // number is the point — "task 3" is unambiguous between two people looking at the same screen,
++  // and a list that renumbers itself on every status change is not a list anybody can point at.
++  // Status is a button, not a checkbox: it cycles, so a row can go back without a second control.
++  async function tasksPage(host) {
++    const rows = el("div", { class: "task-rows" });
++    const input = el("input", {
++      class: "first-run-key",
++      placeholder: "What needs doing?",
++      spellcheck: false,
++    });
++    const ORDER = ["pending", "in_progress", "completed", "cancelled"];
++    const LABEL = { pending: "pending", in_progress: "in progress", completed: "done", cancelled: "cancelled" };
++
++    const draw = (tasks) => {
++      rows.replaceChildren();
++      const list = tasks || [];
++      if (!list.length) {
++        rows.append(el("p", { class: "muted" }, "Nothing on the list. A task is one sentence."));
++        return;
++      }
++      list.forEach((task, index) => {
++        const status = task.status || "pending";
++        const pill = el(
++          "button",
++          {
++            class: "task-status " + status,
++            title: "Click to move it on",
++            onclick: async () => {
++              const next = ORDER[(ORDER.indexOf(status) + 1) % ORDER.length];
++              const res = await api("/api/quixi/tasks/update", { id: task.id, status: next }).catch(() => null);
++              if (res && res.tasks) draw(res.tasks);
++            },
++          },
++          LABEL[status] || status,
++        );
++        rows.append(
++          el(
++            "div",
++            { class: "task-row" + (status === "completed" ? " is-done" : "") },
++            el("span", { class: "task-index" }, String(index)),
++            el("span", { class: "task-text" }, task.text || ""),
++            pill,
++          ),
++        );
++      });
++    };
++
++    const add = async () => {
++      const text = input.value.trim();
++      if (!text) { input.focus(); return; }
++      const res = await api("/api/quixi/tasks", { text }).catch(() => null);
++      if (res && res.tasks) { input.value = ""; draw(res.tasks); }
++      else toast("Could not add that task.", true);
++    };
++    input.addEventListener("keydown", (event) => {
++      if (event.key === "Enter") { event.preventDefault(); add(); }
++    });
++
++    host.replaceChildren(
++      header(
++        "Tasks",
++        "The list the agent and I both work from. Numbered so either of us can say which one.",
++        button("Add", add, "primary"),
++      ),
++      el("p", { class: "muted" }, "A task is a sentence and a status in tasks.json — nothing here is guessed from a conversation, and the file is yours to edit."),
++      el("label", { class: "first-run-label" }, el("span", {}, "New task"), input),
++      rows,
++    );
++
++    const first = await api("/api/quixi/tasks").catch(() => null);
++    draw(first && first.tasks);
++  }
++
+   async function daemonsPage(host) {
+     const body = el("div", { class: "daemon-list" }, el("p", { class: "muted" }, "Asking systemd and the loopback ports…"));
+     host.replaceChildren(
+@@ -4125,7 +4223,7 @@
+               ["retro", "Retro"],
+               ["light", "Light"],
+               ["dark", "Dark"],
+-              ["matrix", "Matrix"],
++              ["volkdude", "volkdude85"],
+               ["amber", "Amber"],
+               ["ice", "Ice"],
+               ["custom", "Custom"],
+@@ -4248,25 +4346,12 @@
+               }),
+               el("span", {}, "Boxed surfaces"),
+             ),
+-            el(
+-              "label",
+-              { class: "toggle" },
+-              el("input", {
+-                type: "checkbox",
+-                checked: localStorage.getItem("quixi.translucent") === "1",
+-                onchange: (event) => {
+-                  rememberPreference("translucent", event.target.checked ? "1" : "0");
+-                  applyTheme();
+-                },
+-              }),
+-              el("span", {}, "Translucent panels"),
+-            ),
+           ),
+           el("h2", { style: "margin-top:30px" }, "Transparency"),
+           el(
+             "p",
+             { class: "muted" },
+-            "How much of what is behind a panel shows through. 100% is solid; below about 60% the text starts to fight the desktop behind it.",
++            "How much of the workspace behind a surface shows through it. 100% is solid: the surface paints its own colour and nothing else. Below about 60% the text starts to fight what is behind it. The window itself is opaque at every setting, so there is no second control and no leftover glass.",
+           ),
+           el(
+             "label",
+@@ -4282,6 +4367,10 @@
+                   document.documentElement.style.setProperty("--panel-alpha", (Number(pct) / 100).toFixed(2));
+                   readout.textContent = `${pct}%`;
+                   rememberPreferenceSoon("panelOpacity", pct);
++                  // The surfaces are only part of it: the window itself has to be blended by the
++                  // compositor, or 100% and 40% look the same over an opaque window. One number,
++                  // sent both ways, is the only way the dial tells the truth.
++                  rpc("AppPreferences", "setPreference", ["windowOpacity", Number(pct)]).catch(() => {});
+                 },
+               });
+               return [input, readout];
+@@ -4707,6 +4796,12 @@
+       slider("l", 100, "Lightness"),
+     );
+   }
++  // The volkdude85 theme is the retro palette with the mouth left in. Everything that reads in a
++  // voice asks this, so the copy and the colours can never drift apart.
++  function volkdudeVoice() {
++    return (localStorage.getItem("quixi.theme") || "retro") === "volkdude";
++  }
++
+   function applyTheme() {
+     const choice = localStorage.getItem("quixi.theme") || "retro";
+     document.documentElement.dataset.theme =
+@@ -4732,8 +4827,13 @@
+     const theme = localStorage.getItem("quixi.theme") || "retro";
+     const custom = theme === "custom";
+     // Two surface options that are pure CSS flags on :root, so the stylesheet owns the look.
+-    root.dataset.translucent = localStorage.getItem("quixi.translucent") === "1" ? "on" : "off";
++    // The dial is the only thing that decides how see-through a surface is, applied at startup as
++    // well as while the slider moves — a saved preference that only takes effect after you touch
++    // the slider is a preference the app forgot. Default 100 is solid.
+     root.style.setProperty("--panel-alpha", ((Number(localStorage.getItem("quixi.panelOpacity") || 100)) / 100).toFixed(2));
++    // The window gets the same number, so a saved 70% is really 70% after a restart rather than
++    // only while the slider is being dragged.
++    rpc("AppPreferences", "setPreference", ["windowOpacity", Number(localStorage.getItem("quixi.panelOpacity") || 100)]).catch(() => {});
+     root.dataset.backgroundMotion = localStorage.getItem("quixi.backgroundMotion") === "1" ? "on" : "off";
+     root.dataset.backgroundGrid = localStorage.getItem("quixi.backgroundGrid") === "1" ? "on" : "off";
+     root.dataset.boxing = localStorage.getItem("quixi.boxing") === "0" ? "off" : "on";
