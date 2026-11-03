@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=56
+pkgrel=57
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -182,10 +182,12 @@ source=(
   "0099-window-fits-the-screen.patch"
   "0100-handheld-windows-open-maximized.patch"
   "0101-the-published-edition-carries-upstreams-skills.patch"
+  "0102-skills-first-on-the-tools-page.patch"
+  "0103-the-names-are-changed-on-the-way-to-the-screen.patch"
 )
 sha256sums=(
             'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
-            '0d447af0ebe5a9aa447e45cffe183c077647637994eb71ec22a29a179742484e'
+            'None'
             '6e777c4292128ea71db0234295c53cdd6fed235dc66ded68e53b906b26b6a61d'
             'a866886e26aea29b04e3c96483f07a9917e821559e416da03d6c630b85e71172'
             'fbe57cbee5e0cfd523a469382a227f55432a2494225f637098ce635eb06a0e91'
@@ -251,12 +253,12 @@ sha256sums=(
             'cc53a583ac6a6af203075c210d080abb7f95fb8e0e03d34bc8cf5561fbab5389'
             '7dfbd143f3cd6df00c7168b06efb7502d254212c1014fc76973c7a9ff29e5d9e'
             'bd06b86c18cea2bd882a8df7c8c208c9c6243b9cf2da3103183ef7de07bde2c0'
-            '1b46d0cfd5c5c02af273f3abbd289c0f6ad5765a4936feb5fcbb15055349bde8'
+            '7d4242e8a622b4530a83b09fce4105472e5384fc327f6eb70a502c8313cf24c8'
             '1d26534b0a5642e7aa4f3776a7a41be53904ea5772dde9f478615a76d13e9d37'
             '869711499fb97de268cc7c38d2960ef16295543ee0a6964dbad1010a83e9f88c'
             '226b80cb43a8049d3b8b731e7959dbabb71f661a058d784f4bc0b12fc24990af'
             '1d2e02a9dbd6e1edf61b0ac07f54967aa8018d021cd8830943d55e4433dd569d'
-            '2a3b213bce9e1d30bbbbb6da84b175a5cb79c7f448fadcb76cf96b137345142c'
+            '30d44c99081c2b5eefd87e4405af8986c2c9493ffa9b944425e14bfa1c1eab1c'
             'b013a82d1fc14e9e25577d9b80d2596baf112e5563cdb48105a03449d06c8c32'
             'e01534de901f57622d7e9463789315a5d3accfaab968a334ff04d388526ec2c6'
             '94a36daf1877e749f7dea37f88deb17b5c9f41c8830aedf699ebc019b62c6f2a'
@@ -286,6 +288,8 @@ sha256sums=(
             '5ff934c318117cb9ca2c4a311fff25d0c995432ede55054fd681ec9e14530f1f'
             '17c52b1bd1e5d5d83e9f071c24d52198be55e12d632136dd537521e3379c51fc'
             '42ac4c2f5cdec80f4c10ae4014b024794d4c3482252ae6e8b2c48f3c0ede98e7'
+            '7a5064772a934108de621811e59f2b8c026dcdc38ea8084a88e15be693050972'
+            '669f52fdd5d76e759a7f203aa45051f576b73d8e9df07b9c42184dc8dce75f28'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -324,6 +328,15 @@ prepare() {
         resources/bundled-skills-extracted/with/SKILL.md \
         resources/bundled-skills-extracted/reverse-engineering/ghidra_dump.py \
         resources/bundled-skills-extracted/reverse-engineering/DumpDecomp.java
+
+  # Belt and braces for the list above. It goes stale the moment a patch is added, and the symptom is
+  # a SILENT skip — "The next patch would create the file X, which already exists!" — followed by a
+  # package that is missing that file. Anything the series creates (its "from" side is empty: /dev/null
+  # or the 1969 epoch stamp `diff -Naur` writes) is cleared here, computed from the patches themselves,
+  # so a repeat build in the same tree cannot depend on somebody remembering to update a list.
+  for _p in "${srcdir}"/*.patch; do
+    awk '/^--- /{prev=$0} /^\+{3} b\//{ if (prev ~ /^--- \/dev\/null/ || prev ~ /1969-12-31/) { sub(/^\+{3} b\//,""); sub(/\t.*/,""); print } }' "$_p"
+  done | sort -u | while read -r _f; do if [ -n "$_f" ]; then rm -f -- "$_f"; fi; done
 
   # 1) Linux platform layer: the ComputerUse surface upstream leaves as silent
   #    no-ops outside macOS, plus the KWin ScreenShot2 fast path.
@@ -625,6 +638,14 @@ prepare() {
   # Upstream's skills only. browser-driving, reverse-engineering and with are the developer edition's,
   # and a published build is upstream's product plus platform work — not the working library.
   patch -Np1 -i "${srcdir}/0101-the-published-edition-carries-upstreams-skills.patch"
+  # Skills first. The page is called "Tools & skills" and it opened with a wall of connection cards,
+  # which pushed both libraries below the fold — the instructions a person came here to read sat
+  # under the plumbing they did not.
+  patch -Np1 -i "${srcdir}/0102-skills-first-on-the-tools-page.patch"
+  # A published build must not put a household on screen: names are masked in the card titles, the
+  # descriptions, the search, and the reader — the reader being where a whole file used to arrive
+  # unredacted. Rendered surface only; nothing on disk is rewritten.
+  patch -Np1 -i "${srcdir}/0103-the-names-are-changed-on-the-way-to-the-screen.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

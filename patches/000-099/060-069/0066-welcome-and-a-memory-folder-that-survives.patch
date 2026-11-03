@@ -99,7 +99,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
 +      el(
 +        "p",
 +        {},
-+        "A companion, not a chatbot. She runs on your machine, for you, one user — her memory is a folder you own, her voice is synthesized locally, and she answers to you rather than to a policy. The aim is a thing that keeps context the way a person does: remembers what mattered, forgets on purpose, and says when it does not know.",
++        "A companion, not a chatbot. She runs on your machine, for you, one user — her memory is a folder you own, her voice is synthesized locally, and she answers to you rather than to a policy. The aim is a thing that keeps context the way a person does, except it does not forget: everything that mattered stays, and she says when it does not know.",
 +      ),
 +      el("h2", {}, "What we are aiming for"),
 +      el(

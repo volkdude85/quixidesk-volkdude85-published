@@ -1,0 +1,38 @@
+Skills first on the tools page
+==============================
+
+The page is called "Tools & skills" and it opened with a wall of connection cards. The two skill
+libraries — what upstream ships and the Hermes library on this machine — sat below them, under the
+fold, which is the wrong way round: the instructions are what a person comes here to read, and the
+connections are plumbing that is set up once.
+
+Order now: search, both libraries (QuixiDesk, then Hermes), a rule, then Connections with its cards.
+
+Nothing about the libraries themselves changed — same two, same searches; they simply start where the
+page starts.
+
+---
+--- a/resources/ui/capability-workflows.js
++++ b/resources/ui/capability-workflows.js
+@@ -264,13 +264,19 @@
+     }
+     function renderTools(host) {
+       const data = ctx.getToolsData();
+-      host.replaceChildren(header("Tools & skills", "Connect services and start tasks with reusable instructions."),
++      // Skills first. This page is called "Tools & skills" and the first thing on it was a wall of
++      // connection cards, which pushed the libraries below the fold — the instructions a person came to
++      // read sat under the plumbing they did not. The order now matches the name: the libraries
++      // (upstream's, then the Hermes one), then the connections that feed tools into them.
++      host.replaceChildren(header("Tools & skills", "Reusable instructions first, the connections that feed them below."),
+         toolsFilter(),
++        skillsSection(data.skills || []),
++        el("hr"),
+         el("div", { class: "row" }, el("h2", { class: "grow" }, "Connections"),
+           button("Add connection", () => connectionEditor(), "primary"), button("Advanced JSON", ctx.advancedMcpEditor, "quiet")),
+         el("p", { class: "muted" }, "Ready means initialization and tool discovery completed. Sign-in requests, failures and last-known catalogs stay visible."),
+         el("p", { id: "mcp-load-error", class: "error-text", role: "alert", hidden: !data.error }, data.error || ""),
+-        el("div", { id: "mcp-connections", class: "mcp-connections" }), el("hr"), skillsSection(data.skills || []));
++        el("div", { id: "mcp-connections", class: "mcp-connections" }));
+       ctx.updateMcpConnections(); enhanceConnections();
+     }
+ 
