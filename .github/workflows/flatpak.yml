@@ -27,6 +27,15 @@ jobs:
       # The manifest sources the application tree, and a checkout of this repository does not contain one:
       # the repository carries the patch series, so this turns the series into a tree. Same order as
       # prepare(), because that order is what ships.
+      # The vendoring step needs cargo on the runner; the Flatpak image ships the Rust SDK inside the
+      # build sandbox, not on the PATH outside it.
+      - name: Make sure cargo exists on the runner
+        run: |
+          set -e
+          command -v cargo >/dev/null 2>&1 && exit 0
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - name: Prepare the source tree from the patch series
         run: |
           set -e
