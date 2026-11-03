@@ -47,8 +47,12 @@ jobs:
             librsvg2-dev libssl-dev patchelf \
             flatpak flatpak-builder
           # The action calls flatpak-builder and installs dependencies from a remote named flathub; on a
-          # plain runner neither exists until they are put there.
+          # plain runner neither exists until they are put there, and the action runs `flatpak --system
+          # install` as the runner user, which the system helper refuses ("Deploy not allowed for user").
+          # So the runtime and SDK go in here, as root, before the action looks for them.
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --noninteractive --system flathub \
+            org.gnome.Platform//50 org.gnome.Sdk//50
           flatpak --version
           flatpak-builder --version
 
