@@ -19,9 +19,10 @@ never could:
   shipped Nora readable without cloning the repository.
 
 diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
---- a/resources/ui/app.css	2026-11-02 19:59:57.008241880 -0800
-+++ b/resources/ui/app.css	2026-11-02 20:27:53.808013924 -0800
-@@ -2567,6 +2567,36 @@
+diff -ruN -x .git -x '*.rej' -x '*.orig' rbA/QuixiDesk-3.6556.12/resources/ui/app.css rbB/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-03 02:11:35.321841982 -0800
++++ b/resources/ui/app.css	2026-11-03 02:11:35.375925136 -0800
+@@ -2624,6 +2624,36 @@
  /* Persona: the chip in the top bar and the page behind it. */
  .persona-chip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
  .persona-page { max-width: 900px; }
@@ -58,10 +59,10 @@ diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resourc
  .persona-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 6px; }
  .persona-status strong { font-size: 15px; color: var(--text); }
  .persona-path { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); background: var(--raised); padding: 3px 7px; border-radius: 5px; }
-diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
---- a/resources/ui/app.js	2026-11-02 20:09:31.810401884 -0800
-+++ b/resources/ui/app.js	2026-11-02 20:27:46.620299135 -0800
-@@ -1020,7 +1020,6 @@
+diff -ruN -x .git -x '*.rej' -x '*.orig' rbA/QuixiDesk-3.6556.12/resources/ui/app.js rbB/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-03 02:11:35.332092749 -0800
++++ b/resources/ui/app.js	2026-11-03 02:11:35.376771909 -0800
+@@ -1098,7 +1098,6 @@
        el("div", { class: "crumb" }, el("strong", {}, crumb)),
        // Nothing to pick from yet. A model picker before a provider exists is a button that opens a
        // dead end, and first run is exactly when a person is most likely to press it.
@@ -69,7 +70,7 @@ diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resourc
        needsOnboarding() ? null : providersChip(),
        ib("Toggle QuixiDesk Browser", "browser", () => toggleBrowser()),
      );
-@@ -4881,6 +4880,98 @@
+@@ -5028,6 +5027,98 @@
      );
    }
    // The persona page: what is loaded, where the file lives, and an editor that writes it.
@@ -168,68 +169,7 @@ diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resourc
    async function personaPage(host) {
      await loadPersona();
      const p = state.persona || {};
-@@ -5292,44 +5383,23 @@
-       value: localStorage.getItem("quixi.ttsVoice") || "af_heart",
-     });
- 
--    // ---- Conversation ----
--    const convoMode = el("select", { class: "first-run-select" });
--    convoMode.append(
--      el("option", { value: "off" }, "Off — press to talk instead"),
--      el("option", { value: "ptt" }, "Push to talk — hold the key, release to send"),
--      el("option", { value: "open" }, "Open conversation — always listening while enabled"),
--    );
--    convoMode.value = localStorage.getItem("quixi.conversationMode") || "ptt";
--    const convoHotkey = el("input", {
--      type: "text", class: "first-run-key", spellcheck: false,
--      value: localStorage.getItem("quixi.dictationHotkey") || "Control+B",
--    });
--    const convoWarn = el(
--      "p",
--      { class: "first-run-warn" },
--      "Always listening means the microphone is open whenever conversation mode is on. There is an indicator while it records, and the mode can be switched off at any time — but an open microphone is a real thing, not a setting.",
--    );
--
-+    // Conversation mode used to be a setting here — a mode and a push-to-talk key. The composer's
-+    // Mic and Speaker switches are that mode now, and a second way to say the same thing is a second
-+    // thing to get out of step, so it is gone rather than hidden.
-     const save = () => {
-       const pairs = [
-         ["sttModel", sttEngine.value],
-         ["ttsModel", ttsEngine.value],
-         ["ttsVoice", ttsVoice.value],
--        ["conversationMode", convoMode.value],
--        ["dictationHotkey", convoHotkey.value],
-       ];
-       for (const [k, v] of pairs) {
-         localStorage.setItem(`quixi.${k}`, v);
-         rememberPreferenceSoon(k, v);
-       }
-     };
--    for (const el2 of [sttEngine, ttsEngine, ttsVoice, convoMode, convoHotkey]) {
-+    for (const el2 of [sttEngine, ttsEngine, ttsVoice]) {
-       el2.addEventListener("change", save);
-     }
--    convoMode.addEventListener("change", () => {
--      convoWarn.hidden = convoMode.value !== "open";
--    });
--    convoWarn.hidden = convoMode.value !== "open";
- 
-     wrap.append(
-       el("h2", {}, "Speech to text"),
-@@ -5345,11 +5415,6 @@
-       el("label", { class: "settings-field" }, el("span", {}, "Engine"), ttsEngine),
-       el("label", { class: "settings-field" }, el("span", {}, "Voice"), ttsVoice),
- 
--      el("h2", { style: "margin-top:28px" }, "Conversation"),
--      el("p", { class: "muted" }, "Both of the above at once: it listens, transcribes, answers, and speaks — without you touching the keyboard. Push-to-talk is the default because a microphone that opens itself is a decision, not a convenience."),
--      el("label", { class: "settings-field" }, el("span", {}, "Mode"), convoMode),
--      el("label", { class: "settings-field" }, el("span", {}, "Push-to-talk key"), convoHotkey),
--      convoWarn,
-       devices,
-       voiceStatus,
-     );
-@@ -5408,6 +5473,7 @@
+@@ -5529,6 +5620,7 @@
        ["general", "General"],
        ["visuals", "Visuals"],
        ["audio", "Audio"],
@@ -237,7 +177,7 @@ diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resourc
        ["providers", "Providers"],
        ["onboarding", "Onboarding"],
        ["privacy", "Privacy & data"],
-@@ -5467,6 +5533,8 @@
+@@ -5588,6 +5680,8 @@
        content.append(...visualsBlocks());
      } else if (state.settingsTab === "audio") {
        content.append(audioPageSections());
@@ -246,20 +186,3 @@ diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resourc
      } else if (state.settingsTab === "providers") {
        content.append(
          el("h2", {}, "Model providers"),
-@@ -6710,8 +6778,14 @@
-   }
-   addEventListener("keydown", (e) => {
-     const command = e.metaKey || e.ctrlKey;
--    if (command && e.key.toLowerCase() === "f" && state.page === "chat") {
--      e.preventDefault(); openConversationFind();
-+    // Ctrl+F is what people reach for. Inside a conversation it finds in that conversation; anywhere
-+    // else it opens the search page, because "find" and "search" are the same instinct and Ctrl+K is
-+    // not a thing anybody remembers. Ctrl+K still works, so nothing that used to be true stops being
-+    // true.
-+    if (command && e.key.toLowerCase() === "f") {
-+      e.preventDefault();
-+      if (state.page === "chat") openConversationFind();
-+      else navigate("search");
-     } else if (command && e.key.toLowerCase() === "g" && conversationFind) {
-       e.preventDefault(); stepConversationFind(e.shiftKey ? -1 : 1);
-     } else if (command && e.key.toLowerCase() === "n") {

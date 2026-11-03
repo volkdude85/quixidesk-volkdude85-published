@@ -174,7 +174,6 @@ source=(
   "0090-nora-introduces-herself.patch"
   "0091-no-apple-shaped-capabilities-on-linux.patch"
   "0092-the-workspace-is-documents.patch"
-  "0093-the-series-rebuilds-what-we-run.patch"
   "0094-developer-affordances-are-a-build-flag.patch"
   "0095-a-published-build-chooses-nothing.patch"
   "0096-recents-grouped-by-day-like-hermes.patch"
@@ -267,7 +266,7 @@ sha256sums=(
   '56f0cf710be1412ad6a0d360ab7f5237a98f555ddae02627274796f2195efc74'
   '58f63448fe6fd0d0a8980e9693baeb683c13b547e0d757f3027a716ea5e2f4c8'
   '95c0db024cad4c7f241f0f250804ec7268c94d0231511f1a7aad5232d21667c1'
-  'a230ed090394ac1c433fe4307c3fbdb0945f511b886e64d83ca77bc90790f1e9'
+  'd14a9963927f822b3f56e99d4ccb0aab5abb51959baddea82e1f044eeb077af4'
   'a94c706e583d162c9f37f61558e7222e4831ad1b91b73ffe553f8c45cdcd94c5'
   '804268b0e90400df7128b28f9bcd7a21da619bd0a4eafdab745d254d0bcebb35'
   '3340025cc1a6c1a0b720a077a9a49c1674695eb66b8c5ed313230b6b73a4a9b7'
@@ -276,7 +275,6 @@ sha256sums=(
   'c74e088f03930815bc9c23cc445b63760f4f7aebdb246bdb1855c72a14294ff0'
   '4a63477fe7c59e9eff8b176c586d6704735c7b9dad759f6f944c7f0fce506fae'
   '8fb74337a154e33205a38cf48e5d2cfa37d6f95ccfc4e37d7d846317de10cb14'
-  'aaf58cd72a30478c7541c1689c65b1b8a43da301b20535f84053738c90c2208b'
   '4854ddb8882fe3caed0f17a2b5fda896916f7ff811f7fa473c0765c6d77e1d9e'
   '916fa7dc7d33de330823a42ba741baad797dafa7005d566097fa6f936dc6f2e7'
   'e560d707eb7865a9053b4278aebba2b4964000fb3f9099b01b1c3f64a21df166'
@@ -594,7 +592,6 @@ prepare() {
   patch -Np1 -i "${srcdir}/0092-the-workspace-is-documents.patch"
 
   # Reconcile the tree with the series: the last edits had never been cut into a patch.
-  patch -Np1 -i "${srcdir}/0093-the-series-rebuilds-what-we-run.patch"
 
   # Developer affordances exist only in a build that says it is a development build.
   patch -Np1 -i "${srcdir}/0094-developer-affordances-are-a-build-flag.patch"
