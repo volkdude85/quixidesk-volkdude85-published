@@ -158,3 +158,23 @@ looks for, cut from the app's own mark and colours:
 
 Right-click the shortcut in Steam → **Properties** → drop each one into its slot. No account, no
 SteamGridDB upload, nothing to install.
+
+### The tile puts itself in the library
+
+`install.sh` on a Deck also writes the shortcut into Steam's own list and drops the artwork where
+Steam looks for it, so the app shows up in Game Mode as a proper tile — no Add a Non-Steam Game, no
+right-click, no four images by hand.
+
+It edits `userdata/<id>/config/shortcuts.vdf`, so it is careful in a specific way: it walks the
+structure rather than counting trailing terminators, it inserts the new entry where the last one
+ends so every existing byte keeps its position, it parses the result and refuses to write unless both
+the old entries and the new one come back intact, it backs the file up first, and it refuses to run
+while Steam is open, because Steam rewrites that file on exit. Artwork goes to
+`userdata/<id>/config/grid/<appid>_p.png` and friends.
+
+By hand, if you would rather:
+
+```sh
+python3 scripts/deck-steam-shortcut.py            # say what it would do
+python3 scripts/deck-steam-shortcut.py --write    # do it
+```

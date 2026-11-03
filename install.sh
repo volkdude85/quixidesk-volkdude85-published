@@ -21,6 +21,8 @@ set -eu
 APP_ID=org.quixidesk.QuixiDesk
 REF_URL="https://volkdude85.github.io/quixidesk-volkdude85-published/org.quixidesk.QuixiDesk.flatpakref"
 CONTAINER_SCRIPT="https://raw.githubusercontent.com/volkdude85/quixidesk-volkdude85-published/master/scripts/steamdeck-distrobox.sh"
+RAW_BASE="https://raw.githubusercontent.com/volkdude85/quixidesk-volkdude85-published/master"
+SHORTCUT_SCRIPT="$RAW_BASE/scripts/deck-steam-shortcut.py"
 
 MODE=flatpak
 for arg in "$@"; do
@@ -69,6 +71,51 @@ install_flatpak() {
     say "    flatpak update $APP_ID"
     return 1
   fi
+}
+
+# Put the tile in the Steam library, with the artwork already in place, so Game Mode has something
+# better than a grey rectangle. Steam must be closed for this — it rewrites shortcuts.vdf on exit.
+add_steam_tile() {
+  say ""
+  say "== Steam library shortcut"
+  if ! have python3; then
+    say "python3 is not on PATH; skipping the shortcut. Add it by hand: Steam → Games →"
+    say "Add a Non-Steam Game → browse to /usr/bin/flatpak, options: run $APP_ID"
+    return 0
+  fi
+
+  work=$(mktemp -d)
+  # Prefer the checkout this script is sitting in; fall back to the repository.
+  if [ -f ./scripts/deck-steam-shortcut.py ]; then
+    cp ./scripts/deck-steam-shortcut.py "$work/"
+  else
+    curl -fsSL "$SHORTCUT_SCRIPT" -o "$work/deck-steam-shortcut.py" || {
+      say "could not fetch the shortcut script — skipping"; return 0; }
+  fi
+
+  art=""
+  if [ -d ./steam ]; then
+    art=./steam
+  else
+    mkdir -p "$work/art"
+    for f in grid-460x215.png grid-600x900.png hero-1920x620.png logo-1280x720.png; do
+      curl -fsSL "$RAW_BASE/steam/$f" -o "$work/art/$f" 2>/dev/null || true
+    done
+    [ -f "$work/art/grid-460x215.png" ] && art="$work/art"
+  fi
+
+  if pgrep -x steam >/dev/null 2>&1; then
+    say "Steam is running — it rewrites its shortcut list on exit, so this waits."
+    say "Close Steam, then run:"
+    say "    python3 $SHORTCUT_SCRIPT --write --art ${art:-<repo>/steam}"
+  else
+    if [ -n "$art" ]; then
+      python3 "$work/deck-steam-shortcut.py" --write --art "$art"
+    else
+      python3 "$work/deck-steam-shortcut.py" --write
+    fi
+  fi
+  rm -rf "$work"
 }
 
 game_mode_steps() {
@@ -137,6 +184,7 @@ if is_steamdeck; then
   fi
   install_flatpak
   finish
+  add_steam_tile
   game_mode_steps
   say ""
   say "If the agent needs to drive the mouse and keyboard, or read the clipboard, the sandbox is"
