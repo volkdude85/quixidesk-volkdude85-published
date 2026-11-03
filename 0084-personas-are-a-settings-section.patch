@@ -1,0 +1,265 @@
+Personas are a settings section
+===============================
+
+The persona was a chip in the top bar, which is a strange place for a file: it sat beside the model
+name as though who is speaking were a per-conversation control like which model answers. It is not —
+it is a document on disk that defines the assistant, and the person who wants to change it goes
+looking in settings.
+
+There is a Personas section now, and it does everything the chip could do plus the thing the chip
+never could:
+
+* **the file and the folder**, as real paths read from the engine rather than reconstructed in the
+  webview;
+* **edit, save to the shelf, open the folder, use the shipped persona** — the same actions, in one
+  place, with the shelf listed underneath as rows that switch or delete;
+* **what it says** — the full text of the persona that is loaded, unsummarised, in a scrollable
+  reading pane. A persona is markdown on your own disk; the point of it being a file is that it can be
+  read, so the section shows it instead of describing where it lives. That is also what makes the
+  shipped Nora readable without cloning the repository.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 19:59:57.008241880 -0800
++++ b/resources/ui/app.css	2026-11-02 20:27:53.808013924 -0800
+@@ -2567,6 +2567,36 @@
+ /* Persona: the chip in the top bar and the page behind it. */
+ .persona-chip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ .persona-page { max-width: 900px; }
++/* Reading the persona: monospace, because it is markdown and the shape of it matters, and scrollable
++   rather than clamped, because the point is that nothing is being hidden. */
++.persona-read {
++  margin-top: 10px;
++  max-height: 420px;
++  overflow: auto;
++  padding: 14px 16px;
++  border: 1px solid var(--line);
++  border-radius: 10px;
++  background: color-mix(in srgb, var(--panel) 70%, transparent);
++  color: var(--text);
++  font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
++  font-size: 12px;
++  line-height: 1.55;
++  white-space: pre-wrap;
++  word-break: break-word;
++}
++.persona-shelf { display: grid; gap: 8px; margin-top: 10px; }
++.persona-shelf-row {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  flex-wrap: wrap;
++  padding: 9px 12px;
++  border: 1px solid var(--line);
++  border-radius: 9px;
++  background: var(--panel);
++}
++.persona-shelf-name { font-weight: 600; }
++
+ .persona-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 6px; }
+ .persona-status strong { font-size: 15px; color: var(--text); }
+ .persona-path { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); background: var(--raised); padding: 3px 7px; border-radius: 5px; }
+diff -ruN '--exclude=target' '--exclude=.git' qtest9/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 20:09:31.810401884 -0800
++++ b/resources/ui/app.js	2026-11-02 20:27:46.620299135 -0800
+@@ -1020,7 +1020,6 @@
+       el("div", { class: "crumb" }, el("strong", {}, crumb)),
+       // Nothing to pick from yet. A model picker before a provider exists is a button that opens a
+       // dead end, and first run is exactly when a person is most likely to press it.
+-      needsOnboarding() ? null : personaChip(),
+       needsOnboarding() ? null : providersChip(),
+       ib("Toggle QuixiDesk Browser", "browser", () => toggleBrowser()),
+     );
+@@ -4881,6 +4880,98 @@
+     );
+   }
+   // The persona page: what is loaded, where the file lives, and an editor that writes it.
++  function personasFolder() {
++    const file = (state.persona && state.persona.path) || "~/.quixi/persona.md";
++    const cut = file.lastIndexOf("/");
++    return cut > 0 ? `${file.slice(0, cut)}/personas` : "~/.quixi/personas";
++  }
++
++  // Personas, as a settings section rather than a chip in the header.
++  //
++  // Everything the chip did lives here now, plus the part the chip could never do: showing what the
++  // persona actually says. A persona is a markdown file on somebody's disk — the point of it being a
++  // file is that it can be read, so the section reads it out instead of describing where it is.
++  async function personaSettings(host) {
++    await loadPersona();
++    const p = state.persona || {};
++    const shelf = await rpc("AppPreferences", "listPersonas").catch(() => null);
++    const shelfRows = (shelf && shelf.personas) || [];
++    const others = shelfRows.filter((x) => x.name !== p.name || x.slug !== (p.slug || ""));
++
++    const reader = el("pre", { class: "persona-read" }, (p.content || "").trim() || "(this persona file is empty)");
++    reader.hidden = true;
++    const toggle = button("Read it here", () => {
++      const open = reader.hidden;
++      reader.hidden = !open;
++      toggle.textContent = open ? "Hide the text" : "Read it here";
++    }, "reveal");
++
++    host.append(
++      el("h2", {}, "Who is speaking"),
++      el(
++        "div",
++        { class: "persona-status" },
++        el("strong", {}, p.loaded ? p.name : "No persona loaded"),
++        el("span", { class: "tag" }, p.loaded ? "LIVE" : "EMPTY"),
++        el("span", { class: "muted" }, `${p.bytes || 0} bytes`),
++      ),
++      el(
++        "p",
++        { class: "muted" },
++        "A persona is a markdown file read at the start of every turn, so an edit takes effect on the next message. The first line beginning with '# ' is the name shown here. It is an ordinary file: you can open it, copy it, back it up or put it in git.",
++      ),
++      el("label", { class: "settings-field" }, el("span", {}, "Persona file"), el("code", { class: "persona-path" }, p.path || "~/.quixi/persona.md")),
++      el(
++        "label",
++        { class: "settings-field" },
++        el("span", {}, "Personas folder"),
++        el("code", { class: "persona-path" }, personasFolder()),
++      ),
++      el(
++        "div",
++        { class: "toolbar" },
++        button("Edit the persona file", () => navigate("persona"), "primary"),
++        button("Save this one to the shelf…", () => savePersonaAsFlow(), "reveal"),
++        button("Open the personas folder", () => rpc("AppPreferences", "revealPersonas"), "quiet"),
++        button("Use the shipped persona", () => restorePersonaFlow(), "quiet"),
++      ),
++      el("h2", { style: "margin-top:30px" }, "What it says"),
++      el(
++        "p",
++        { class: "muted" },
++        "The text this build ships with, read straight from the file that is loaded right now. Nothing is summarised: if you want to know what the assistant was told to be, this is the whole of it.",
++      ),
++      el("div", { class: "toolbar" }, toggle),
++      reader,
++      el("h2", { style: "margin-top:30px" }, "The shelf"),
++      el(
++        "p",
++        { class: "muted" },
++        shelfRows.length
++          ? "Copies you have saved. Switching one changes who is speaking immediately; deleting one asks you to type its name first."
++          : "Empty. Saving the current persona puts a copy in the folder so you can switch back to it later.",
++      ),
++      el(
++        "div",
++        { class: "persona-shelf" },
++        ...shelfRows.map((x) =>
++          el(
++            "div",
++            { class: "persona-shelf-row" },
++            el("span", { class: "persona-shelf-name" }, x.name),
++            el("span", { class: "muted" }, `${x.slug} · ${x.bytes} B`),
++            x.slug === (p.slug || "") ? el("span", { class: "tag" }, "CURRENT") : null,
++            el("span", { class: "spacer" }),
++            x.slug === (p.slug || "")
++              ? null
++              : button("Switch to it", () => activatePersonaFlow(x.slug, x.name), "reveal"),
++            button("Delete…", () => deletePersonaFromShelf(x.slug, x.name), "quiet"),
++          ),
++        ),
++      ),
++    );
++  }
++
+   async function personaPage(host) {
+     await loadPersona();
+     const p = state.persona || {};
+@@ -5292,44 +5383,23 @@
+       value: localStorage.getItem("quixi.ttsVoice") || "af_heart",
+     });
+ 
+-    // ---- Conversation ----
+-    const convoMode = el("select", { class: "first-run-select" });
+-    convoMode.append(
+-      el("option", { value: "off" }, "Off — press to talk instead"),
+-      el("option", { value: "ptt" }, "Push to talk — hold the key, release to send"),
+-      el("option", { value: "open" }, "Open conversation — always listening while enabled"),
+-    );
+-    convoMode.value = localStorage.getItem("quixi.conversationMode") || "ptt";
+-    const convoHotkey = el("input", {
+-      type: "text", class: "first-run-key", spellcheck: false,
+-      value: localStorage.getItem("quixi.dictationHotkey") || "Control+B",
+-    });
+-    const convoWarn = el(
+-      "p",
+-      { class: "first-run-warn" },
+-      "Always listening means the microphone is open whenever conversation mode is on. There is an indicator while it records, and the mode can be switched off at any time — but an open microphone is a real thing, not a setting.",
+-    );
+-
++    // Conversation mode used to be a setting here — a mode and a push-to-talk key. The composer's
++    // Mic and Speaker switches are that mode now, and a second way to say the same thing is a second
++    // thing to get out of step, so it is gone rather than hidden.
+     const save = () => {
+       const pairs = [
+         ["sttModel", sttEngine.value],
+         ["ttsModel", ttsEngine.value],
+         ["ttsVoice", ttsVoice.value],
+-        ["conversationMode", convoMode.value],
+-        ["dictationHotkey", convoHotkey.value],
+       ];
+       for (const [k, v] of pairs) {
+         localStorage.setItem(`quixi.${k}`, v);
+         rememberPreferenceSoon(k, v);
+       }
+     };
+-    for (const el2 of [sttEngine, ttsEngine, ttsVoice, convoMode, convoHotkey]) {
++    for (const el2 of [sttEngine, ttsEngine, ttsVoice]) {
+       el2.addEventListener("change", save);
+     }
+-    convoMode.addEventListener("change", () => {
+-      convoWarn.hidden = convoMode.value !== "open";
+-    });
+-    convoWarn.hidden = convoMode.value !== "open";
+ 
+     wrap.append(
+       el("h2", {}, "Speech to text"),
+@@ -5345,11 +5415,6 @@
+       el("label", { class: "settings-field" }, el("span", {}, "Engine"), ttsEngine),
+       el("label", { class: "settings-field" }, el("span", {}, "Voice"), ttsVoice),
+ 
+-      el("h2", { style: "margin-top:28px" }, "Conversation"),
+-      el("p", { class: "muted" }, "Both of the above at once: it listens, transcribes, answers, and speaks — without you touching the keyboard. Push-to-talk is the default because a microphone that opens itself is a decision, not a convenience."),
+-      el("label", { class: "settings-field" }, el("span", {}, "Mode"), convoMode),
+-      el("label", { class: "settings-field" }, el("span", {}, "Push-to-talk key"), convoHotkey),
+-      convoWarn,
+       devices,
+       voiceStatus,
+     );
+@@ -5408,6 +5473,7 @@
+       ["general", "General"],
+       ["visuals", "Visuals"],
+       ["audio", "Audio"],
++      ["persona", "Personas"],
+       ["providers", "Providers"],
+       ["onboarding", "Onboarding"],
+       ["privacy", "Privacy & data"],
+@@ -5467,6 +5533,8 @@
+       content.append(...visualsBlocks());
+     } else if (state.settingsTab === "audio") {
+       content.append(audioPageSections());
++    } else if (state.settingsTab === "persona") {
++      personaSettings(content);
+     } else if (state.settingsTab === "providers") {
+       content.append(
+         el("h2", {}, "Model providers"),
+@@ -6710,8 +6778,14 @@
+   }
+   addEventListener("keydown", (e) => {
+     const command = e.metaKey || e.ctrlKey;
+-    if (command && e.key.toLowerCase() === "f" && state.page === "chat") {
+-      e.preventDefault(); openConversationFind();
++    // Ctrl+F is what people reach for. Inside a conversation it finds in that conversation; anywhere
++    // else it opens the search page, because "find" and "search" are the same instinct and Ctrl+K is
++    // not a thing anybody remembers. Ctrl+K still works, so nothing that used to be true stops being
++    // true.
++    if (command && e.key.toLowerCase() === "f") {
++      e.preventDefault();
++      if (state.page === "chat") openConversationFind();
++      else navigate("search");
+     } else if (command && e.key.toLowerCase() === "g" && conversationFind) {
+       e.preventDefault(); stepConversationFind(e.shiftKey ? -1 : 1);
+     } else if (command && e.key.toLowerCase() === "n") {

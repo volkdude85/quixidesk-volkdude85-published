@@ -165,6 +165,7 @@ source=(
   0081-dictation-state-survives-a-repaint.patch
   0082-no-words-left-behind.patch
   0083-ctrl-f-and-no-second-conversation-mode.patch
+  0084-personas-are-a-settings-section.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -252,6 +253,7 @@ sha256sums=(
   '56f0cf710be1412ad6a0d360ab7f5237a98f555ddae02627274796f2195efc74'
   '58f63448fe6fd0d0a8980e9693baeb683c13b547e0d757f3027a716ea5e2f4c8'
   '95c0db024cad4c7f241f0f250804ec7268c94d0231511f1a7aad5232d21667c1'
+  'a230ed090394ac1c433fe4307c3fbdb0945f511b886e64d83ca77bc90790f1e9'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -535,6 +537,9 @@ prepare() {
 
   # Ctrl+F searches, and conversation mode lives in the composer instead of being described twice.
   patch -Np1 -i "${srcdir}/0083-ctrl-f-and-no-second-conversation-mode.patch"
+
+  # Personas live in settings, and the persona text can be read there.
+  patch -Np1 -i "${srcdir}/0084-personas-are-a-settings-section.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
