@@ -179,6 +179,7 @@ source=(
   "0096-recents-grouped-by-day-like-hermes.patch"
   "0097-project-rules-beside-the-work.patch"
   "0098-the-daemon-list-belongs-to-the-machine.patch"
+  "0099-window-fits-the-screen.patch"
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -607,6 +608,10 @@ prepare() {
 
   # The daemon list belongs to the machine: it comes from <data_dir>/daemons.json.
   patch -Np1 -i "${srcdir}/0098-the-daemon-list-belongs-to-the-machine.patch"
+
+  # The window opens no larger than the screen it lands on: a 1280x800 handheld (Steam Deck in desktop
+  # mode) was getting a 1280x840 window with the composer below the bottom edge.
+  patch -Np1 -i "${srcdir}/0099-window-fits-the-screen.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
