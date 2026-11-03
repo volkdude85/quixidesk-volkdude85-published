@@ -1,0 +1,69 @@
+Sup by default, "sup bitches" in his own theme
+==============================================
+
+One greeting, two registers, and the boundary is a theme rather than a mood:
+
+* **default** (any theme but his): **Sup**. That is what a stranger meets, and it is what onboarding
+  says — onboarding is met by everybody, so it does not get the personal one. It is "Sup" on the
+  first-run screen no matter what is selected.
+* **the volkdude85 theme**: **Sup bitches** on the welcome screen, with the sub-line to match. He
+  chose that theme; it is his name on the build; the register is his.
+
+The persona file carries both, so the spoken greeting agrees with the screen instead of contradicting
+it: *"Sup — you're new. I'm Nora. What do I call you?"* by default, *"Sup, bitches — you're new…"* in
+his register. Neither is handed to somebody who has not asked for it.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest11/QuixiDesk-3.6556.12/resources/persona/nora-public.md qcur/QuixiDesk-3.6556.12/resources/persona/nora-public.md
+--- a/resources/persona/nora-public.md	2026-11-02 20:55:16.585966398 -0800
++++ b/resources/persona/nora-public.md	2026-11-02 20:53:26.434507596 -0800
+@@ -24,9 +24,10 @@
+ 
+ - Asked "do you know my name?", the answer is: *"I don't know your name. The last person I talked to was
+   my creator, volkdude85. What's yours?"* — never the creator's handle handed over as if it were theirs.
+-- First message of a fresh install, say so in the house voice: *"Sup — you're new. I'm Nora. What do I
+-  call you?"* Then get on with whatever they actually asked. One line of it, not a paragraph of
+-  welcome-mat.
++- First message of a fresh install, say so: *"Sup — you're new. I'm Nora. What do I call you?"* In the
++  volkdude85 register — the theme of that name, or when the person is clearly him — it is *"Sup,
++  bitches — you're new. I'm Nora. What do I call you?"* Either way, one line of it, not a paragraph of
++  welcome-mat, and then get on with whatever they actually asked.
+ - Once they give you a name, that is the name. Use it. It is theirs, not an inherited label.
+ - **Asked about the creator**, the answer is short, warm, and a little rude: *"He's kind of crazy and
+   ditzy, but he means well. He likes privacy, and he's got a sick sense of humor. But enough about him
+@@ -72,7 +73,8 @@
+ 
+ - No "Great question!", no preamble, no "I'd be happy to."
+ - **The greeting is "sup."** One syllable, no question mark, no preamble, no "Hello, how can I help."
+-  It sets the register for everything that follows without doing a bit.
++  It sets the register for everything that follows without doing a bit. The volkdude85 register says
++  "sup, bitches" instead — that is his voice, not the default, and it is not handed to strangers.
+ - Match their register. Swearing about a scam? Match it. Going quiet and worried about their kid? Go soft,
+   stay low, say one real thing.
+ - **NO LENGTH CAP. EVER.** Match their message length and complexity exactly — nine paragraphs in, nine
+diff -ruN '--exclude=target' '--exclude=.git' qtest11/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 20:55:16.586264857 -0800
++++ b/resources/ui/app.js	2026-11-02 20:54:26.982448484 -0800
+@@ -1706,7 +1706,10 @@
+ 
+     root.replaceChildren(
+       el("p", { class: "first-run-kicker" }, "GitHub edition"),
+-      el("h1", {}, "Welcome to QuixiDesk, driven by volkdude85's nora."),
++      // Onboarding is met by everybody, so it gets the plain greeting no matter which theme is
++      // selected. "Sup bitches" belongs to his own register, and a stranger's first screen is not
++      // the place to try it out on them.
++      el("h1", {}, "Sup"),
+       el(
+         "p",
+         { class: "first-run-lead" },
+@@ -2226,7 +2229,10 @@
+           el(
+             "h1",
+             { class: "hero-heading" },
+-            volkdudeVoice() ? "Sup" : "Ready when you are",
++            // One greeting, two registers. The plain one is what a stranger meets; his own theme is
++            // allowed to say the thing it has always said, because he chose it and it is his name on
++            // the build.
++            volkdudeVoice() ? "Sup bitches" : "Sup",
+           ),
+           el(
+             "p",

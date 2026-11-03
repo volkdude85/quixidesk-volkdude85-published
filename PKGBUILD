@@ -167,6 +167,7 @@ source=(
   0083-ctrl-f-and-no-second-conversation-mode.patch
   0084-personas-are-a-settings-section.patch
   0085-the-greeting-is-sup.patch
+  0086-sup-by-default-sup-bitches-in-his-own-theme.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -256,6 +257,7 @@ sha256sums=(
   '95c0db024cad4c7f241f0f250804ec7268c94d0231511f1a7aad5232d21667c1'
   'a230ed090394ac1c433fe4307c3fbdb0945f511b886e64d83ca77bc90790f1e9'
   'a94c706e583d162c9f37f61558e7222e4831ad1b91b73ffe553f8c45cdcd94c5'
+  '804268b0e90400df7128b28f9bcd7a21da619bd0a4eafdab745d254d0bcebb35'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -545,6 +547,9 @@ prepare() {
 
   # The greeting is "Sup" — the first word should set a register, not make a claim.
   patch -Np1 -i "${srcdir}/0085-the-greeting-is-sup.patch"
+
+  # Sup by default; his own theme is the only place the other register appears.
+  patch -Np1 -i "${srcdir}/0086-sup-by-default-sup-bitches-in-his-own-theme.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
