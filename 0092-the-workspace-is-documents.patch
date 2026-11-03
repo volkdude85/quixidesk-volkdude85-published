@@ -1,0 +1,27 @@
+The workspace is Documents, not the palace inside it
+====================================================
+
+A new conversation opened on `~/Documents/memory-palace`, so every ordinary question about a file —
+"what is in my Documents", "can I show you this" — was an access **outside** the workspace, and the
+answer was a permission dialog. The palace lives inside Documents; the workspace default should be the
+folder that contains both the palace and the person's other files.
+
+The palace path is still what the memory system writes to. Only the default working folder changed.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest17/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 21:41:19.558594050 -0800
++++ b/resources/ui/app.js	2026-11-02 21:52:39.639105260 -0800
+@@ -4986,7 +4986,12 @@
+     let info = null;
+     try { info = await rpc("Memory", "info"); } catch {}
+     const path = (info && (info.path || info.defaultPath)) || "";
+-    palaceFolderCache = { path, dataDir: (info && info.dataDir) || "" };
++    // The workspace is the palace's PARENT, not the palace itself. A workspace of
++    // Documents/memory-palace makes every ordinary file question — "what is in my Documents" —
++    // an access-outside-the-workspace request, which is a permission prompt for something the
++    // person already considers theirs. Documents holds the palace and the rest of their files.
++    const parent = path && path.lastIndexOf("/") > 0 ? path.slice(0, path.lastIndexOf("/")) : path;
++    palaceFolderCache = { path: parent, palace: path, dataDir: (info && info.dataDir) || "" };
+     return palaceFolderCache;
+   }
+ 
