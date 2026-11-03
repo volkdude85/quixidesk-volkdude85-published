@@ -11,11 +11,15 @@
 > * [`quixidesk-volkdude85`](https://github.com/volkdude85/quixidesk-volkdude85) — **PBBBT.** The extra
 >   crazy vibe-coded edition. Wired to one specific machine, does cool shit, has opinions.
 >
+> **On a Steam Deck?** Read [`STEAMDECK.md`](STEAMDECK.md) before you install. It is a desktop
+> application on a handheld: desktop mode works, game mode launches it and nothing more, and the input
+> path needs `ydotoold` to exist.
+>
 > |  |  |
 > |---|---|
 > | what differs, patch by patch | [`EDITIONS.md`](EDITIONS.md) |
 > | every runtime, optional and external dependency, and why | [`DEPENDENCIES.md`](DEPENDENCIES.md) |
-> | running it on a Steam Deck: SteamOS, read-only root, containers | [`STEAMDECK.md`](STEAMDECK.md) |
+> | **running it on a Steam Deck — compatibility, caveats, and what does not work** | **[`STEAMDECK.md`](STEAMDECK.md)** |
 > | what is left wide open, and why | [`WAIVER.md`](WAIVER.md) — **read this before installing** |
 > | how it got built, in order | [`CHANGELOG.md`](CHANGELOG.md) |
 > | Artix / OpenRC (non-systemd) | [`ARTIX.md`](ARTIX.md) |
