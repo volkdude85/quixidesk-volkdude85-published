@@ -1,0 +1,40 @@
+A published build chooses nothing
+================================
+
+The engine's defaults were `active_provider: "ollama"` and `active_model: "qwen2.5-coder:32b"`. Both were
+local, and local was the right instinct — but it is still the build deciding something for a person who
+has not decided anything, and the first thing they see is a provider and a model they did not pick and
+did not ask for. They are empty now. Empty means the app asks.
+
+The published edition's label is `(volkdude85 published)` so the title bar says which of the two builds
+is running, next to a developer build that says `(volkdude85 developer)`.
+
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv9/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs
+--- a/crates/quixi-engine/src/providers.rs	2026-11-02 23:03:15.214366943 -0800
++++ b/crates/quixi-engine/src/providers.rs	2026-11-02 23:07:11.112154258 -0800
+@@ -922,11 +922,12 @@
+ 
+         ProvidersStateFile {
+             onboarding_completed: false,
+-            // Local by default. Nothing leaves the machine until the person chooses otherwise, and a
+-            // cloud provider with no key configured is a dead end on first run — which is exactly what
+-            // a default should not be.
+-            active_provider: "ollama".to_string(),
+-            active_model: "qwen2.5-coder:32b".to_string(),
++            // Nothing selected, by design. A shipped build that opens on a provider and a model — even
++            // a local one — is a build that has decided something for a person who has not decided
++            // anything yet, and the first thing they see is a name they did not choose and cannot
++            // cancel. Empty means the app asks.
++            active_provider: String::new(),
++            active_model: String::new(),
+             subagent_provider: String::new(),
+             subagent_model: String::new(),
+             providers,
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv9/QuixiDesk-3.6556.12/resources/edition.txt /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/edition.txt
+--- a/resources/edition.txt	2026-11-02 23:03:15.150117861 -0800
++++ b/resources/edition.txt	2026-11-02 23:07:11.112975703 -0800
+@@ -1 +1 @@
+-(volkdude85 github) 
+\ No newline at end of file
++(volkdude85 published)
+\ No newline at end of file

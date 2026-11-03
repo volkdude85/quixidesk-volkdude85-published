@@ -176,6 +176,7 @@ source=(
   patches/000-099/090-099/0092-the-workspace-is-documents.patch
   patches/000-099/090-099/0093-the-series-rebuilds-what-we-run.patch
   "patches/000-099/090-099/0094-developer-affordances-are-a-build-flag.patch"
+  "patches/000-099/090-099/0095-a-published-build-chooses-nothing.patch"
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -274,6 +275,7 @@ sha256sums=(
   '8fb74337a154e33205a38cf48e5d2cfa37d6f95ccfc4e37d7d846317de10cb14'
   'aaf58cd72a30478c7541c1689c65b1b8a43da301b20535f84053738c90c2208b'
   '04809ee8524177ac0cd2e48b96b658c647a8b30a929af59b307bf6e2910b7cb7'
+  '6f76f4195b5871181899f4b2b5ff7e24e9fe1ce39ba6c27fa57d22721e2f5670'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -590,6 +592,9 @@ prepare() {
 
   # Developer affordances exist only in a build that says it is a development build.
   patch -Np1 -i "${srcdir}/0094-developer-affordances-are-a-build-flag.patch"
+
+  # A shipped build selects nothing: no provider, no model, until the person chooses.
+  patch -Np1 -i "${srcdir}/0095-a-published-build-chooses-nothing.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
