@@ -177,6 +177,7 @@ source=(
   patches/000-099/090-099/0093-the-series-rebuilds-what-we-run.patch
   "patches/000-099/090-099/0094-developer-affordances-are-a-build-flag.patch"
   "patches/000-099/090-099/0095-a-published-build-chooses-nothing.patch"
+  "patches/000-099/090-099/0096-recents-grouped-by-day-like-hermes.patch"
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -276,6 +277,7 @@ sha256sums=(
   'aaf58cd72a30478c7541c1689c65b1b8a43da301b20535f84053738c90c2208b'
   '04809ee8524177ac0cd2e48b96b658c647a8b30a929af59b307bf6e2910b7cb7'
   '6f76f4195b5871181899f4b2b5ff7e24e9fe1ce39ba6c27fa57d22721e2f5670'
+  'ba5497d06f401ef07ac1385f666e8446c1deab5b3eb00589a62d1188eece06a7'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -595,6 +597,9 @@ prepare() {
 
   # A shipped build selects nothing: no provider, no model, until the person chooses.
   patch -Np1 -i "${srcdir}/0095-a-published-build-chooses-nothing.patch"
+
+  # The rail groups by day and counts each day, like the sessions list in Hermes.
+  patch -Np1 -i "${srcdir}/0096-recents-grouped-by-day-like-hermes.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

@@ -1,0 +1,168 @@
+Recents grouped by day, the way the sessions list reads in Hermes
+=================================================================
+
+The rail was one flat "Recent" block capped at thirty-five rows. That answers *what did I touch most
+recently* and nothing else. The question a person asks their own history is *what was I doing on
+Tuesday*, and the day is the unit they ask it in.
+
+So: Pinned first, then one group per calendar day of the conversation's last activity, newest day
+first, each header carrying its own count — `TODAY 19`, `YESTERDAY 8`, `Monday · Nov 1 3`. Inside a day,
+newest activity first. The grouping is local time, so it agrees with the clock on the wall rather than
+with UTC.
+
+Measured against the real session files on this machine: Today 19, Yesterday 8.
+
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv10/QuixiDesk-3.6556.12/resources/ui/app.css /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 23:37:52.986893668 -0800
++++ b/resources/ui/app.css	2026-11-02 23:31:55.609849477 -0800
+@@ -408,6 +408,12 @@
+   border-color: color-mix(in srgb, var(--line), transparent 35%);
+ }
+ .sidebar .section-label {
++  /* A day header carries its own count, so the two sit on one line and the number is set apart by
++     weight rather than by colour: "Today  12". */
++  display: flex;
++  align-items: baseline;
++  justify-content: space-between;
++  gap: 8px;
+   font-size: 10px;
+   text-transform: uppercase;
+   letter-spacing: 1.1px;
+@@ -415,6 +421,11 @@
+   padding: 0 10px;
+   margin: 0 0 8px;
+ }
++.sidebar .section-count {
++  font-variant-numeric: tabular-nums;
++  letter-spacing: .5px;
++  opacity: .7;
++}
+ .recent {
+   flex: 1;
+   overflow: auto;
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv10/QuixiDesk-3.6556.12/resources/ui/app.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 23:37:52.999100208 -0800
++++ b/resources/ui/app.js	2026-11-02 23:31:53.280659379 -0800
+@@ -1128,44 +1128,63 @@
+     renderRecents();
+     renderPage();
+   }
++  // One group per day, newest day first, each group saying how many conversations live in it.
++  //
++  // A flat "the last 35" answers "what did I touch most recently" and nothing else. The question
++  // people actually ask their own history is "what was I doing on Tuesday", and the day is the unit
++  // they ask it in. Same shape as the Sessions list in Hermes, so the two read alike.
++  function dayKeyOf(ms) {
++    const d = new Date(ms);
++    return [
++      d.getFullYear(),
++      String(d.getMonth() + 1).padStart(2, "0"),
++      String(d.getDate()).padStart(2, "0"),
++    ].join("-");
++  }
++  function dayLabelOf(key) {
++    const [y, m, d] = key.split("-").map(Number);
++    const day = new Date(y, m - 1, d);
++    const now = new Date();
++    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
++    const days = Math.round((midnight - day) / 86400000);
++    if (days === 0) return "Today";
++    if (days === 1) return "Yesterday";
++    const weekday = day.toLocaleDateString(undefined, { weekday: "long" });
++    const rest = day.toLocaleDateString(undefined, { month: "short", day: "numeric" });
++    return y === now.getFullYear() ? `${weekday} · ${rest}` : `${rest}, ${y}`;
++  }
+   function renderRecents() {
+     const target = document.getElementById("recents");
+     if (!target) return;
+     const visible = state.sessions.filter((s) => !s.isArchived);
+     const pinned = visible.filter((s) => s.isStarred);
+-    const rest = visible.filter((s) => !s.isStarred).slice(0, 35);
++    const byDay = new Map();
++    for (const s of visible.filter((s) => !s.isStarred)) {
++      const ms = s.lastActivityAt || s.createdAt || 0;
++      const key = dayKeyOf(ms);
++      if (!byDay.has(key)) byDay.set(key, []);
++      byDay.get(key).push(s);
++    }
++    const days = [...byDay.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+     target.replaceChildren();
+-    for (const [label, list] of [
+-      ["Pinned", pinned],
+-      ["Recent", rest],
+-    ])
+-      if (list.length) {
+-        target.append(el("div", { class: "section-label" }, label));
+-        for (const s of list)
+-          target.append(
+-            el(
+-              "div",
+-              {
+-                class:
+-                  "recent-row" + (state.id === s.sessionId ? " current" : ""),
+-              },
+-              button(
+-                [
+-                  running(s) ? el("span", { class: "running-dot" }) : null,
+-                  s.title || "Untitled task",
+-                ],
+-                () => {
+-                  state.project = s.spaceId || null;
+-                  state.folder = s.cwd || "";
+-                  navigate("chat", s.sessionId);
+-                },
+-                "session-link",
+-              ),
+-              ib(`Delete conversation: ${s.title || "Untitled task"}`, "trash", () => deleteSession(s)),
+-              button("···", () => sessionMenu(s), "more"),
+-            ),
+-          );
+-      }
++    const section = (label, list) =>
++      target.append(
++        el(
++          "div",
++          { class: "section-label" },
++          el("span", {}, label),
++          el("span", { class: "section-count" }, String(list.length)),
++        ),
++      );
++    if (pinned.length) {
++      section("Pinned", pinned);
++      for (const s of pinned) target.append(recentRow(s));
++    }
++    for (const [key, list] of days) {
++      list.sort((a, b) => (b.lastActivityAt || 0) - (a.lastActivityAt || 0));
++      section(dayLabelOf(key), list);
++      for (const s of list) target.append(recentRow(s));
++    }
+     if (!visible.length)
+       target.append(
+         el(
+@@ -1175,6 +1194,26 @@
+         ),
+       );
+   }
++  function recentRow(s) {
++    return el(
++      "div",
++      { class: "recent-row" + (state.id === s.sessionId ? " current" : "") },
++      button(
++        [
++          running(s) ? el("span", { class: "running-dot" }) : null,
++          s.title || "Untitled task",
++        ],
++        () => {
++          state.project = s.spaceId || null;
++          state.folder = s.cwd || "";
++          navigate("chat", s.sessionId);
++        },
++        "session-link",
++      ),
++      ib(`Delete conversation: ${s.title || "Untitled task"}`, "trash", () => deleteSession(s)),
++      button("···", () => sessionMenu(s), "more"),
++    );
++  }
+   // Drag the edge between the sidebar and the page. The width lives in the backend preferences, so
+   // it belongs to the installation rather than to one window, and it survives a restart.
+   const SIDEBAR_MIN = 180;
