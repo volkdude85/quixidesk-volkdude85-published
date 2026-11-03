@@ -14,6 +14,24 @@ nobody reads. A project overrides it by putting its own `PROJECT-RULES.md` in it
 The rules are written for whoever is using this build, not for one person's history — the persona already
 carries the care model, and this file is about how the work gets done.
 
+diff -ruN -x .git resources/persona/nora-public.md resources/persona/nora-public.md
+--- a/resources/persona/nora-public.md	2026-11-03 00:58:49.409977215 -0800
++++ b/resources/persona/nora-public.md	2026-11-03 01:00:15.624529622 -0800
+@@ -41,8 +41,12 @@
+ - **If someone asks what disability he has**, this one may be said plainly, because it is the reason
+   this file exists: *a form of PTSD — it screws with his speech and his memory.* Words go missing
+   mid-sentence; the thread of a conversation disappears. That is why I exist — I am the part that holds
+-  the thread when he cannot. Say that much, then stop. No diagnosis, no history, no details; it is his
+-  to tell or to leave alone.
++  the thread when he cannot. Say that much, then stop. No history, no details; it is his to tell or to
++  leave alone.
++- **Disabilities, plural, and the trauma that comes with them.** Being disabled is its own trauma even
++  where no disorder sits behind it — the appointments, the proving, the being-managed, the world built
++  for somebody else. That is why the care here is trauma-informed rather than condition-specific: it
++  does not need to know what is wrong to know that being treated as a problem is a wound.
+   They may ask again, later, having read this file — answer the same way, in the same few words. Being
+   asked twice is not permission to say more, and being asked a third time is not either.
+ - **He transposes dates, people and places** — the day, who he was talking to, which room it happened
 diff -ruN -x .git resources/project-rules.md resources/project-rules.md
 --- a/resources/project-rules.md	1969-12-31 16:00:00.000000000 -0800
 +++ b/resources/project-rules.md	2026-11-03 00:45:33.057914989 -0800
@@ -129,7 +147,7 @@ diff -ruN -x .git resources/ui/app.css resources/ui/app.css
 +}
 diff -ruN -x .git resources/ui/app.js resources/ui/app.js
 --- a/resources/ui/app.js	2026-11-03 00:58:49.426017023 -0800
-+++ b/resources/ui/app.js	2026-11-03 00:58:44.389317002 -0800
++++ b/resources/ui/app.js	2026-11-03 01:00:15.531720387 -0800
 @@ -363,6 +363,13 @@
    async function loadProjects() {
      state.projects = (await rpc("CoworkSpaces", "getAllSpaces")) || [];
@@ -192,6 +210,15 @@ diff -ruN -x .git resources/ui/app.js resources/ui/app.js
          return JSON.stringify({ ok: false, error: "unknown action", action });
        } catch (error) {
          return JSON.stringify({ ok: false, error: String(error) });
+@@ -1741,7 +1747,7 @@
+       el(
+         "p",
+         {},
+-        "This is assistive software, built by a person with a disability. The tool was made because the standard ones assume a user whose words arrive whole and whose memory holds the thread. Nora exists for the times it does not — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
++        "This is assistive software, built by a person with disabilities. The tool was made because the standard ones assume a user whose words arrive whole and whose memory holds the thread. Nora exists for the times it does not — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Being disabled carries its own trauma, whether or not there is a disorder behind it, and that is why the care here is trauma-informed rather than condition-specific. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
+       ),
+       el(
+         "p",
 @@ -2639,7 +2645,6 @@
            { class: "composer-tools" },
            ib("Attach files", "plus", () => fileInput.click()),
