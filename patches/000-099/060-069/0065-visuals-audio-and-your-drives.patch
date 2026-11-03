@@ -20,7 +20,7 @@ Restored, and now carrying what was asked for:
 everything people actually keep models on — those are mounts, not removable media, so they do not
 appear. `LocalModels.mounts` reads `/proc/mounts` and lists the real filesystems (ext4, xfs, btrfs,
 exfat, ntfs3, fuseblk, vfat, zfs), skipping `/`, `/boot`, `/home` and the kernel's furniture. Each one
-is a button under the picker, so `/mnt/nvme4tb` and `/run/media/<user>/<disk>` are one click away
+is a button under the picker, so `/mnt/<disk>` and `/run/media/<user>/<disk>` are one click away
 instead of a navigation exercise.
 
 diff -Naur a/crates/quixi-ipc/src/lib.rs b/crates/quixi-ipc/src/lib.rs

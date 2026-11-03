@@ -12,7 +12,7 @@ with UTC.
 
 Measured against the real session files on this machine: Today 19, Yesterday 8.
 
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv10/QuixiDesk-3.6556.12/resources/ui/app.css /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.css
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' a/resources/ui/app.css b/resources/ui/app.css
 --- a/resources/ui/app.css	2026-11-02 23:37:52.986893668 -0800
 +++ b/resources/ui/app.css	2026-11-02 23:31:55.609849477 -0800
 @@ -408,6 +408,12 @@
@@ -40,7 +40,7 @@ diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.re
  .recent {
    flex: 1;
    overflow: auto;
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv10/QuixiDesk-3.6556.12/resources/ui/app.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.js
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' a/resources/ui/app.js b/resources/ui/app.js
 --- a/resources/ui/app.js	2026-11-02 23:37:52.999100208 -0800
 +++ b/resources/ui/app.js	2026-11-02 23:31:53.280659379 -0800
 @@ -1128,44 +1128,63 @@

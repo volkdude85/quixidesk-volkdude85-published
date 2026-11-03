@@ -9,7 +9,7 @@ did not ask for. They are empty now. Empty means the app asks.
 The published edition's label is `(volkdude85 published)` so the title bar says which of the two builds
 is running, next to a developer build that says `(volkdude85 developer)`.
 
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv9/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' a/crates/quixi-engine/src/providers.rs b/crates/quixi-engine/src/providers.rs
 --- a/crates/quixi-engine/src/providers.rs	2026-11-02 23:03:15.214366943 -0800
 +++ b/crates/quixi-engine/src/providers.rs	2026-11-02 23:07:11.112154258 -0800
 @@ -922,11 +922,12 @@
@@ -30,7 +30,7 @@ diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.re
              subagent_provider: String::new(),
              subagent_model: String::new(),
              providers,
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv9/QuixiDesk-3.6556.12/resources/edition.txt /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/edition.txt
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' a/resources/edition.txt b/resources/edition.txt
 --- a/resources/edition.txt	2026-11-02 23:03:15.150117861 -0800
 +++ b/resources/edition.txt	2026-11-02 23:07:11.112975703 -0800
 @@ -1 +1 @@

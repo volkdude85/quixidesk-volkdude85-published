@@ -12,7 +12,7 @@ anything shipped — has neither in the DOM at all, not merely hidden.
 Verified both directions in containers: without the variable the automation bridge reports no
 Onboarding (development) control and no dev key field; with `QUIXI_DEVELOPER=1` both return.
 
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv7/QuixiDesk-3.6556.12/crates/quixi-app/src/main.rs /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/crates/quixi-app/src/main.rs
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' a/crates/quixi-app/src/main.rs b/crates/quixi-app/src/main.rs
 --- a/crates/quixi-app/src/main.rs	2026-11-02 23:01:18.314949575 -0800
 +++ b/crates/quixi-app/src/main.rs	2026-11-02 23:01:26.766207245 -0800
 @@ -722,9 +722,14 @@
@@ -31,7 +31,7 @@ diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.re
              );
              let html = String::from_utf8_lossy(&bytes).replacen("</head>", &bootstrap, 1);
              build_http_response(200, "text/html; charset=utf-8", html.into_bytes())
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv7/QuixiDesk-3.6556.12/resources/ui/app.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.js
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' a/resources/ui/app.js b/resources/ui/app.js
 --- a/resources/ui/app.js	2026-11-02 23:01:18.365640362 -0800
 +++ b/resources/ui/app.js	2026-11-02 23:02:09.810274062 -0800
 @@ -110,6 +110,8 @@

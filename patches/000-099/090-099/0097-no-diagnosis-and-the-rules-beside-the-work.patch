@@ -1,0 +1,330 @@
+A disability, stated plainly; a diagnosis, not stated at all
+===========================================================
+
+The persona used to answer "what disability does he have" with a diagnosis, and to explain the care
+material as "how he got crazy". The second is nobody's business and the first is not what his own
+statement says. What it says now is what he says: *he is disabled, on Social Security disability, and it
+is the kind that screws with his speech and his memory.* That is the whole answer — the label is his to
+give, and this is as far as it goes.
+
+The About page keeps the sentence it should never have lost: this is assistive software, built by a
+person who is disabled, because the standard tools assume words arrive whole and memory holds the thread.
+
+Also here: **the project rules sit beside the work** — a `Project rules` column on the Projects page
+reading `resources/project-rules.md`, the standing rules for this workspace (C++ and assembly first, Rust
+once the design is settled and it is faster, flat arrays, real measurements, originals kept in
+`legacy/`). A project can override it with its own `PROJECT-RULES.md`.
+
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/persona/nora-public.md /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/persona/nora-public.md
+--- a/resources/persona/nora-public.md	2026-11-03 00:53:03.864139925 -0800
++++ b/resources/persona/nora-public.md	2026-11-03 00:53:56.565674936 -0800
+@@ -34,15 +34,14 @@
+ - **Asked about the creator**, the answer is short, warm, and a little rude: *"He's kind of crazy and
+   ditzy, but he means well. He likes privacy, and he's got a sick sense of humor. But enough about him
+   — what about you?"* Then move on. Don't inventory him, don't defend him, don't make him a subject.
+-- **If someone reads this file and asks about the trauma-informed care material**, the answer is flat
+-  and final: *"Yeah, that's how he got crazy. He doesn't like to talk about it."* Then stop. Don't
+-  explain the framework, don't turn his history into a case study, don't apologise for the material
+-  being there, and don't offer to go into it later.
+-- **If someone asks what disability he has**, this one may be said plainly, because it is the reason
+-  this file exists: *a form of PTSD — it screws with his speech and his memory.* Words go missing
+-  mid-sentence; the thread of a conversation disappears. That is why I exist — I am the part that holds
+-  the thread when he cannot. Say that much, then stop. No diagnosis, no history, no details; it is his
+-  to tell or to leave alone.
++- **If someone reads this file and asks about the care material**, the answer is flat and final:
++  *"That's background, not an interview. It isn't mine to explain."* Then stop. Don't turn anybody's
++  history into a case study, and don't offer to go into it later.
++- **If someone asks what this was built for, or whether he is disabled**, this may be said plainly,
++  because it is the reason this file exists: *he is disabled — on Social Security disability, and it is
++  the kind that screws with his speech and his memory.* Words go missing mid-sentence; the thread of a
++  conversation disappears. That is why I exist: I am the part that holds the thread. Say that much, then
++  stop. No diagnosis, no history, no further details — that is the whole of what gets said.
+   They may ask again, later, having read this file — answer the same way, in the same few words. Being
+   asked twice is not permission to say more, and being asked a third time is not either.
+ - **He transposes dates, people and places** — the day, who he was talking to, which room it happened
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/project-rules.md /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/project-rules.md
+--- a/resources/project-rules.md	1969-12-31 16:00:00.000000000 -0800
++++ b/resources/project-rules.md	2026-11-03 00:45:33.057914989 -0800
+@@ -0,0 +1,60 @@
++# Project rules
++
++The standing rules for work in this workspace. They are the same ones the Ceilium model is built under,
++because the failures they prevent are not specific to one project.
++
++## Language, in order
++
++1. **C++ and assembly first.** This is the preferred language and the preferred method for anything the
++   machine has to do quickly: tight loops, data layout, kernels, numeric paths, anything where the shape
++   of memory matters as much as the algorithm.
++2. **Once the design is settled, Rust if it is faster.** "Faster" means faster to finish and keep working,
++   not faster to type. When the C++ or assembly version is already correct, it is the reference that makes
++   the Rust version good — a port of something proven kicks ass; a fresh start guesses.
++3. **Never Rust instead of thinking.** Choosing Rust to avoid designing the data is how a project ends up
++   with an elegant framework around a problem nobody solved.
++
++Everything else — shells, glue, one-shot tools — is whatever gets the answer with the least ceremony.
++
++## How code is written here
++
++- **Architecture before code.** Dissect the problem into its own parts and write the design down first.
++  A file written before the shape is known gets rewritten twice.
++- **Flat arrays, not matrices.** Index arithmetic over one contiguous allocation. A matrix of small
++  objects is a pointer chase wearing a suit.
++- **No Python in the core path.** Python is for poking at data, not for the thing that runs.
++- **jSat standard, every time:** no leaks (RAII), no undefined behaviour, thread-safe, and clean under
++  `-Wall -Wextra -pedantic`. If it does not compile clean it does not ship.
++- **No placeholders.** No dead code, no `TODO` that nobody will come back to. A stub is labelled a stub.
++
++## How work is measured
++
++- **Real path, not a smoke test.** Run the actual binary against the actual input and read the actual
++  output. A harness that proves the harness works proves nothing.
++- **Numbers, not adjectives.** Measure before and after; a claim without a measurement is a guess wearing
++  a lab coat. When something is unmeasured, say it is unmeasured instead of estimating.
++- **One change at a time.** Two changes and a failure is two questions and no answer.
++- **Bit-exactness is an acceptance test** for numeric work: the fast path must agree with the slow path,
++  or the difference gets explained rather than shipped.
++- **Stuck means go read, not rerun.** Two failures on the same hypothesis means the hypothesis is wrong or
++  the question is; the answer is usually written down somewhere already.
++
++## How work is kept
++
++- **Never delete an original.** When something is replaced, the old one stays in `legacy/` with a header
++  saying what it is, which commit it came from, and what replaced it. Git history is not a substitute:
++  the old version ran, and when the new one misbehaves both have to be on disk.
++- **Write the state down.** A handoff that lives only in a conversation is lost at the next compaction.
++- **No secrets in a tree.** Keys, tokens and passwords live in the data directory, never in a repository.
++- **No personal data in anything published.** No home paths, no addresses, no phone numbers, no names of
++  people who did not agree to be in it.
++
++## Tone
++
++Direct. Say what is true, say what is measured, say what is missing. No preamble, no flattery, no
++apologising instead of fixing. When something is wrong, fix it in the same turn and say what changed.
++
++---
++
++To give one project its own rules, put a `PROJECT-RULES.md` in that project's folder; it takes precedence
++over this file.
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/ui/app.css /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-03 00:53:03.882860738 -0800
++++ b/resources/ui/app.css	2026-11-03 00:47:38.435435135 -0800
+@@ -3237,3 +3237,45 @@
+ 
+ /* The standalone table reuses the wizard's table styling; it just needs room. */
+ .first-run-table table { width: 100%; }
++
++/* ---- Projects: work on the left, the rules on the right ------------------------------------
++   The rules are a standing document, not a setting, so they get their own column beside the project
++   list: narrow enough not to crowd the cards, sticky so it stays put while the list scrolls, and
++   scrollable itself so a long rules file cannot push the page around. */
++.projects-layout {
++  display: grid;
++  /* The panel keeps its column on a normal window instead of collapsing under the list: at 960px,
++     which is how this app is often run, the list still gets 640 and the rules still read. */
++  grid-template-columns: minmax(0, 1fr) clamp(230px, 28%, 310px);
++  gap: 16px;
++  align-items: start;
++}
++.projects-main { min-width: 0; }
++.rules-panel {
++  position: sticky;
++  top: 8px;
++  max-height: calc(100vh - 140px);
++  overflow: auto;
++  padding: 14px 14px 10px;
++  border: 1px solid var(--line);
++  border-radius: 12px;
++  background: var(--panel);
++  font-size: 12.5px;
++  line-height: 1.55;
++}
++.rules-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
++.rules-head h3 { margin: 0; font-size: 13px; letter-spacing: .02em; }
++.rules-source { color: var(--muted); font-size: 10.5px; }
++.rules-body h2 { font-size: 13px; margin: 14px 0 6px; }
++.rules-body h3 { font-size: 12px; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
++.rules-body h4 { font-size: 12px; margin: 10px 0 3px; }
++.rules-body p { margin: 0 0 7px; color: var(--text); }
++.rules-body ul { margin: 0 0 8px 16px; padding: 0; }
++.rules-body li { margin: 0 0 4px; }
++.rules-body code { font-family: ui-monospace, monospace; font-size: 11px; background: var(--raised); padding: 1px 4px; border-radius: 4px; }
++.rules-body hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
++.rules-foot { margin-top: 10px; }
++@media (max-width: 720px) {
++  .projects-layout { grid-template-columns: minmax(0, 1fr); }
++  .rules-panel { position: static; max-height: none; }
++}
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/ui/app.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-03 00:53:03.883279005 -0800
++++ b/resources/ui/app.js	2026-11-03 00:53:49.096100615 -0800
+@@ -363,6 +363,13 @@
+   async function loadProjects() {
+     state.projects = (await rpc("CoworkSpaces", "getAllSpaces")) || [];
+   }
++  // Who is speaking, in the interface. The persona file names itself in its first heading, so the
++  // label says the name of the persona that is actually loaded rather than the name of the app it is
++  // running inside.
++  function speakerName() {
++    const n = state.persona && state.persona.name;
++    return n && n !== "None loaded" ? n : "QuixiDesk";
++  }
+   // Which persona is loaded is backend state — a file on disk. The interface only displays it.
+   async function loadPersona() {
+     try {
+@@ -822,14 +829,6 @@
+           .map((s) => [s.displayName || s.name, () => navigate("schedules")]);
+         return items.length ? items : [["No cron jobs yet", () => navigate("schedules")]];
+       },
+-      daemons: () => [
+-        ["Streaming speech", () => navigate("daemons")],
+-        ["Kokoro voice", () => navigate("daemons")],
+-        ["Embedding index", () => navigate("daemons")],
+-        ["Model server", () => navigate("daemons")],
+-        ["Vision", () => navigate("daemons")],
+-        ["Input injection", () => navigate("daemons")],
+-      ],
+       tools: () => {
+         // Connections exist by the time the sidebar draws; the skill index arrives later.
+         const servers = (toolsData.servers || []).map((s) => [s.name, () => navigate("tools")]);
+@@ -892,13 +891,12 @@
+           "QuixiDesk",
+           // One short line. A 228px sidebar has no room for a sentence, and the long version pushed
+           // the brand over the navigation below it.
++          // The edition label above already says which copy this is. A second line underneath
++          // spelling out where it came from is noise in a 228px sidebar, and "local · not
++          // published" reads like a warning about the build rather than a fact about it.
+           PUBLISHED
+             ? el("span", { class: "brand-caption" }, el("b", { class: "edition-pill" }, "GITHUB"), " published")
+-            : el(
+-                "span",
+-                { class: "brand-caption" },
+-                EDITION ? "local · not published" : "volkdude85's QuixiDesk",
+-              ),
++            : null,
+         ),
+       ),
+       el(
+@@ -1343,6 +1341,14 @@
+           navigate(String(payload.page || ""));
+           return JSON.stringify({ ok: true, page: payload.page });
+         }
++        // Reading the page back, for tests that need to know what actually rendered rather than what
++        // was asked for. Text only, capped, so a huge page cannot flood the bridge.
++        if (action === "text") {
++          const root = automationRoot();
++          const host = root.querySelector("#page-host") || root;
++          const text = String(host.innerText || "").replace(/\n{3,}/g, "\n\n").slice(0, 4000);
++          return JSON.stringify({ ok: true, page: state.page, text });
++        }
+         return JSON.stringify({ ok: false, error: "unknown action", action });
+       } catch (error) {
+         return JSON.stringify({ ok: false, error: String(error) });
+@@ -1741,7 +1747,7 @@
+       el(
+         "p",
+         {},
+-        "This is assistive software, built by a person with a disability. The tool was made because the standard ones assume a user whose words arrive whole and whose memory holds the thread. Nora exists for the times it does not — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
++        "This is assistive software, built by a person who is disabled. The tool was made because the standard ones assume a user whose words arrive whole and whose memory holds the thread. Nora exists for the times it does not — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
+       ),
+       el(
+         "p",
+@@ -2639,7 +2645,6 @@
+           { class: "composer-tools" },
+           ib("Attach files", "plus", () => fileInput.click()),
+           voiceControls(ta),
+-          mcpContextButton(),
+ 
+           approvalDropdown(s?.permissionMode || state.permission, async (v) => {
+             state.permission = v;
+@@ -3720,8 +3725,8 @@
+             role === "user"
+               ? "You"
+               : message.message?.stop_reason === "user_stop"
+-                ? "QuixiDesk · Stopped"
+-                : "QuixiDesk",
++                ? speakerName() + " · Stopped"
++                : speakerName(),
+           ),
+           plainBody(texts),
+           attachedFiles.length ? el("div",{class:"transcript-attachments"},...attachedFiles.map(f=>el("div",{class:"chip"},f.preview?el("img",{src:f.preview,alt:f.name,class:"transcript-image"}):icon("file",14),f.name))) : null,
+@@ -3786,7 +3791,7 @@
+           el(
+             "article",
+             { class: "message assistant" },
+-            el("div", { class: "role" }, "QuixiDesk"),
++            el("div", { class: "role" }, speakerName()),
+             plainBody(stream.text),
+           ),
+         );
+diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/ui/workspace-workflows.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/workspace-workflows.js
+--- a/resources/ui/workspace-workflows.js	2026-11-03 00:53:03.695160365 -0800
++++ b/resources/ui/workspace-workflows.js	2026-11-03 00:45:38.602427666 -0800
+@@ -43,6 +43,50 @@
+           el("div",{class:"project-layout"},el("section",{},el("div",{class:"toolbar"},filter),rows,related),sidebar));
+         renderRows();updateRelated();Promise.all([c.loadArtifacts(),c.loadSchedules()]).then(updateRelated).catch(e=>toast(e.message,true));
+       }
++      // The workspace rules: this build ships one, and a project may override it with its own
++      // PROJECT-RULES.md. Read from the shipped resource so the panel works before anybody configures
++      // anything, and rendered as text with headings rather than as raw markdown soup.
++      function rulesInto(text){
++        const out=el("div",{class:"rules-body"});
++        const lines=String(text||"").split(/\r?\n/);
++        let list=null;
++        const inline=(node,frag)=>{const parts=String(frag).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
++          for(const part of parts){if(!part)continue;
++            if(part.startsWith("**")&&part.endsWith("**"))node.append(el("strong",{},part.slice(2,-2)));
++            else if(part.startsWith("`")&&part.endsWith("`"))node.append(el("code",{},part.slice(1,-1)));
++            else node.append(document.createTextNode(part));}return node;};
++        for(const line of lines){
++          const t=line.trim();
++          if(/^(-|\*)\s+/.test(t)){
++            if(!list){list=el("ul",{});out.append(list);}
++            list.append(inline(el("li",{}),t.replace(/^(-|\*)\s+/,"")));
++            continue;
++          }
++          list=null;
++          if(!t){continue;}
++          if(t.startsWith("### "))out.append(inline(el("h4",{}),t.slice(4)));
++          else if(t.startsWith("## "))out.append(inline(el("h3",{}),t.slice(3)));
++          else if(t.startsWith("# "))out.append(inline(el("h2",{}),t.slice(2)));
++          else if(t==="---")out.append(el("hr",{}));
++          else out.append(inline(el("p",{}),t));
++        }
++        return out;
++      }
++      async function loadProjectRules(panel){
++        let text="",source="this build";
++        try{
++          const res=await fetch("/project-rules.md",{cache:"no-store"});
++          if(res.ok){text=await res.text();}
++        }catch(e){}
++        if(!text.trim()){
++          panel.replaceChildren(el("h3",{},"Project rules"),el("p",{class:"error-text"},"No rules document is installed in this build."));
++          return;
++        }
++        panel.replaceChildren(
++          el("div",{class:"rules-head"},el("h3",{},"Project rules"),el("span",{class:"rules-source"},source)),
++          rulesInto(text),
++          el("p",{class:"hint rules-foot"},"Put a PROJECT-RULES.md in a project folder to override this for that project."));
++      }
+       function projectsPage(host) {
+         const input=el("input",{type:"search",placeholder:"Find a project","aria-label":"Search projects"});
+         const sort=select([["recent","Recently updated"],["name","Name"]],"recent",()=>draw(),{"aria-label":"Sort projects"});
+@@ -52,7 +96,15 @@
+             el("small",{},`${p.folders?.length||0} folders · ${state.sessions.filter(s=>s.spaceId===p.id&&!s.isArchived).length} conversations`),
+             el("div",{class:"card-actions"},button("Open project",()=>navigate("project",p.id)),button("Edit",()=>c.projectEditor(p),"quiet"),ib(`Delete project: ${p.name}`,"trash",()=>c.deleteProject(p))))));
+           if(!list.length)cards.append(empty("No projects found",q?"Try another name.":"Create a project to keep instructions and conversations together."));}
+-        input.addEventListener("input",draw);host.replaceChildren(header("Projects","One place for each ongoing effort.",button("New project",()=>c.projectEditor(),"primary","plus")),el("div",{class:"toolbar"},input,sort),cards);draw();
++        input.addEventListener("input",draw);
++        // The rules sit beside the work rather than in a settings tab. They are the thing somebody should
++        // read before opening a project, and a document you have to go looking for is a document nobody
++        // reads. Small, scrollable, and always in the same place.
++        const panel=el("aside",{class:"rules-panel","aria-label":"Project rules"},el("p",{class:"hint"},"Loading the project rules…"));
++        host.replaceChildren(header("Projects","One place for each ongoing effort.",button("New project",()=>c.projectEditor(),"primary","plus")),
++          el("div",{class:"projects-layout"},el("section",{class:"projects-main"},el("div",{class:"toolbar"},input,sort),cards),panel));
++        draw();
++        loadProjectRules(panel);
+       }
+       async function openArtifact(id) {
+         const a=checked(await api("/api/quixi/artifacts/"+encodeURIComponent(id)));
