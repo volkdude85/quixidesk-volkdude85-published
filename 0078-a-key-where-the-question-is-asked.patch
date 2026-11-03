@@ -1,0 +1,151 @@
+A key where the question is asked
+=================================
+
+The model chip in the composer is where "which model?" gets asked, so it should be where that gets
+answered. Every provider in it ran the same handler, which opened the providers page — so choosing
+Ollama Cloud and being told "not configured" sent you to a second screen to paste a key and then walk
+back to the first.
+
+An unconfigured provider now opens a key dialog in place: the field, a link to where the key comes
+from, and one button that saves it through the same `/api/quixi/providers/save` the provider settings
+use, tests it, and lands in that provider's model list. Local providers are not asked for a key they
+do not have — the dialog says so, probes the port, and reports what answered.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest4b/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 19:31:50.400144889 -0800
++++ b/resources/ui/app.js	2026-11-02 19:34:31.864522012 -0800
+@@ -565,6 +565,108 @@
+   });
+ }
+ 
++// Add a key without leaving the composer.
++//
++// The model chip sits where the question "which model?" is actually asked, so answering it there is
++// the whole point; sending somebody to a providers page to paste a key and then walk back is the
++// long way round to the same box. This saves through the same endpoint the provider settings use,
++// tests it, and lands in the model list for that provider.
++// A local provider has no key. Asking for one would be a form that cannot be filled in; the only
++// question is whether something is listening on the port, so ask that and report the answer.
++async function probeLocalProvider(provider) {
++  const status = el("p", { class: "hint", role: "status" }, `Looking for ${provider.name}…`);
++  const dlg = dialog(provider.name, [
++    el("p", { class: "muted" }, `This one runs on this machine, so there is no key. QuixiDesk asks ${provider.baseUrl || "its port"} whether anything is listening.`),
++    status,
++  ]);
++  try {
++    const r = await api("/api/quixi/providers/test", { providerId: provider.id });
++    await loadProviders();
++    if (r && r.ok === false) {
++      status.textContent = r.message || `Nothing answered at ${provider.baseUrl || "that port"}.`;
++      const retry = button("Try again", async () => { dlg.close(); probeLocalProvider(provider); }, "reveal");
++      status.after(retry);
++      return;
++    }
++    dlg.close();
++    modelPicker(provider.id);
++  } catch (error) {
++    status.textContent = `${provider.name} did not answer: ${error.message}`;
++  }
++}
++
++async function addKeyFor(provider) {
++  const keyInput = el("input", {
++    type: "password",
++    placeholder: provider.keyPlaceholder || "Paste the API key",
++    autocomplete: "off",
++    autocapitalize: "off",
++    spellcheck: "false",
++    "aria-label": `${provider.name} API key`,
++  });
++  const status = el("p", { class: "hint", role: "status" });
++  let dlg = null;
++  const saveBtn = button(
++    "Save and load models",
++    async () => {
++      const key = keyInput.value.trim();
++      if (!key) {
++        status.textContent = "Paste the key first.";
++        keyInput.focus();
++        return;
++      }
++      saveBtn.disabled = true;
++      status.textContent = "Saving…";
++      try {
++        const saved = await api("/api/quixi/providers/save", {
++          providerId: provider.id,
++          apiKey: key,
++          selectedModel: provider.selectedModel || "",
++          setAsActive: true,
++        });
++        if (saved.error) throw new Error(saved.error);
++        status.textContent = "Testing the key and loading models…";
++        let tested = null;
++        try {
++          tested = await api("/api/quixi/providers/test", { providerId: provider.id });
++        } catch {}
++        await loadProviders();
++        dlg?.close();
++        if (tested && tested.ok === false) {
++          toast(`Key saved for ${provider.name}. ${tested.message || "The provider did not answer."}`, true);
++        }
++        modelPicker(provider.id);
++      } catch (error) {
++        status.textContent = `Could not save the key: ${error.message}`;
++        saveBtn.disabled = false;
++      }
++    },
++    "primary",
++  );
++  const body = [
++    el(
++      "p",
++      { class: "muted" },
++      `${provider.name} needs a key before it can answer. It is stored on this machine with the rest of the provider credentials — not in the memory folder, and not sent anywhere except to ${provider.name}.`,
++    ),
++    field("API key", keyInput),
++    provider.docsUrl
++      ? el(
++          "p",
++          { class: "hint" },
++          button(["Where to get a key ↗"], (event) => {
++            event.preventDefault();
++            openExternal(provider.docsUrl);
++          }, "quiet"),
++        )
++      : null,
++    status,
++    el("div", { class: "first-run-actions" }, saveBtn),
++  ].filter(Boolean);
++  dlg = dialog(`Add a key for ${provider.name}`, body);
++  keyInput.focus();
++}
++
+ function providersChip() {
+   const st = state.providers || {};
+   const list = st.providers || [];
+@@ -573,11 +675,23 @@
+   const items = [{ label: "Providers & models", note: "opens the picker", run: () => modelPicker() }, { sep: true }];
+   for (const p of list) {
+     const isActive = p.id === st.activeProvider;
++    const local = p.category === "local" || /localhost|127\.0\.0\.1/.test(p.baseUrl || "");
+     items.push({
+       label: p.name,
+       checked: isActive,
+-      note: isActive ? (st.activeModel || "") : (p.configured ? "configured" : "not configured"),
+-      run: () => modelPicker(),
++      note: isActive
++        ? st.activeModel || ""
++        : p.configured
++          ? "configured"
++          : local
++            ? "runs on this machine — no key"
++            : "needs a key",
++      run: () => {
++        if (p.configured) return modelPicker(p.id);
++        // A local server has no key to ask for: it either answers on its port or it does not.
++        if (local) return probeLocalProvider(p);
++        return addKeyFor(p);
++      },
+     });
+   }
+   return chipMenu({ label, glyph: MODEL_GLYPH, cls: "model", items });
