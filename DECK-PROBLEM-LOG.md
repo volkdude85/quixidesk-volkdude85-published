@@ -239,3 +239,43 @@ check the source before reporting a bug.
 Every wall above that took more than one attempt was solved by reading the actual error text, or by
 looking the behaviour up, rather than by another guess. The Rust SDK delta, the eu-strip strip step, and
 the portal talk-name were all one search each after a wrong theory.
+
+---
+
+## Privacy
+
+### 21. A compiled Python file was tracked, and it carried the build path
+
+**What happened** — `scripts/__pycache__/deck-steam-shortcut.cpython-314.pyc` was committed. A `.pyc`
+stores the absolute path of the source it was compiled from, and `strings` on that file returns
+`/home/volkdude/Projects/quixidesk-public/scripts/deck-steam-shortcut.py`. It was in the public
+repository, fetchable by URL, for a while.
+
+**Why it is the same family as the `target/` problem** — compiled and generated files remember where
+they were built. `.gitignore` already excluded `/src/` and `/target/` for exactly this reason; the
+Python cache was not covered.
+
+**Fix** — the file is removed, and `__pycache__/` and `*.pyc` are in `.gitignore`. It remains in
+history; a path is not worth rewriting a public repository's history over, but it is worth not adding
+more. *(verified — the file is gone from the tree; `git ls-files '*.pyc'` is empty)*
+
+### 22. The audit that found it
+
+Three passes over the repository, because they catch different things: the working tree (what a reader
+sees today), every blob in history (what a reader sees with `git log`), and filenames. Categories:
+names, emails, phone, address, family, court case, credentials and keys; separately, machine paths,
+hostnames, LAN addresses and sudo passwords.
+
+What the developer edition came back with:
+
+| result | detail |
+|---|---|
+| no name, email, phone, address, case number | zero hits across every revision |
+| no credentials | no keys, tokens, passwords, private keys |
+| commit identity | `volkdude85 <volkdude85@users.noreply.github.com>` only — the GitHub noreply, no personal address |
+| no machine detail | zero hits for `/home/volkdude`, the hostname, LAN or Tailscale addresses |
+| one surname | `0044-shipped-persona.patch`, the line about the handle never being written "Volk dude" — already public in both editions |
+| one path leak | the `.pyc` above |
+
+Audit source: `doxscan.py` in the session scratch — three passes, severity-ranked, exits non-zero when
+it finds anything hard.
