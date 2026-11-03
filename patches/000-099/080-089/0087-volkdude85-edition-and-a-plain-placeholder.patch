@@ -2,8 +2,8 @@ volkdude85 edition, and a placeholder that asks nothing
 ======================================================
 
 Onboarding said "GitHub edition", which names the host rather than the thing. It says **volkdude85
-edition** now — lowercase, because the handle is lowercase on purpose and styling it into VOLKDUDE85
-undoes the only reason the spelling matters. The kicker lost its `text-transform: uppercase` for that
+edition** now — lowercase, because the handle is lowercase on purpose and setting it in caps would
+undo the only reason the spelling matters. The kicker lost its `text-transform: uppercase` for that
 reason; nothing else on the screen changed.
 
 The composer placeholder was "You gonna talk to me or what?", which is a line from somebody's
@@ -19,7 +19,7 @@ diff -ruN '--exclude=target' '--exclude=.git' qtest12/QuixiDesk-3.6556.12/resour
  .first-run-kicker {
 -  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
 +  /* No uppercase here: the edition is "volkdude85 edition" — the handle is lowercase on purpose and
-+     styling it into VOLKDUDE85 undoes the one thing the spelling was for. */
++     setting it in caps undoes the one thing the spelling was for. */
 +  font-size: 11px; letter-spacing: .06em; text-transform: none;
    color: var(--accent); margin: 0 0 8px; font-weight: 700;
  }
