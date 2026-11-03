@@ -1,12 +1,17 @@
 #!/bin/sh
 # QuixiCore — install, on whatever Linux this is.
 #
-#   sh install.sh
+#   sh install.sh              # the Flatpak
+#   sh install.sh --container  # a distrobox container with the full dependency set (Deck / immutable)
 #
 # One rule: the Flatpak is the install path everywhere it exists, because it is the only one that
 # brings its own runtime, drops into the menu, and updates itself afterwards. Everything below is
 # about what is *around* that on this particular machine — and on a Steam Deck, the part that is
 # around it is the part people get stuck on.
+#
+# The container route exists because a sandbox cannot run ydotool or a compositor capture daemon.
+# It lives in your home directory so a SteamOS update does not erase it, and it costs a couple of
+# gigabytes and an update step of its own. See STEAMDECK.md.
 #
 # Nothing here needs root, nothing here talks to anything but the repository it names, and you can
 # read the whole file before you run it.
@@ -15,6 +20,19 @@ set -eu
 
 APP_ID=org.quixidesk.QuixiDesk
 REF_URL="https://volkdude85.github.io/quixidesk-volkdude85-published/org.quixidesk.QuixiDesk.flatpakref"
+CONTAINER_SCRIPT="https://raw.githubusercontent.com/volkdude85/quixidesk-volkdude85-published/master/scripts/steamdeck-distrobox.sh"
+
+MODE=flatpak
+for arg in "$@"; do
+  case "$arg" in
+    --container|container) MODE=container ;;
+    --flatpak|flatpak)     MODE=flatpak ;;
+    -h|--help)
+      sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) : ;;
+  esac
+done
 
 say() { printf '%s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -84,6 +102,32 @@ finish() {
 
 # ---------------------------------------------------------------------------------------------
 
+run_container_route() {
+  say "== container route: distrobox, dependencies inside, nothing written to the OS image"
+  if ! have distrobox; then
+    say "distrobox is not installed. On SteamOS it is in the Discover store (it is a Flatpak)."
+    say "Then run this again with --container."
+    return 1
+  fi
+  # The script itself is in the repository — fetch it, do not reimplement it here, so there is one
+  # copy of the container logic and it is the copy the documentation describes.
+  tmp=$(mktemp)
+  curl -fsSL "$CONTAINER_SCRIPT" -o "$tmp"
+  say "== fetched scripts/steamdeck-distrobox.sh"
+  sh "$tmp"
+  rc=$?
+  rm -f "$tmp"
+  return $rc
+}
+
+if [ "$MODE" = container ]; then
+  run_container_route || exit 1
+  say ""
+  say "The container survives SteamOS updates because it lives in ~/.local/share/containers."
+  say "Enter it with:  distrobox enter quixi -- quixidesk"
+  exit 0
+fi
+
 if is_steamdeck; then
   say "SteamOS / Steam Deck detected."
   if ! have flatpak; then
@@ -94,6 +138,11 @@ if is_steamdeck; then
   install_flatpak
   finish
   game_mode_steps
+  say ""
+  say "If the agent needs to drive the mouse and keyboard, or read the clipboard, the sandbox is"
+  say "the thing in the way — those need ydotool and wl-clipboard on the machine, which a Flatpak"
+  say "cannot carry for you. That is the other route, and it is one command:"
+  say "    sh install.sh --container"
   exit 0
 fi
 
