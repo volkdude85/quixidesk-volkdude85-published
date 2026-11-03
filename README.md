@@ -21,6 +21,7 @@
 > | every runtime, optional and external dependency, and why | [`DEPENDENCIES.md`](DEPENDENCIES.md) |
 > | **running it on a Steam Deck — compatibility, caveats, and what does not work** | **[`STEAMDECK.md`](STEAMDECK.md)** |
 | **every wall hit making it ship, and the fix for each** | [`DECK-PROBLEM-LOG.md`](DECK-PROBLEM-LOG.md) |
+| **setting it up in pictures, for anyone who would rather look than read** | [`docs/SETUP-VISUAL.md`](docs/SETUP-VISUAL.md) |
 > | what is left wide open, and why | [`WAIVER.md`](WAIVER.md) — **read this before installing** |
 > | how it got built, in order | [`CHANGELOG.md`](CHANGELOG.md) |
 > | Artix / OpenRC (non-systemd) | [`ARTIX.md`](ARTIX.md) |
