@@ -123,11 +123,35 @@ panels larger than 1280x840 nothing changes. *(verified)*
 but it sits in a black field rather than filling the frame, because Game Mode gives one application the
 whole display and does not decorate or maximize it.
 
-**Fix** — the window builder also asks to be maximized when the panel is handheld-sized
+**Fix attempted** — the window builder also asks to be maximized when the panel is handheld-sized
 (`width <= 1366 && height <= 900`). A desktop window manager honours the same hint.
 
-**Status — UNVERIFIED.** The nested-gamescope re-test did not complete; a real Deck is the only place
-that behaviour can be confirmed. Do not describe this as fixed until someone looks at it on hardware.
+**Status — UNVERIFIED, and the harness cannot settle it.**
+
+What was actually measured, twice, on this machine:
+
+| run | result |
+|---|---|
+| before the maximize hint | window 1240x720 at 1:1, black borders on all four sides |
+| after the maximize hint | content occupies 1280x743 of the 800-pixel frame — 1240x720 scaled up to fit the width, leaving ~28 px black at top and bottom. The hint does not resize the window; gamescope has no window manager to honour it, so it scales instead. |
+
+And the second run rendered a blank dark rectangle — no sidebar, no composer — while the identical
+binary had drawn the full UI twenty minutes earlier in the same harness. That is the harness, not the
+app: **this box is NVIDIA, a Deck is AMD**. Nested gamescope on the proprietary driver throws
+`vkGetPhysicalDeviceFormatProperties2 returned zero modifiers` and renders inconsistently, so nothing
+this machine says about Game Mode rendering can be trusted either way.
+
+What would actually settle it: a Deck, Steam closed, `sh install.sh`, then Game Mode. Until that
+happens this stays on the unverified list, and the honest expectation is that a maximized window fills
+an AMD compositor that has a window manager's worth of behaviour, and that the letterboxing above is an
+artifact of nesting.
+
+### 12a. The test harness is not the target
+
+Worth writing down because it has already produced one wrong conclusion: an app that renders blank
+inside nested gamescope on NVIDIA may be perfectly fine on gamescope on AMD, and vice versa. Every
+measurement that depends on the compositor is a measurement of *this* compositor. Geometry measured
+from an X server (`xwininfo`) is reliable; anything about what got painted is not.
 
 ### 13. `Address already in use (os error 98)`
 
