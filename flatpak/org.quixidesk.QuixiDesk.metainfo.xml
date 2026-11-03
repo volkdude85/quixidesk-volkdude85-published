@@ -8,7 +8,11 @@
   <description>
     <p>A desktop workspace that runs AI models locally or over the internet, keeps its memory in a folder of markdown you own, and works on your files.</p>
   </description>
+  <icon type="stock">org.quixidesk.QuixiDesk</icon>
   <launchable type="desktop-id">org.quixidesk.QuixiDesk.desktop</launchable>
+  <categories>
+    <category>Utility</category>
+  </categories>
   <releases>
     <release version="3.6556.12" date="2026-11-02"/>
   </releases>

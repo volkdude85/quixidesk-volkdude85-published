@@ -22,18 +22,28 @@ finish-args:
   - --talk-name=org.kde.KWin.Scripting
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
+
   env:
     CARGO_HOME: /run/build/quixidesk/cargo
 modules:
   - name: quixidesk
     buildsystem: simple
     build-commands:
+      # The crate registry is vendored into the tree. The dir source does not carry dotfiles, so the
+      # cargo config is installed here rather than shipped as .cargo/config.toml.
+      - mkdir -p .cargo
+      - cp flatpak/cargo-config.toml .cargo/config.toml
       - cargo build --release --offline -p quixi-app
       - install -Dm755 target/release/QuixiDesk /app/bin/QuixiDesk
       - install -Dm755 flatpak/quixidesk-flatpak /app/bin/quixidesk-flatpak
       - install -Dm644 flatpak/org.quixidesk.QuixiDesk.desktop /app/share/applications/org.quixidesk.QuixiDesk.desktop
       - install -Dm644 flatpak/org.quixidesk.QuixiDesk.metainfo.xml /app/share/metainfo/org.quixidesk.QuixiDesk.metainfo.xml
+      # appstream refuses a component whose icon it cannot find, so the mark is installed under the name
+      # the metainfo will advertise.
+      - install -Dm644 resources/quixi-mark.svg /app/share/icons/hicolor/scalable/apps/org.quixidesk.QuixiDesk.svg
       - mkdir -p /app/share/quixidesk && cp -a resources /app/share/quixidesk/resources
+    # The source tree is prepared by flatpak/build-flatpak.sh and the manifest is copied into it, so the
+    # tree root is one level up from this file. A dir source is resolved relative to the manifest.
     sources:
       - type: dir
         path: ..

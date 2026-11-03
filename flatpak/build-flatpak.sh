@@ -1,0 +1,122 @@
+#!/bin/bash
+# Build the Flatpak for the published edition.
+#
+# The application source is not in this repository — the repository carries the patch series, and
+# PKGBUILD builds the tree by extracting the upstream release tarball and applying each patch in
+# `prepare()` order. A Flatpak has to see the same tree, so this script builds it the same way and then
+# hands flatpak-builder a directory source that already contains the patched source and the packaging
+# files. One series, two packagers, no second copy of the truth.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+WORK="${WORK:-$HOME/flatpak-build}"
+SRC="$WORK/src"
+BUILD="$WORK/build"
+REPO_DIR="$WORK/repo"
+STATE="$WORK/state"
+
+PKGVER=$(sed -n 's/^pkgver=//p' "$REPO/PKGBUILD")
+# The series is written against the *upstream* release, so that is what gets patched. The custom tarball
+# in src/ is this machine's prepared tree and cannot be the base for a patch that expects upstream.
+TARBALL="$REPO/src/QuixiDesk-${PKGVER}.tar.gz"
+if [ ! -f "$TARBALL" ]; then
+  echo "== downloading the upstream release"
+  curl -sSL --speed-limit 2048 --speed-time 45 --retry 3 --retry-all-errors \
+    -o "$TARBALL" "https://github.com/QuixiAI/QuixiDesk/archive/refs/tags/v${PKGVER}.tar.gz"
+fi
+# A prepared tree beside the tarball (src/QuixiDesk-<ver>) is the tree the application is actually built
+# from here. Use it when it exists: the Flatpak should package what runs, and the series currently needs
+# re-baselining before it can rebuild that tree from scratch. When it is absent, fall through to the
+# tarball-plus-series path below.
+PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
+if [ -d "$PREPARED" ]; then
+  echo "== using the prepared tree at $PREPARED"
+  rm -rf "$SRC"; mkdir -p "$SRC"
+  cp -a "$PREPARED" "$SRC/"
+  TREE="$SRC/QuixiDesk-${PKGVER}"
+  cp -a "$REPO/flatpak" "$TREE/flatpak"
+  echo "== staging the source archive"
+# A dir source does not carry dotfiles, and a vendored crate without .cargo-checksum.json cannot build.
+# So the tree is archived and the manifest is staged beside it with an archive source.
+STAGE="$WORK/stage"
+rm -rf "$STAGE"; mkdir -p "$STAGE"
+# The prepared tree is the tree the application runs from, and something may be writing to it while we
+# read (a build, an editor). So the archive is made from a clean copy, with the local build artifacts and
+# the repository left out — target/ alone is 5.8 GB and the sandbox builds its own.
+SRCCOPY="$WORK/archive-src"
+rm -rf "$SRCCOPY"; mkdir -p "$SRCCOPY"
+# Anchored excludes: an unanchored 'target/' also strips vendor/cc/src/target, and a vendored crate
+# missing a file will not build. Only the tree's own build directory goes.
+rsync -a --exclude '/target/' --exclude '/.git/' "$TREE/" "$SRCCOPY/QuixiDesk-${PKGVER}/"
+
+tar czf "$STAGE/quixidesk-src.tar.gz" --warning=no-file-changed \
+  -C "$SRCCOPY" "QuixiDesk-${PKGVER}" || [ $? -eq 1 ]
+
+# The manifest is staged beside the archive with an archive source instead of a dir source.
+python3 - "$REPO/flatpak/org.quixidesk.QuixiDesk.yml" "$STAGE/manifest.yml" <<'PY'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src).read()
+text = re.sub(r"    sources:\n      - type: dir\n        path: \.\.",
+              "    sources:\n      - type: archive\n        path: quixidesk-src.tar.gz", text)
+open(dst, "w").write(text)
+PY
+
+echo "== building with flatpak-builder"
+rm -rf "$BUILD" "$REPO_DIR"
+flatpak-builder --user --state-dir="$STATE" --force-clean --repo="$REPO_DIR" \
+  "$BUILD" "$STAGE/manifest.yml"
+BUNDLE="$WORK/QuixiDesk.flatpak"
+flatpak build-bundle "$REPO_DIR" "$BUNDLE" org.quixidesk.QuixiDesk
+  ls -la "$BUNDLE"
+  exit 0
+fi
+
+# and it has to be the checksum the PKGBUILD pins, or the build is not reproducible
+WANT=$(grep -oE "[0-9a-f]{64}" "$REPO/PKGBUILD" | while read -r h; do
+        [ "$h" = "$(sha256sum "$TARBALL" | cut -d' ' -f1)" ] && echo "$h" && break
+      done | head -1)
+[ -n "$WANT" ] || { echo "the tarball does not match any checksum in PKGBUILD" >&2; exit 1; }
+
+echo "== extracting $(basename "$TARBALL")"
+rm -rf "$SRC"
+mkdir -p "$SRC"
+tar xzf "$TARBALL" -C "$SRC"
+TREE=$(find "$SRC" -maxdepth 1 -mindepth 1 -type d | head -1)
+[ -d "$TREE" ] || { echo "tarball did not contain a directory" >&2; exit 1; }
+
+echo "== applying the series in prepare() order"
+cd "$TREE"
+for p in $(sed -n '/^prepare()/,/^build()/p' "$REPO/PKGBUILD" \
+             | grep -oE '[0-9]{4}-[a-z0-9-]+\.patch' | awk '!seen[$0]++'); do
+  path=$(find "$REPO/patches" -name "$p" | head -1)
+  [ -n "$path" ] || { echo "missing patch: $p" >&2; exit 1; }
+  if patch -Np1 -s -i "$path" >/dev/null 2>&1; then
+    :
+  elif [ -z "$(find . -name '*.rej' | head -1)" ]; then
+    # Its content is already in the tree from an earlier patch in the series: a no-op, not a failure.
+    echo "   already applied: $p"
+  else
+    echo "patch failed: $p" >&2
+    find . -name '*.rej' | head -3 >&2
+    exit 1
+  fi
+done
+rm -f CREDITS resources/ui/*.rej resources/ui/*.orig 2>/dev/null || true
+
+echo "== adding the packaging files"
+cp -a "$REPO/flatpak" "$TREE/flatpak"
+
+echo "== building with flatpak-builder"
+mkdir -p "$WORK"
+rm -rf "$BUILD" "$REPO_DIR"
+flatpak-builder --user \
+  --state-dir="$STATE" \
+  --force-clean \
+  --repo="$REPO_DIR" \
+  "$BUILD" "$TREE/flatpak/org.quixidesk.QuixiDesk.yml"
+
+BUNDLE="$WORK/QuixiDesk.flatpak"
+echo "== exporting $BUNDLE"
+flatpak build-bundle "$REPO_DIR" "$BUNDLE" org.quixidesk.QuixiDesk
+ls -la "$BUNDLE"
