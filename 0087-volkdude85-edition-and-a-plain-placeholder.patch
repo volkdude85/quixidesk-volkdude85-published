@@ -1,0 +1,58 @@
+volkdude85 edition, and a placeholder that asks nothing
+======================================================
+
+Onboarding said "GitHub edition", which names the host rather than the thing. It says **volkdude85
+edition** now — lowercase, because the handle is lowercase on purpose and styling it into VOLKDUDE85
+undoes the only reason the spelling matters. The kicker lost its `text-transform: uppercase` for that
+reason; nothing else on the screen changed.
+
+The composer placeholder was "You gonna talk to me or what?", which is a line from somebody's
+conversation rather than an instruction. It says **Text goes here…** now — the same information, with
+no register to live up to on a screen where somebody is deciding whether to type.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest12/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 20:29:11.931285251 -0800
++++ b/resources/ui/app.css	2026-11-02 20:57:42.459514437 -0800
+@@ -3149,7 +3149,9 @@
+ 
+ /* The welcome screen: who made it, what it is, and the assistive-software point up front. */
+ .first-run-kicker {
+-  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
++  /* No uppercase here: the edition is "volkdude85 edition" — the handle is lowercase on purpose and
++     styling it into VOLKDUDE85 undoes the one thing the spelling was for. */
++  font-size: 11px; letter-spacing: .06em; text-transform: none;
+   color: var(--accent); margin: 0 0 8px; font-weight: 700;
+ }
+ .first-run-about { margin: 16px 0 6px; padding: 14px 16px; border: 1px solid var(--line);
+diff -ruN '--exclude=target' '--exclude=.git' qtest12/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 20:55:25.151363935 -0800
++++ b/resources/ui/app.js	2026-11-02 20:56:47.942000791 -0800
+@@ -1705,7 +1705,7 @@
+     );
+ 
+     root.replaceChildren(
+-      el("p", { class: "first-run-kicker" }, "GitHub edition"),
++      el("p", { class: "first-run-kicker" }, "volkdude85 edition"),
+       // Onboarding is met by everybody, so it gets the plain greeting no matter which theme is
+       // selected. "Sup bitches" belongs to his own register, and a stranger's first screen is not
+       // the place to try it out on them.
+@@ -2364,8 +2364,8 @@
+       disabled: pendingSubmissions.has(draftKey()),
+       placeholder: running(s)
+         ? "Write a follow-up while this task runs…"
+-        : "You gonna talk to me or what?",
+-      "aria-label": "You gonna talk to me or what?",
++        : "Text goes here…",
++      "aria-label": "Text goes here…",
+       rows: 3,
+       value: getDraft(),
+       onInput: () => { resetHistory(); saveDraft(); },
+@@ -3100,7 +3100,7 @@
+     if (note) note.textContent = active ? "Enter to queue · Shift+Enter for a new line" : "Enter to send · Shift+Enter for a new line";
+     document.getElementById("pending-messages")?.replaceChildren(...pendingMessageRows(session()));
+     const input = document.getElementById("prompt");
+-    if (input) input.placeholder = active ? "Add a follow-up…" : "You gonna talk to me or what?";
++    if (input) input.placeholder = active ? "Add a follow-up…" : "Text goes here…";
+   }
+   async function refreshSession(id) {
+     let old = state.sessions.find((s) => s.sessionId === id);

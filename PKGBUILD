@@ -168,6 +168,7 @@ source=(
   0084-personas-are-a-settings-section.patch
   0085-the-greeting-is-sup.patch
   0086-sup-by-default-sup-bitches-in-his-own-theme.patch
+  0087-volkdude85-edition-and-a-plain-placeholder.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -258,6 +259,7 @@ sha256sums=(
   'a230ed090394ac1c433fe4307c3fbdb0945f511b886e64d83ca77bc90790f1e9'
   'a94c706e583d162c9f37f61558e7222e4831ad1b91b73ffe553f8c45cdcd94c5'
   '804268b0e90400df7128b28f9bcd7a21da619bd0a4eafdab745d254d0bcebb35'
+  '3340025cc1a6c1a0b720a077a9a49c1674695eb66b8c5ed313230b6b73a4a9b7'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -550,6 +552,9 @@ prepare() {
 
   # Sup by default; his own theme is the only place the other register appears.
   patch -Np1 -i "${srcdir}/0086-sup-by-default-sup-bitches-in-his-own-theme.patch"
+
+  # The edition names itself in his handle's own case; the composer placeholder asks nothing.
+  patch -Np1 -i "${srcdir}/0087-volkdude85-edition-and-a-plain-placeholder.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
