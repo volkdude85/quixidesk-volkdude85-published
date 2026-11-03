@@ -1,0 +1,1529 @@
+The rest of the library, and this edition's own three skills
+============================================================
+
+The developer edition's tools page shows three libraries; this one showed one and two empty panels,
+because this edition ships the office skills and nothing else. That is not what the page is for — a
+tools page with two thirds of it blank reads as broken.
+
+So the published edition now carries what the developer edition carries:
+
+  * the three skills written for this edition — `browser-driving`, `reverse-engineering`, `with` —
+    which a previous patch removed. With stays filed under `quixidesk`, because it is Eric Hartford's
+    language and this build only packages and documents it.
+  * the eleven work skills from a working agent, scrubbed: web-research, post-media-read,
+    terminal-email, voice-pipeline, memory-hygiene, local-inference, multi-machine-offload, linux-ops,
+    document-extraction, verification-discipline, image-gen-local.
+  * the manifest's `owner` values, which is what puts each skill in its panel.
+
+Everything identifying came out of these before they were first shipped: addresses, phone numbers,
+mailboxes, given names, a case number, a court, a jurisdiction, LAN addresses, workstation names, home
+paths. Delete the identity, keep the measurement.
+
+---
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills/manifest.json /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills/manifest.json
+--- a/resources/bundled-skills/manifest.json
++++ b/resources/bundled-skills/manifest.json
+@@ -3,12 +3,92 @@
+     {
+       "name": "browser-driving",
+       "description": "Drive a real browser: Brave over CDP, Firefox over WebDriver BiDi, curl as the last resort.",
+-      "tier": "always"
++      "tier": "always",
++      "owner": "volkdude85"
+     },
+     {
+       "name": "with",
+-      "description": "Build, test and ship software in With, the self-hosting systems language, when its compiler is installed.",
+-      "tier": "always"
++      "description": "Build, test and ship software in With, the self-hosting systems language by Eric Hartford, when its compiler is installed.",
++      "tier": "always",
++      "owner": "quixidesk"
++    },
++    {
++      "name": "web-research",
++      "description": "Find a fact on the web without burning an hour: curl first, the source's own endpoint second, a real browser only when the page actually needs one.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "post-media-read",
++      "description": "Read a social post someone pasted \u2014 text, thread, and the media itself \u2014 with no account and no login wall.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "terminal-email",
++      "description": "Read, search, draft and send email from the shell over IMAP/SMTP \u2014 with the flag-order and folder-name traps that make commands appear to succeed silently.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "voice-pipeline",
++      "description": "Wire speech in and out of an agent that runs locally: TTS to the right sink, STT that hears a real person, and the gate problems that make a mic look open while nothing arrives.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "memory-hygiene",
++      "description": "Write memory that survives: which layer a fact belongs in, what to record, and how to reconstruct a span of work without trusting your own recall.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "local-inference",
++      "description": "Run and inspect local GGUF models: the container format, quant math, llama.cpp serving flags, and how to benchmark without lying to yourself.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "multi-machine-offload",
++      "description": "Put a second computer to work over SSH: offload a job, reach a service that is bound to loopback, and tell what a remote box is actually doing.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "linux-ops",
++      "description": "Diagnose a Linux box that is out of space, full of stray processes, or failing units \u2014 measure first, attribute before acting.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "document-extraction",
++      "description": "Get text and tables out of PDFs, scans and office documents \u2014 pick the extractor by what the file actually is, and verify the output against the page.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "verification-discipline",
++      "description": "Prove the artifact works before saying it does \u2014 the false failures, the false successes, and what 'verified' is allowed to mean.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "image-gen-local",
++      "description": "Generate images on a local ComfyUI: drive it by API, find the parameters a workflow exposes, and know when the machine cannot do the job.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "linux-gaming-field-notes",
++      "description": "Set up or repair a Linux gaming box: distro choice, the compatibility stack, the packages that earn their place, and where to look when a game will not start.",
++      "tier": "always",
++      "owner": "volkdude85"
++    },
++    {
++      "name": "reverse-engineering",
++      "description": "Decompile a binary with Ghidra headless and read the C \u2014 functions, call graph, where to look first.",
++      "tier": "always",
++      "owner": "volkdude85"
+     }
+   ]
+ }
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/document-extraction/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/document-extraction/SKILL.md
+--- a/resources/bundled-skills-extracted/document-extraction/SKILL.md
++++ b/resources/bundled-skills-extracted/document-extraction/SKILL.md
+@@ -0,0 +1,128 @@
++---
++name: document-extraction
++description: "Get text and tables out of PDFs, scans and office documents — pick the extractor by what the file actually is, and verify the output against the page."
++version: 1.0.0
++tags: [pdf, ocr, pymupdf, marker, tesseract, tables, forms]
++---
++
++# Getting text out of a document
++
++The first decision is not which tool, it is **what kind of document this is**. Text-layer PDF, scan,
++mixed, and forms each fail differently, and using the wrong extractor produces plausible prose with the
++numbers missing — which is the worst outcome, because it reads as success.
++
++## Step 1 — is there a text layer?
++
++```bash
++python3 - <<'PY'
++import fitz                      # pymupdf
++d = fitz.open("input.pdf")
++print("pages:", d.page_count)
++for i in range(min(3, d.page_count)):
++    t = d[i].get_text()
++    print(i, "chars:", len(t), "|", repr(t[:120]))
++PY
++```
++
++- **Hundreds of characters per page** → real text layer. Use it; do not OCR.
++- **Single digits or empty** → a scan. Go to OCR.
++- **A mix** → extract the text pages, OCR the rest, and note which pages came from where.
++
++`pdftotext -layout` is the quickest first look and preserves column position, which matters for tables:
++
++```bash
++pdftotext -layout input.pdf - | head -60
++```
++
++If `-layout` output has clean columns, you have a born-digital document and the job is nearly done.
++
++## Step 2 — pick the extractor
++
++| Document | Use | Why |
++|---|---|---|
++| Text-layer PDF | `pymupdf` (`fitz`) | fast, exact, preserves order |
++| Scan, clean | `tesseract` at 300 dpi | cheapest accurate OCR |
++| Scan, complex layout / tables / multi-column | `marker-pdf` | reconstructs structure, slower, needs disk |
++| Office docs | the format's own reader (`python-docx`, `openpyxl`) | never OCR a .docx |
++| Images of text | `tesseract <img> stdout` | and crop to the text first |
++
++```bash
++# OCR one page at 300 dpi (below ~200 dpi accuracy collapses)
++pdftoppm -r 300 -f 1 -l 1 -png input.pdf /tmp/pg && tesseract /tmp/pg-01.png stdout
++
++# whole scanned document with layout reconstruction
++marker_single input.pdf --output_dir /tmp/out
++```
++
++**Crop before you OCR.** A 1920×1080 render costs ~2000 vision/text tokens; a 256×256 crop of the region
++that matters costs ~90. On dense documents this is the difference between one call and twenty.
++
++## Tables
++
++Tables are where extraction silently loses the answer. A table flattened to prose loses the column
++alignment that gave each number its meaning.
++
++- `pdftotext -layout` first: if the columns line up, split on runs of two or more spaces and you have rows.
++- Otherwise `pymupdf`'s `page.find_tables()` → `.to_pandas()`, or `camelot` for ruled tables.
++- **Always print the row and column count and the first two rows** before using the data. A table that
++  came back 12 rows when the page shows 40 is a parse failure, not a short table.
++- A `0` or blank in a parsed numeric field is a parse bug until proven otherwise — check the source's own
++  formatting (thousands separators, parentheses for negatives, unicode minus `−`, a trailing asterisk).
++
++## Step 3 — verify against the page
++
++Extraction is a claim. Check it:
++
++1. **Page count and character count** — print both. A 40-page PDF yielding 200 characters is a failure you
++   can see in one line.
++2. **Spot-check the first and last page** against a render of the same page.
++3. **Grep for a string you know is in the document** — a title, a section number, a proper noun. If it is
++   missing, the extraction is partial.
++4. **If a number is going into a decision**, read it out of an image render of that page as well. Two
++   independent reads of one number is a cheap and high-value habit.
++
++## PDF forms
++
++AcroForm fields are read and written with `pypdf`:
++
++```python
++from pypdf import PdfReader, PdfWriter
++r = PdfReader("form.pdf")
++print(r.get_fields())                      # name -> field object (type, value, rect)
++w = PdfWriter(clone_from=r)
++w.update_page_form_field_values(w.pages[0], {"field_name": "value"})
++w.write("filled.pdf")
++```
++
++- **Print every field name and its type first.** Names are opaque (`topmostSubform[0].Page1[0].f1_02[0]`),
++  and guessing produces a file that looks filled and is not.
++- **Checkboxes are `/Btn` fields** and take either a state name from `field.button_states` (preferred) or a
++  boolean, depending on the producer.
++- **Regenerating a PDF is a rewrite, not a patch.** If you rebuild a form from scratch, every previously
++  filled field must be carried across — including the date next to the signature and any image. Extract
++  all fields from the original first, then diff the new file's fields against that list before delivering.
++- **`pypdf` cannot create a form from nothing.** For an empty form, place text with `reportlab` at measured
++  coordinates, then flatten — and check the result by extracting the text back out.
++- **Flatten means frozen.** Do not flatten a form someone may need to edit later; ask, or deliver both.
++
++## Arxiv and web PDFs
++
++```bash
++curl -sL "https://arxiv.org/abs/<id>"       # abstract page, cheap
++curl -sL "https://arxiv.org/pdf/<id>" -o /tmp/p.pdf && pdftotext -layout /tmp/p.pdf -
++```
++
++Fetch the PDF once, extract locally, and read from the file — repeatedly re-fetching a large PDF to grep a
++different section is the slow path.
++
++## Pitfalls
++
++- **OCR at low dpi.** Under ~200 dpi, small type and thin strokes vanish; 300 dpi is the floor for text.
++- **Rotated pages.** A page scanned sideways returns nothing useful. Check `page.rotation` and fix it
++  before OCR.
++- **Multi-column layouts** intersperse columns line by line when read naively. Use an extractor that
++  respects reading order, or crop column by column.
++- **Headers and footers contaminate every page.** Strip the top and bottom band when you are searching for
++  a value across pages — otherwise the footer's page number is what you find.
++- **A document that is an image inside a PDF wrapper** (a scanned page saved as PDF) has a text layer of
++  zero characters. That is the scan case, and no amount of "just extract the text" will work.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/image-gen-local/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/image-gen-local/SKILL.md
+--- a/resources/bundled-skills-extracted/image-gen-local/SKILL.md
++++ b/resources/bundled-skills-extracted/image-gen-local/SKILL.md
+@@ -0,0 +1,117 @@
++---
++name: image-gen-local
++description: "Generate images on a local ComfyUI: drive it by API, find the parameters a workflow exposes, and know when the machine cannot do the job."
++version: 1.0.0
++tags: [comfyui, diffusion, image, workflow, gpu, vram]
++---
++
++# Image generation on a local ComfyUI
++
++ComfyUI is two layers and they are worth keeping separate:
++
++- **The server** — a graph executor listening on `127.0.0.1:8188` with an HTTP API and a WebSocket.
++- **A workflow** — a JSON graph describing nodes and links. The **API format** is the one that matters:
++  it is a flat map of node id → `class_type` + `inputs`, and it is what you POST.
++
++The UI format and the API format are different files. A workflow saved from the browser UI is the UI
++format and will be rejected; use *Save (API Format)* or convert it.
++
++## Step 0 — what can this machine actually do
++
++Before installing anything or promising an image:
++
++```bash
++nvidia-smi --query-gpu=name,memory.total,memory.used --format=csv,noheader 2>/dev/null \
++  || rocm-smi --showmeminfo vram 2>/dev/null \
++  || echo "no GPU"
++df -h /            # a checkpoint is 2–7 GB each; models fill a root in one afternoon
++```
++
++Rough VRAM floors (SDXL, 1024²): **6 GB** with `--lowvram`, **8 GB** comfortable, **12 GB** for batch or
++img2img chains. SD 1.5 runs on 4–6 GB. Video and upscale pipelines want far more. If the machine cannot do
++it, say so before the download — that is cheaper for everyone than a 20-minute install that OOMs.
++
++## Driving it
++
++```bash
++# health
++curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8188/system_stats
++
++# what checkpoints are installed
++curl -s http://127.0.0.1:8188/object_info/CheckpointLoaderSimple | python3 -m json.tool | head -40
++
++# queue a workflow (API format)
++curl -s -X POST http://127.0.0.1:8188/prompt \
++  -H 'Content-Type: application/json' \
++  -d "{\"prompt\": $(cat workflow_api.json), \"client_id\": \"agent\"}"
++# -> {"prompt_id": "...", "number": N}
++```
++
++Then poll for the result rather than guessing a duration:
++
++```bash
++curl -s "http://127.0.0.1:8188/history/$PROMPT_ID" | python3 -m json.tool | head -40
++```
++
++Outputs land in the server's `output/` directory with the filename the save node chose; `/history` gives you
++the exact name plus the subfolder. Read the images from there — do not assume `ComfyUI_00001_.png`.
++
++**Progress beats polling** where the WebSocket is available: subscribe to
++`ws://127.0.0.1:8188/ws?clientId=agent` and read `progress` messages (`value`/`max`). It costs one
++connection and turns a blind wait into a real percentage.
++
++## Finding the knobs in a workflow you did not author
++
++A workflow JSON is opaque until you enumerate it. Every parameter worth changing is an input that is not a
++link:
++
++```python
++import json
++wf = json.load(open("workflow_api.json"))
++for nid, node in wf.items():
++    print(nid, node["class_type"])
++    for k, v in node.get("inputs", {}).items():
++        kind = "LINK<-" + str(v[0]) if isinstance(v, list) else repr(v)[:70]
++        print(f"   {k:24} {kind}")
++```
++
++The four you will nearly always touch: the **positive prompt** (`CLIPTextEncode.text` feeding the
++`KSampler.positive`), the **negative prompt**, the **seed** (`KSampler.seed`), and **steps / cfg /
++sampler_name / scheduler** on the same node. Resolution lives on an `EmptyLatentImage` node; batch size is
++`batch_size` on the same node.
++
++**Change only what the job needs.** A seed sweep is one edit per run; re-writing the whole graph between
++runs is how a working workflow turns into a broken one.
++
++## Prompt-craft that survives a local model
++
++- **Order matters**: subject → attributes → setting → lighting → medium/style. Front-load what must not be
++  lost.
++- **SDXL-class models ignore negatives less reliably than SD1.5** — a negative prompt is still worth a
++  short list of the three things you do not want, not a paragraph.
++- **Seeds are reproducible only with the same model, sampler, scheduler, steps and resolution.** Record all
++  of them next to any image you keep.
++- **Upscale rather than asking for a bigger canvas.** Generating at 1536² directly on a 12 GB card produces
++  duplicated limbs; generate at 1024² and run a latent or ESRGAN upscale.
++
++## Presenting results
++
++- Show the image, not a path to it.
++- Say which model, seed, steps and size produced it — one line. Without that, a good result is not
++  reproducible and a bad one is not diagnosable.
++- If a run failed because of a missing node or checkpoint, name the exact missing object; "the workflow did
++  not run" is not actionable.
++
++## Pitfalls
++
++- **A UI-format workflow cannot be POSTed.** Convert to API format first; the error otherwise is a
++  validation complaint about node ids.
++- **The server is single-queue.** Two POSTs queue in order; a "hung" run is often the one behind a large
++  job. Check `/queue` before assuming a failure.
++- **A missing custom node fails at queue time, not at load.** The error names the class; install the pack
++  and restart the server.
++- **Model files in the wrong folder are invisible.** Each loader reads one directory
++  (`models/checkpoints`, `models/loras`, `models/vae`, …). A 6 GB download in `models/` is not seen.
++- **First run after a restart is slow** — the model has to be loaded and compiled. Do not report that as
++  the workflow's speed.
++- **Do not drive a UI on someone's screen to do an API job.** If the server is reachable, use the API.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/linux-ops/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/linux-ops/SKILL.md
+--- a/resources/bundled-skills-extracted/linux-ops/SKILL.md
++++ b/resources/bundled-skills-extracted/linux-ops/SKILL.md
+@@ -0,0 +1,154 @@
++---
++name: linux-ops
++description: "Diagnose a Linux box that is out of space, full of stray processes, or failing units — measure first, attribute before acting."
++version: 1.0.0
++tags: [linux, systemd, storage, processes, disk, diagnostics]
++---
++
++# Linux ops: space, processes, units
++
++Three failures cover most "the machine is broken" reports on a Linux box: a filesystem filled by
++something nobody expected, a process nobody started, and a unit that has been failed since boot. All
++three are diagnosable in a few measured commands, and all three are routinely misdiagnosed because the
++first plausible theory was acted on before anything was measured.
++
++## Rule zero — measure before you delete anything
++
++`du`, `df`, `ps`, `systemctl status` cost seconds. A deletion costs a rebuild. Print the numbers you are
++acting on, then act.
++
++## Disk: root is full
++
++```bash
++df -hT                                     # per-filesystem, WITH type — a FUSE/NTFS mount is not root
++findmnt -o TARGET,SOURCE,FSTYPE,SIZE,USED,AVAIL
++```
++
++The type column matters more than the numbers: a 4 TB NTFS mount can sit at 297 MB/s while the same
++class of file on the local btrfs reads at 2.7 GB/s, and a full `ntfs-3g` mount behaves oddly rather than
++erroring cleanly.
++
++Find the consumers, largest first, in one pass:
++
++```bash
++du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -20
++# then drill where the weight is:
++du -x -h --max-depth=1 /home 2>/dev/null | sort -h | tail -20
++```
++
++`-x` stops the traversal crossing into other filesystems — without it a remote mount drags the scan to a
++crawl and reports someone else's numbers.
++
++The usual repeat offenders, in order:
++
++- **Package and build caches** — `~/.cargo`, `~/.cache/uv`, `~/.npm`, `~/.cache/pip`, `~/.cache/huggingface`.
++  A single `~/.cache/uv` has been seen at 13 GB on a 96 GB root.
++- **Container and VM images** — `docker system df`, then `docker system prune` (say what it will delete).
++- **Journal** — `journalctl --disk-usage`, then `journalctl --vacuum-size=500M`.
++- **Snapshots** — `btrfs filesystem usage /`, `snapper list`, `timeshift --list`. Snapshots share
++  extents, so deleting the wrong one frees nothing.
++- **Model and media files** — multi-GB by nature, and the ones that fill a root every time.
++
++**Prove whether anything is still writing before you clean up.** A filesystem that collapses back to
++zero shortly after you free space is being filled by a live process:
++
++```bash
++find / -xdev -newermt '-10 minutes' -type f -size +50M 2>/dev/null | head
++```
++
++**Move, verify, then link.** For anything large crossing filesystems, `cp` then compare (`sha256sum`,
++or size + a content probe), then remove the source, then symlink back. Never `mv` a large tree and
++assume it arrived.
++
++**Long copies are background jobs with a real progress check.** Start them, report the start, and check
++`ps`/size growth when asked — do not narrate or poll on a timer. A cross-filesystem `mv` keeps running
++after a shell timeout, which is useful to know and misleading if you assume it died.
++
++### A mount that is present but has no free space
++
++Check inode exhaustion as well as bytes: `df -i`. A filesystem at 1 % used with 0 inodes free cannot
++create a file either, and it reads as a permissions error from most applications.
++
++## Processes: what is this, who started it, why is it back
++
++```bash
++ps -eo pid,ppid,pcpu,pmem,etime,wchan:20,cmd --sort=-pcpu | head -20
++ss -ltnp                      # who owns a listening port (needs privileges for foreign processes)
++```
++
++**Attribute a port to a unit before deciding what it is:**
++
++```bash
++ss -ltnp | grep ':8086'
++systemctl --user status <maybe-matching-unit>
++systemctl status <maybe-matching-unit>
++```
++
++Two listeners on adjacent ports is a normal state, and the wrong one owning a port explains a service
++that "works" at 25 s per request. Measure the response time before theorising:
++
++```bash
++curl -s -o /dev/null -w '%{time_total}\n' http://127.0.0.1:PORT/health
++```
++
++**A process that will not die is usually a unit respawning it.** `kill <pid>` then watching it return
++with a new pid is the signature:
++
++```bash
++systemctl status <unit>          # look for "Restart=" and the restart counter
++systemctl stop <unit>            # stop the UNIT, then verify the pid is gone
++```
++
++Never leave a service stopped without saying so — something may be mid-conversation on it.
++
++**Hung, or just parked?** `wchan`, the CPU delta over two samples, and whether it holds the resource it
++is waiting on:
++
++```bash
++cat /proc/<pid>/wchan; echo
++awk '{print $14+$15}' /proc/<pid>/stat; sleep 2; awk '{print $14+$15}' /proc/<pid>/stat
++ls -l /proc/<pid>/fd | wc -l     # a descriptor count that grows is a leak, not a wait
++```
++
++## Units: a failure that has been failing since boot
++
++```bash
++systemctl --failed
++systemctl status <unit> -l --no-pager
++journalctl --user-unit <unit> -n 60 --no-pager
++```
++
++**Read the status code before the theory.** `status=203/EXEC` is a missing or non-executable binary;
++`status=1/FAILURE` is the program's own exit code; `status=226/NAMESPACE` is a sandbox path that does
++not exist; `code=killed, signal=SEGV` is a crash. Each one rules out whole classes of cause, and guessing
++without reading it produces "restart the service" answers that never hold.
++
++**A systemd user unit gets no session environment.** `WAYLAND_DISPLAY`, `DISPLAY`,
++`DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR` are all absent — that is by design, not a bug. Lift them
++from the live session when the unit needs them:
++
++```bash
++pid=$(pgrep -x plasmashell | head -1)
++tr '\0' '\n' < /proc/$pid/environ | grep -E '^(WAYLAND_DISPLAY|DISPLAY|DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR)='
++```
++
++and re-read them on every start, because the Wayland socket renumbers across reboots (`wayland-0` →
++`wayland-1`).
++
++**A restart loop is a population problem, not a crash.** A unit with `Restart=always` that dies after 9 s
++looks like a leak and is usually two instances of the same thing fighting for one resource — a model
++loading twice into one GPU, two daemons on one port, a lock file. Read what *else* is running before
++treating it as a memory bug.
++
++## Rules that keep earning their place
++
++- **Never sweep every machine for a problem reported on one.** The box named is the blast radius; a
++  fleet-wide change for a single complaint is damage, and the revert is what gets remembered.
++- **Do not restart or stop anything a person might be using without saying so first.** Say what stops,
++  for how long, and what comes back.
++- **A "please reboot" without a root cause is not a fix.** Read the journal for the specific error, fix
++  that, then verify the fix addresses it — one reboot per hypothesis at most.
++- **Check `/proc` before assuming a binary is gone.** A deleted-but-running binary is recoverable from
++  `/proc/<pid>/exe`, which has saved a wiped `~/.local/bin` more than once.
++- **`pgrep -f '<pattern>'` matches the shell running it.** Use `pgrep -x` or read `/proc/<pid>/cmdline`
++  when the pattern appears in your own command line.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/local-inference/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/local-inference/SKILL.md
+--- a/resources/bundled-skills-extracted/local-inference/SKILL.md
++++ b/resources/bundled-skills-extracted/local-inference/SKILL.md
+@@ -0,0 +1,121 @@
++---
++name: local-inference
++description: "Run and inspect local GGUF models: the container format, quant math, llama.cpp serving flags, and how to benchmark without lying to yourself."
++version: 1.0.0
++tags: [llama.cpp, gguf, quantization, inference, benchmark, vram]
++---
++
++# Local inference and GGUF
++
++## The container
++
++A GGUF is a header, a tensor table, and a data blob. You can read the whole table without downloading the
++weights:
++
++```
++magic "GGUF" | version | tensor_count | kv_count | key-value metadata | tensor infos | alignment pad | data
++```
++
++Each tensor info carries name, n_dims, dims[], type, and an **offset relative to the data section start**
++— not to the file start. Getting that base wrong reads plausible garbage, which is the worst failure mode
++because it does not error.
++
++**Parse the header before you trust any tool's summary.** A GGUF whose `general.architecture` disagrees
++with its filename is common (a mislabelled image model that is actually an LLM, a "27B" that is a 35B
++MoE); the header settles it in one read.
++
++## Quant layouts worth knowing cold
++
++| type | block | bytes/block | notes |
++|---|---|---|---|
++| F16 / BF16 | 1 | 2 | reference |
++| Q8_0 | 32 | 34 | one fp16 scale per block |
++| Q5_K | 256 | 176 | super-block with 6-bit scales and mins, 5th bit packed |
++| Q4_K | 256 | 144 | `d(2) dmin(2) scales[12] qs[128]`; 8 sub-blocks of 32 |
++
++Q4_K dequantises as `d * scale * q - dmin * min`, with the low nibbles in `qs[0..63]` and the high nibbles
++in `qs[64..127]`. The fp16→fp32 conversion is the ggml bit-twiddle, **not** textbook IEEE expansion — port
++it exactly or every value is subtly wrong.
++
++## Doing the memory arithmetic before choosing a quant
++
++Bytes moved per token, not file size, is the number that predicts speed.
++
++```
++dense model:   bytes/token ≈ file_size_bytes                     (every weight read per token)
++MoE model:     bytes/token ≈ backbone + (top_k / n_experts) × expert_bytes
++```
++
++A worked example that surprises people: in one 110 GB MoE, the 5.5 GB backbone was re-read every token
++while the 29 GB expert bank only contributed ~1.5 GB/token — so the *small* part was four times the
++traffic. The conclusion: **quantise the always-hot part first.** Dropping the backbone from 8.5 to 4.5
++bits saved 2.6 GB/token; dropping every expert from 4.5 to 2.6 saved 0.6.
++
++Then divide by measured bandwidth, not spec-sheet bandwidth:
++
++```
++ms/token ≈ bytes_per_token / (bytes_per_second achievable)
++```
++
++Measure the achievable number on the actual mount. On the same machine, one NVMe partition served
++**2.7 GB/s** cold while an `ntfs-3g` (FUSE) mount of another drive served **297 MB/s** — a 9× difference
++that looks exactly like "the model is slow" and is really "the model is on the wrong filesystem".
++
++## Serving
++
++```bash
++llama-server -m model.gguf \
++  -ngl 99 \                 # layers on GPU; a partial value is a compromise, not a mistake
++  --ctx-size 32768 \
++  -fa \                     # flash attention where supported
++  --host 127.0.0.1 --port 8080
++```
++
++- **Bind to loopback** unless something on the network genuinely needs it.
++- **`--parallel` decides your KV cache and your latency.** With `--parallel 1` there is one slot, and any
++  other request — including a tiny health probe — evicts the cached prefix of the conversation in flight.
++  Every real turn then re-prefills. This is the usual cause of "it went slow again for no reason".
++- **Check `/slots` for cache reuse**, not just `/health`:
++  `n_prompt_tokens_cache / n_prompt_tokens` is the fraction of the prompt that did not need recomputation.
++  A healthy multi-turn session sits high; 0 % every turn means something is invalidating the prefix.
++- **Prompt caching matches the longest common token prefix.** Anything inserted *near the front* of the
++  prompt (a recall block glued into the system message, a timestamp, a shuffled tool list) invalidates
++  everything after it. Put per-turn injected content at the **end of the last user message**.
++- **Reasoning models spend completion tokens before they emit anything.** A `max_tokens` that is too small
++  returns `finish_reason: length` with empty content — which looks identical to a refusal. Set a generous
++  budget (≥ 12000 for a long task), lower the reasoning effort if the runtime supports it, and **always log
++  `finish_reason`**.
++
++## Benchmarking without lying to yourself
++
++- **Warm up first.** Page cache is worth an 8× swing on the same model: one measured run went from 375 ms
++  to 47 ms per token purely from being warm. A cold number is not a rate.
++- **A/B inside one process, alternating.** Cross-process comparison lets a one-time cost (uploading
++  weights, page faults) swamp a real 10–20 % win, and it has hidden real wins.
++- **Repeated single-token runs are a best case**, not an average: the same experts fire every step. Report
++  prose generation and best-case separately.
++- **Report the floor you are at.** If `bytes/token ÷ measured bandwidth` predicts 200 ms and you measure
++  205 ms, there is nothing left to win inside that design — say so instead of continuing to tune.
++- **`perf` beats theories** where it is available (needs `kernel.perf_event_paranoid` ≤ 1). Beware that it
++  attributes time to page faults that may not cost wall clock.
++- **Measure the thing you changed.** Two builds, one variable, one run each, same warm state.
++
++## Choosing a quant for a machine
++
++1. Compute the full-resident size; if it exceeds RAM, stop treating "runs" as a yes/no question.
++2. Decide what must be resident: backbone, KV cache, and the active expert set.
++3. KV size: `2 × n_layers × n_kv_heads × head_dim × ctx × bytes_per_element`. Quantising KV to q8 costs
++   ~half and is usually free in quality; **budget it before raising context**, because context is the
++   thing that silently zeroes your headroom.
++4. Only then pick a file, and prefer the one whose *hot* part is smallest rather than whose file is
++   smallest.
++
++## Pitfalls
++
++- Reading a tensor offset relative to file start instead of the data section.
++- Assuming file size predicts speed on a Mixture-of-Experts model.
++- Loading weights from a FUSE/NTFS mount and concluding the GPU is slow.
++- Reporting a cold-start rate as throughput.
++- Trusting a filename for the architecture; parse `general.architecture`.
++- Forgetting that a second server process on the same GPU will not fail cleanly — it will take what it can
++  get and silently degrade both.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/memory-hygiene/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/memory-hygiene/SKILL.md
+--- a/resources/bundled-skills-extracted/memory-hygiene/SKILL.md
++++ b/resources/bundled-skills-extracted/memory-hygiene/SKILL.md
+@@ -0,0 +1,104 @@
++---
++name: memory-hygiene
++description: "Write memory that survives: which layer a fact belongs in, what to record, and how to reconstruct a span of work without trusting your own recall."
++version: 1.0.0
++tags: [memory, context, notes, session, continuity, journal]
++---
++
++# Memory hygiene
++
++An agent with no memory re-derives the same conclusions every session. An agent with bad memory is worse:
++it carries confident, stale claims and acts on them. The difference is not storage capacity, it is knowing
++which layer a fact belongs in and never writing a fact you did not verify.
++
++## The layers, and what each one is for
++
++| Layer | Holds | Cost of getting it wrong |
++|---|---|---|
++| **Identity / instructions** | who the agent is, standing rules, the user's preferences | every turn reads it — bloat slows everything and buries the important line |
++| **Durable facts** | stable environment facts, conventions, who the user is | repeated as fact forever; a wrong entry outlives the session that wrote it |
++| **Procedures (skills)** | how to do a recurring *kind* of task | loads only when relevant; a stale procedure executes confidently and wrongly |
++| **Verbatim store** | committed records, transcripts, decisions | nobody re-reads it wholesale — it is for reconstruction |
++| **Session history** | what happened, in what order | searchable, never injected |
++
++**Facts that apply to every session go in the durable layer. Anything learned while doing a task —
++procedures, pitfalls, corrections for a category of work — belongs in the procedure, where it loads only
++when relevant.** Putting a task lesson into the always-injected layer costs every future turn and is
++re-read as a standing instruction.
++
++## Write a fact as a fact
++
++- **Declarative, not imperative.** "The user prefers short answers" ✓. "Always answer briefly" ✗ — the
++  second is re-read later as a directive and can override what the user is asking for *now*.
++- **A correction is a fact about preferences, not a mood.** Record the preference, never the emotional
++  read that produced it.
++- **Record live state from a measurement.** A port number, a model id, an IP, a mount type — read it, then
++  write it. State copied from an earlier note is how stale configs propagate for months.
++- **Date the things that will move.** A version, a price, a running service: write when you measured it.
++- **Never write a credential into a note.** Store a path or a command that retrieves it.
++
++## What is worth keeping
++
++Keep things that are (a) expensive to rediscover, (b) stable for weeks, and (c) not already obvious from
++the environment. That is roughly: environment topology, the user's standing preferences, hard-won
++tool traps, decisions with a reason attached.
++
++Skip: task progress, completed-work logs, anything re-discoverable in one command, and anything that will
++be false by Friday. If it is a procedure, it is a skill, not a memory.
++
++## Reconstructing a span of work
++
++When asked "where were we", the order matters — use the **first source that answers, never the last**:
++
++1. **Live state on disk** — the file, the process, the unit, the git log. Authoritative.
++2. **The committed record** — decision notes, changelogs, the last handoff.
++3. **Session history** — search it by topic, then read the turns around the hit.
++4. **Your own recollection** — last resort, and labelled as such.
++
++**Digest, never dump.** A reconstruction is 10–20 lines: what was decided, what was done, what was
++measured, what is open, what is uncertain. Pasting a transcript back at someone is not a summary.
++
++**Mark what you did not re-verify — but establish reachability first.** "I did not re-run the tests" is an
++honest label. "I could not find the file" is a different claim; check the path exists before reporting on
++its contents.
++
++**Verify the mechanism, not the message.** A note saying "the service is running" is not evidence; the
++port answering is.
++
++## The append-only journal
++
++A per-turn journal — one line per action, appended, never rewritten — is the cheapest continuity
++insurance there is:
++
++```
++2026-05-02T14:03Z  START    rebuild of the parser started, 12 files
++2026-05-02T14:41Z  DONE     11 of 12 pass, one fixture missing
++2026-05-02T14:42Z  BLOCKED  needs the fixture from upstream, asked
++```
++
++- **Append only.** Rewriting history to look tidier destroys the one property that makes a journal useful.
++- **Timestamp every line from a real clock**, and never state a duration you did not compute from two
++  timestamps.
++- **Heartbeat separately from work.** "Still alive" and "still progressing" are different signals, and a
++  long job should say which one it is emitting.
++- **One line, not a paragraph.** The journal is scanned, not read.
++
++## Structure that scales
++
++- **Flat key + value beats nested.** A memory that needs parsing to read is a memory that will be misread.
++- **Every entry stands alone.** Entries get loaded out of order and out of context; one that begins "as
++  noted above" is lost.
++- **Prune by replacing, not by appending.** When a note is superseded, patch it. Two conflicting notes on
++  the same topic will eventually be read as two facts.
++- **Keep the always-loaded layer small.** If it has grown, the answer is to move detail into the
++  procedures it belongs to, not to compress it into shorthand nobody can parse.
++
++## The failure modes to watch for
++
++- **Confident recall of a thing that changed.** Check the live source before asserting.
++- **A memory that restates the instruction as a personality trait.** "User is angry" is a label; "user
++  swears as cadence and is not angry by default" is the useful version — and the first one will shape
++  every future answer wrongly.
++- **Duplicating a rule in three layers** so that updating one leaves two stale copies.
++- **Summarising the summary.** After a few rounds of "what we discussed", the record drifts from the
++  events. Go back to the source turn.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md
+--- a/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md
++++ b/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md
+@@ -0,0 +1,110 @@
++---
++name: multi-machine-offload
++description: "Put a second computer to work over SSH: offload a job, reach a service that is bound to loopback, and tell what a remote box is actually doing."
++version: 1.0.0
++tags: [ssh, offload, fleet, remote, tunnels, gpu]
++---
++
++# Working across more than one machine
++
++The value of a second box is not raw power, it is a different resource pool: the GPU that is free, the
++disk that is not full, the CPU that is not mid-build. The cost is that every assumption you make about it
++is probably stale.
++
++## Before anything: what is that box doing right now
++
++One SSH call, one answer — do not ask three questions in three round trips:
++
++```bash
++ssh "$BOX" 'hostname; uptime -p; \
++  free -g | awk "/Mem:/{print \"mem \"\$3\"/\"\$2\" GB\"}"; \
++  nvidia-smi --query-gpu=name,memory.used,memory.total,utilization.gpu --format=csv,noheader 2>/dev/null; \
++  df -h / /home 2>/dev/null | tail -2; \
++  systemctl --user list-units --type=service --state=running --no-legend | wc -l'
++```
++
++Read the numbers before assigning work. A box with the GPU already holding 19 GB is not the box for a
++20 GB model, and a box at 98 % on `/` cannot accept output.
++
++## Offloading a job
++
++```bash
++ssh "$BOX" 'cd /path/to/work && nohup ./long-job > run.log 2>&1 & echo $!'
++# later
++ssh "$BOX" 'ps -o pid,etime,pcpu,rss,cmd -p <pid>; tail -5 run.log'
++```
++
++- **Redirect everything.** An unredirected background process dies with the SSH session, and the log you
++  needed goes with it.
++- **Write to a path you can retrieve**, and print that path in the result — not a path that only exists in
++  the remote shell's cwd.
++- **Check it is progressing, not just alive**: CPU delta across two samples, log tail, output file growth.
++  A process parked in a poll loop burns no CPU and produces nothing; `wchan` and the output mtime separate
++  "working" from "spinning".
++- **Long jobs are background jobs with a real end.** Report the start, then check when asked or when it
++  finishes. Narrating each step is noise.
++
++## Reaching a service bound to loopback
++
++Most sane services bind `127.0.0.1`. That is a feature; do not change it. Tunnel to it:
++
++```bash
++ssh -N -L 8080:127.0.0.1:8080 "$BOX" &     # then talk to http://127.0.0.1:8080 locally
++curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/health
++```
++
++The tunnel is the right answer far more often than re-binding the service to `0.0.0.0`. Two caveats: pick
++a local port that is genuinely free, and remember the tunnel dies with the shell that opened it — a
++`nohup`ed tunnel is a leaked process you will later mistake for a service.
++
++**A relay is the fallback for a client that cannot tunnel** (a phone, a browser, an app with one URL
++field): a small TCP relay on the box that *can* reach the service, forwarding a port. Dumb, stateless,
++one process, and it must be documented where the client's config lives.
++
++## Two servers, one card
++
++Two processes can both start on one GPU and neither will fail cleanly. The second one gets whatever is
++left and both run degraded, which reads as "the model got slower" rather than "there are two models".
++Before blaming the code:
++
++```bash
++nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv
++```
++
++If it is a managed setup, use a **mutually exclusive group** so the manager unloads one before loading the
++other. If it is not managed, stop the one you are not using — and say that you did.
++
++## Environment differences that bite
++
++- **No session environment over SSH.** `WAYLAND_DISPLAY`, `DISPLAY`, `DBUS_SESSION_BUS_ADDRESS` and
++  `XDG_RUNTIME_DIR` are absent, so anything GUI or D-Bus fails in a way that looks like a missing binary.
++  Lift them from the live session when needed.
++- **`sudo` differs per box.** Never assume a password, a rule, or a key is the same. Test: `sudo -n true`.
++- **A different Python.** The interpreter on `PATH` may not be the one with the dependency. Say which one
++  you used: `head -1 $(which python3)`, `python3 -c 'import sys; print(sys.executable)'`.
++- **A different CPU feature set.** Code compiled `-march=native` on one box is not portable to the other —
++  and a build that runs but produces wrong numbers (rather than crashing) is the worst version of this.
++- **A different filesystem.** A FUSE/NTFS mount can be 9× slower than the local disk on the same class of
++  file. Check `findmnt -o TARGET,FSTYPE` before deciding a job is CPU-bound.
++
++## Naming and addressing
++
++- **Keep a table of which box is which**, with what each one is for (main GPU, CPU worker, training node,
++  low-power node). Ten lines, saved, beats reconstructing it from `~/.ssh/config` every session.
++- **A stale alias is a real bug.** If a host's address changed, update every reference at once — the SSH
++  config, any relay, any kernel command line, any documentation. Half-updated addressing produces failures
++  that look random.
++- **Say which machine ran the work.** A result with no provenance gets attributed to the wrong box later,
++  and the wrong box gets debugged.
++
++## Cost model, so the split is not arbitrary
++
++Put the job where the *bottleneck* is cheapest:
++
++| bottleneck | send it to |
++|---|---|
++| GPU compute or VRAM | the box with a free card |
++| RAM, page cache | the box with the most memory per byte of working set |
++| sustained disk read | the box with the fastest local filesystem — never a FUSE mount |
++| long-running CPU grind | any box, but one that will not be needed for anything else |
++| interactive latency | the box the user is actually sitting at |
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/post-media-read/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/post-media-read/SKILL.md
+--- a/resources/bundled-skills-extracted/post-media-read/SKILL.md
++++ b/resources/bundled-skills-extracted/post-media-read/SKILL.md
+@@ -0,0 +1,116 @@
++---
++name: post-media-read
++description: "Read a social post someone pasted — text, thread, and the media itself — with no account and no login wall."
++version: 1.0.0
++tags: [x, twitter, syndication, media, ocr, vision]
++---
++
++# Reading a pasted post
++
++A pasted link is a request to read it. "No content extracted" almost always means you used the wrong
++endpoint, not that the post is gone.
++
++## The one-liner
++
++For X/Twitter, the syndication endpoint answers plain HTTP with no auth, no cookies, and no browser:
++
++```bash
++ID=1234567890123456789
++curl -s "https://cdn.syndication.twimg.com/tweet-result?id=$ID&lang=en&token=0" -o /tmp/post.json
++python3 - <<'PY'
++import json
++d = json.load(open('/tmp/post.json'))
++print(d.get('user', {}).get('screen_name'), '|', d.get('created_at'))
++print(d.get('text', ''))
++for m in (d.get('mediaDetails') or []):
++    print(m.get('type'), m.get('media_url_https'))
++PY
++```
++
++The post id is the number after `/status/`. Get the handle from the same URL — it is only used for the
++alternative endpoints and for quoting the source correctly.
++
++## The syndication payload is truncated, not complete
++
++Long posts ("notes") come back cut off, with no marker saying so. When the text looks like it stops
++mid-sentence, or the account is known for long-form:
++
++```bash
++curl -s "https://api.fxtwitter.com/<handle>/status/$ID" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["tweet"]["text"])'
++```
++
++**Check the returned id matches the one you asked for** before quoting — a redirect or a stale cache
++hands back a different post, and the mistake is invisible once the text is pasted into an answer.
++
++`api.vxtwitter.com` returns 403 on the same URL; do not route through it. `oEmbed` is the third fallback
++when both of the above are unhappy — it gives the author and a short excerpt, which is enough to identify
++the post even when the body is unavailable.
++
++## The media IS the content
++
++When the post's substance is an image — a screenshot of a document, a chart, a receipt, a settings panel,
++a chart axis, a table — the text of the post is caption, and answering from it is answering from the
++caption.
++
++1. Take `media_url_https` and **append `?name=orig`**. The default URL is a downscale, and the downscale
++   is exactly where fine print, small type and axis labels die.
++2. Download it to a scratch path, then read it with the vision tool at full resolution.
++3. **Ask for the text verbatim**, not for a summary. "Transcribe every line" produces something you can
++   check; "what does this say" produces a paraphrase you cannot.
++4. For a dense crop, re-crop the region and ask again — accuracy on small type improves sharply when the
++   image is cropped to the text rather than scaled whole.
++
++Video: variants appear in either of two shapes in the payload — `video.variants[]` with
++`type`/`src` (pick `type == "video/mp4"`) or `mediaDetails[].video_info.variants[]` with
++`content_type`/`url`. Check both; a single check "finds no video" on perfectly good posts.
++
++## A post that quotes a number is a secondary source
++
++Screenshots of statistics circulate with the axis cropped, the baseline changed, or the period omitted. If
++the number matters, find the original: the agency release, the filing, the vendor's own chart. Quote the
++post and the primary source separately, and say which is which.
++
++## Posts that are gated
++
++An age-check or "sensitive content" interstitial is a **server-side withhold** for these endpoints: the
++media was never sent. Do not spend calls trying to unblur it.
++
++Diagnose it in one step: if the HTML loads and the images have `naturalWidth === 0` with zero requests to
++the site's own media endpoint in `performance.getEntriesByType('resource')`, the bytes do not exist in
++your session. The only honest options are (a) report that the media is behind a gate, or (b) fetch it with
++a session that is entitled to it, in a separate browser profile — never the user's live profile.
++
++## Threads
++
++Every payload carries a `parent` — walk it upward to reconstruct the thread instead of guessing at the
++conversation from one post:
++
++```bash
++python3 - <<'PY'
++import json, subprocess
++cur, out = "<ID>", []
++while cur:
++    d = json.loads(subprocess.run(["curl","-s",
++        f"https://cdn.syndication.twimg.com/tweet-result?id={cur}&lang=en&token=0"],
++        capture_output=True, text=True).stdout or "{}")
++    if not d.get("text"): break
++    out.append((d.get("user",{}).get("screen_name"), d["text"]))
++    cur = (d.get("parent") or {}).get("id_str")
++for who, text in reversed(out):
++    print(f"{who}: {text}\n")
++PY
++```
++
++## Searching without a browser
++
++For a feed, a keyword or an account's posts, a syndication-style timeline endpoint or a search engine
++query scoped to the domain (`site:x.com <term>`) beats driving the site: x.com itself is a JavaScript
++application that returns a shell to any plain HTTP client, and its logged-out view is deliberately
++degraded. Reading a *pasted post* is a solved problem; browsing the site is not, and does not need to be.
++
++## Verification before quoting
++
++- The id in the payload equals the id in the URL.
++- The handle equals the handle in the URL.
++- The text ends in punctuation, or you retrieved the long-form version.
++- If you read an image, you can point at where in the image the claim came from.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/terminal-email/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/terminal-email/SKILL.md
+--- a/resources/bundled-skills-extracted/terminal-email/SKILL.md
++++ b/resources/bundled-skills-extracted/terminal-email/SKILL.md
+@@ -0,0 +1,155 @@
++---
++name: terminal-email
++description: "Read, search, draft and send email from the shell over IMAP/SMTP — with the flag-order and folder-name traps that make commands appear to succeed silently."
++version: 1.0.0
++tags: [email, imap, smtp, himalaya, cli]
++---
++
++# Email from the terminal
++
++A CLI mail client (himalaya is the reference here) talks IMAP for reading and SMTP for sending, so it
++works over any provider that offers both — including ones with no API. The traps are almost all about
++folder names and argument order, and they all fail in the same quiet way: a command that looks like it
++worked and did nothing.
++
++## Check the major version before anything else
++
++```bash
++himalaya --version
++```
++
++v1 and v2 take *different flags*, and a v1 command against a v2 binary fails with a usage error that
++reads like a config problem. Write every example below against the version you actually have.
++
++## Configuration
++
++`~/.config/himalaya/config.toml` — one `[accounts.<name>]` block per mailbox:
++
++```toml
++[accounts.main]
++email = "you@example.com"
++display-name = "Your Name"
++
++backend.type = "imap"
++backend.host = "imap.example.com"
++backend.port = 993
++backend.encryption.type = "tls"
++backend.login = "you@example.com"
++backend.auth.type = "password"
++backend.auth.cmd = "pass show mail/example"     # or a keyring command — never a literal password
++
++message.send.backend.type = "smtp"
++message.send.backend.host = "smtp.example.com"
++message.send.backend.port = 465
++message.send.backend.encryption.type = "tls"
++message.send.backend.login = "you@example.com"
++message.send.backend.auth.type = "password"
++message.send.backend.auth.cmd = "pass show mail/example"
++```
++
++**Keep the secret out of the file.** An `auth.cmd` that reads a password manager or a key file is the
++only shape that survives a dotfile repo.
++
++**Folder aliases are not optional.** Servers use their own names, and the client's canonical names
++(`inbox`, `sent`, `drafts`, `trash`) silently resolve to nothing when they do not match:
++
++```toml
++folder.aliases.inbox  = "INBOX"
++folder.aliases.sent   = "[Gmail]/Sent Mail"
++folder.aliases.drafts = "[Gmail]/Drafts"
++folder.aliases.trash  = "[Gmail]/Trash"
++```
++
++Get the real names first — `himalaya folder list` — then alias every one you will touch. This is the
++single most common cause of "the message was sent but Sent is empty".
++
++## Reading
++
++```bash
++himalaya envelope list                          # newest first; a page at a time
++himalaya envelope list -f INBOX -s 20
++himalaya message read <ID>                      # by envelope id from the listing
++himalaya message export <ID> --full > msg.eml   # keep the raw message, headers included
++```
++
++**Put every option before the query string.** In v2, `envelope search` treats trailing words as the
++query; an option placed after the query is parsed as search text and the command returns a plausible,
++wrong, empty set:
++
++```bash
++himalaya envelope search --subject "invoice" --from billing@  subject invoice   # options first
++```
++
++**Gmail's sent mail is not where you think.** Depending on version and aliasing, your own outgoing mail
++is most reliably read from `[Gmail]/All Mail` or from `INBOX` (Gmail's server-side copy), not from the
++sent folder path you assumed.
++
++## Sending
++
++```bash
++# draft to a file first — this is the default for anything with consequences
++cat > /tmp/reply.eml <<'EOF'
++From: you@example.com
++To: someone@example.com
++Subject: Re: the thing
++In-Reply-To: <original-message-id@host>
++
++Body text.
++EOF
++
++himalaya message send < /tmp/reply.eml              # v2: reads a full RFC 5322 message from stdin
++himalaya template send < /tmp/reply.eml             # v1 equivalent
++```
++
++**Attachments go through a file, not a flag chain.** Build the `.eml` (base64 the part, set
++`Content-Type` and `Content-Disposition`) and pass the path. Long `--attachment` flag chains quote badly
++and fail after the send has already been committed.
++
++**Drafting is the default mode.** Writing a message to a file and showing it is a draft. Sending happens
++only when asked for explicitly — a message that leaves the machine cannot be recalled, and "I drafted it"
++and "I sent it" are not the same verb.
++
++## Verify a send from a different path
++
++A `0` exit from the send command means the SMTP transaction was accepted, not that the message is
++readable in the mailbox. Confirm it where a human would see it:
++
++```bash
++himalaya envelope list -f "[Gmail]/All Mail" | head
++```
++
++IMAP sync is not real-time: check once, then once more after a few seconds, and stop. Polling a mailbox
++a dozen times reads as broken, not thorough. If the provider's copy has not appeared but the send was
++accepted, say that — it is a sync lag, not a failure.
++
++## Reading mail as evidence
++
++When the mailbox is the source of truth for a decision (a receipt, an approval, a termination, a court
++notice):
++
++- **Export the raw message and keep it.** `--full` preserves headers, which is what makes a message
++  quotable; a rendered body loses the `Date`, the `Message-ID` and every `Received` hop.
++- **Search broadly, then narrow.** `[Gmail]/All Mail` catches things a folder-scoped search misses,
++  including mail filed by a rule you forgot existed.
++- **Quote the sender and the date, not your summary of them.**
++- **Do not assume a decision arrived by email.** Some institutions send paper or portal-only notices;
++  an empty mailbox is not a negative decision.
++
++## Debugging
++
++```bash
++RUST_LOG=debug himalaya envelope list -f INBOX 2>&1 | tail -40
++```
++
++Read the protocol trace, not the summary line. An authentication failure, a TLS failure and a folder that
++does not exist all surface as "cannot list envelopes" at the default log level, and only the trace
++separates them.
++
++## Pitfalls
++
++- **A password in `config.toml` is a leak.** Use `auth.cmd`.
++- **An unaliased folder silently resolves to nothing.** List the server's folders first.
++- **Options after the query string are parsed as query text.** Order matters in v2.
++- **A successful SMTP exit is not a readable message.** Verify from the mailbox, once.
++- **`--json` output is versioned too.** Parse defensively and print the raw value when a field is
++  missing, rather than reporting a default.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/verification-discipline/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/verification-discipline/SKILL.md
+--- a/resources/bundled-skills-extracted/verification-discipline/SKILL.md
++++ b/resources/bundled-skills-extracted/verification-discipline/SKILL.md
+@@ -0,0 +1,97 @@
++---
++name: verification-discipline
++description: "Prove the artifact works before saying it does — the false failures, the false successes, and what 'verified' is allowed to mean."
++version: 1.0.0
++tags: [testing, verification, debugging, evidence, discipline]
++---
++
++# Verification discipline
++
++A checker that reports a defect is not evidence of a defect. A green light is not evidence of a working
++service. This skill exists because both of those sentences cost real hours.
++
++## The rule that resolves most of it
++
++**When a checker disagrees with reality, suspect the checker first — and say which one you are
++doubting.**
++
++The artifact is usually fine and the instrument is broken. Before you change working code to satisfy a
++failing check, prove the check can produce a TRUE POSITIVE: feed it the exact thing it is supposed to
++detect and watch it fail for the right reason. A check that has never failed once is not a check.
++
++## False failures — patterns that have all been seen
++
++1. **A matcher that also matches a different element.** A selector meant for one component type picked
++   up two other types in the same document and reported the good one as broken. Print what matched.
++2. **A regex too narrow for the values it must accept.** Rejects leading signs, thousands separators,
++   unicode minus, or the localised decimal comma.
++3. **Comparing raw text when the artifact normalises it.** Curly quotes, collapsed whitespace, ligatures
++   — diff the two strings and print both with their ordinals.
++4. **A matcher that hits the index before the content.** Table of contents, navigation, or summary hits
++   first, so the "content" found is a link list.
++5. **A vision model asked to inspect an image invents defects** — and it invents them plausibly. A small
++   local model is the *worst* checker: it hallucinates confidently about layout, colours and text. Trust
++   vision on a contained render (a chart, a crop); verify layout programmatically (pixel sampling,
++   bounding boxes, DOM geometry) and let vision only confirm.
++6. **The verifier's own arithmetic.** Off-by-one in a crop box, a scale factor applied twice (a 2×
++   screenshot has 2× coordinates), a sample origin at the wrong corner.
++7. **The sampling band excludes the signal.** A whole-page scan of a rendered document always hits the
++   header and footer rules; the number you wanted is in the middle. Skip the furniture zones and say so.
++8. **The diagnostic prints a span without its length** — a "match" of zero characters looks identical to
++   a match.
++9. **A symbol-name check is a false negative on an optimised build.** Inlined-away functions leave no
++   symbol. Test behaviour, not names.
++10. **A test that fails after your change is not evidence your change caused it.** Stash the change, run
++    the test again, then attribute. Cheap, and it prevents a wrong root cause.
++11. **The command you ran to check is itself a checker.** A `grep` whose pattern is wrong reports zero
++    hits; a `ps` through a shell that eats the pattern matches the shell's own command line. Print the
++    command, then the result.
++12. **A parsed field that comes back `0` or missing is a parse bug until proven otherwise.** Print the
++    source's own value set before filtering on it. A vocabulary mismatch (the data says `Aye`, the filter
++    tests for `yea`) silently inverts the whole result set.
++13. **The environment cannot exercise the capability**, so the failure is not about the artifact. No
++    compositor, no display, no permission — say so instead of "the code is broken".
++
++## False successes — the ones that ship broken
++
++- **Listed is not applied.** Reading the configuration back proves the file was written, not that the
++  running process took it. Restart, then re-measure the effect.
++- **A green health check is not a working service.** A socket file is not a daemon; a `200 /health` is
++  not the feature. Exercise the real path once, end to end.
++- **A content script that *loads* is not a fix that *works*.** Confirm the observable behaviour changed.
++- **A build that compiles clean is not a compliant build.** If the standard is "no allocations", compiling
++  proves nothing — measure allocations per unit of work and report the number.
++- **A job that exits 0 has not necessarily produced anything.** Count the artifacts, open one, check it is
++  not a stub. Report the count.
++- **A test that passes in isolation may pass *because* it is in isolation.** A suite that opens its
++  fixture and asserts immediately cannot distinguish per-session from per-call state.
++
++## What "verified" is allowed to mean
++
++Write it as a claim with a receipt, not an adjective:
++
++> ✓ 58 tests passed  ·  ✗ 3 of 61 failed (names)  ·  unverified (no hardware)
++
++- **A count and a name.** "tests pass" is not a receipt; "12 passed, 0 failed" is.
++- **Name what was not verified.** An honest unverified line beats a fabricated pass. Never substitute a
++  plausible-looking result for one you could not produce.
++- **Only the thing you actually ran.** Running the real path once beats a harness that simulates it —
++  especially when the user says "go": that means run the real thing and show the log.
++- **A declared total is an assertion.** If your output says "12 of 12", the enumerable count must agree.
++  When it does not, re-fetch or count programmatically; never finalise on "go with what I have".
++
++## Make the check a gate, not a printout
++
++A verification step that reports and continues is decoration. Failure must abort the pipeline and leave
++no artifact behind — no package, no image, no commit. And the gate must run against a **fresh,
++reconstructed** input every time, not the working tree: a chain that reproduces the tree is the only
++proof that what ships is what was tested.
++
++## Procedure for a check that fails
++
++1. Re-read the check. Is it reading the artifact or a summary of the artifact?
++2. Reproduce the failure by hand, in one command, and read the raw output.
++3. Make the check fail deliberately on a known-bad input. Does it report the right reason?
++4. If the check is sound, change **one** parameter and re-test — never two.
++5. If the failure repeats with the same shape, the instrument is wrong; change class of instrument, not
++   the query, the seed, or the timing.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/voice-pipeline/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/voice-pipeline/SKILL.md
+--- a/resources/bundled-skills-extracted/voice-pipeline/SKILL.md
++++ b/resources/bundled-skills-extracted/voice-pipeline/SKILL.md
+@@ -0,0 +1,123 @@
++---
++name: voice-pipeline
++description: "Wire speech in and out of an agent that runs locally: TTS to the right sink, STT that hears a real person, and the gate problems that make a mic look open while nothing arrives."
++version: 1.0.0
++tags: [voice, tts, stt, whisper, kokoro, vad, audio, pipewire]
++---
++
++# A local voice pipeline
++
++Two independent halves that fail differently. Speech **out** fails loudly (nothing plays). Speech **in**
++fails silently (the mic is open, the recogniser returns empty strings, and everything reports healthy).
++
++## Speech out
++
++**The sink, not the file, is what people notice.** Generating a WAV that nobody hears is a zero.
++
++```bash
++# generate
++kokoro -m af_heart -o /tmp/say.wav "the line to speak"
++# play it, and be able to STOP it
++paplay /tmp/say.wav &
++```
++
++- **Name the voice explicitly.** A default that changes between releases is worse than a voice you do
++  not love. `af_heart` is the reference for a warm mid-range read.
++- **Play through the default sink**, and resolve that sink at play time — a Bluetooth headset that
++  connects mid-session moves it, and a hard-coded device name is how audio goes to a headset nobody is
++  wearing.
++- **Speech must be interruptible.** Barge-in — the moment the user starts talking, playback stops — is
++  the single feature that makes voice usable rather than a monologue. Implement it as: cancel the
++  player process on the first recognised speech frame.
++- **Keep utterances short and sentences complete.** Long generations sound like reading; 15–25 s of
++  speech at natural cadence is about one paragraph.
++- **Do not narrate the work.** Spoken output is for the answer, a real question, or a decision that is
++  needed. Never for tool calls, plans, or progress. Silence while working is correct.
++
++## Speech in
++
++### The failure that looks like a working mic
++
++A capture graph can look completely healthy — track live, no errors, no dropouts — and deliver **zero
++audio**, because the render side is suspended. On Linux/PipeWire, an idle Bluetooth or HDMI sink can
++suspend the render quantum while the capture track stays "live". The tell: frames arrive, energy is exactly
++zero forever, and nothing in the web-audio layer complains.
++
++Two defences:
++
++1. **Hold a silent render** on the current output device for the whole capture session, so the graph keeps
++   running.
++2. **Read the energy yourself** and treat a flat zero as a capture failure, not as silence from the room.
++
++### Energy gating — fixed gates, never adaptive
++
++A simple RMS gate decides when a clip starts and stops. Use **fixed thresholds**, measured on the actual
++hardware:
++
++```
++open  at RMS ≈ 450      # above this, speech has started
++close at RMS ≈ 280      # below this, keep listening a beat, then end the clip
++```
++
++**An adaptive noise floor will silently go deaf.** It converges onto whatever the loudest steady sound
++is, drifts above the voice, and then reports a healthy signal-to-noise ratio while gating out every word.
++It reads as "the microphone stopped working" and it is a maths problem, not hardware.
++
++Two more gates worth having:
++
++- **A minimum clip length** (drop < ~250 ms) and a **maximum** (force-flush at ~15 s) so a stuck gate
++  cannot hold a clip forever.
++- **A short pre-roll** (200–300 ms kept before the open threshold) so the first consonant is not clipped.
++  Word-initial fricatives are what a bad pre-roll eats, and it makes the first word of every sentence
++  unreliable.
++
++### Recognition
++
++- **Whisper-class models, locally.** `faster-whisper` with `small.en` or `medium.en` transcribes a 5 s clip
++  in roughly 2.5–3 s on a modern CPU. That is fast enough to feel live when clips are processed
++  concurrently.
++- **Do not put STT on the GPU** when the same machine is serving a model. Contention makes both slower,
++  and CPU inference on a small Whisper is already real-time enough.
++- **Vosk with a grammar built from a small word list is actively harmful.** Restricted grammars bias
++  decoding toward the listed words, so every out-of-vocabulary word becomes the nearest listed one —
++  confident, wrong, and unfixable downstream. A small Vosk model also tends to prepend a filler word
++  ("the") to everything. Prefer Whisper unless there is a specific reason.
++- **16 kHz, 16-bit, mono** is correct. Upsampling to 44.1 kHz adds bytes and no accuracy.
++- **Run transcription off the audio thread.** Ingest frames continuously; hand finished clips to a worker.
++  Blocking the capture loop on recognition drops the next clip.
++
++### The chunk protocol that keeps turns in order
++
++If capture, transcription and the chat turn are separate workers, they will reorder under load. A minimal
++protocol that holds up:
++
++```
++/chunk     push a finished audio clip
++/claim     take ownership of the next complete utterance
++/own       keep ownership while composing
++/release   hand back
++/state     what is pending, who owns what
++```
++
++The rule that matters: **a recognised utterance is not a turn until it is claimed**, and the owner must
++release it even on failure — otherwise one dropped turn locks the microphone forever.
++
++## Configuration traps
++
++- **A provider that points at nothing looks configured.** Setting `tts.provider = kokoro` without a
++  command or endpoint resolves to silence with no error. Verify the whole chain by speaking one line and
++  hearing it.
++- **Check which interpreter has the dependency.** `faster-whisper` installed in the system Python but not
++  the app's virtualenv means transcription fails inside the app while working in your shell.
++- **A local engine hot-reloads are not free.** A plugin or module reload drops state but not timers — an
++  orphaned capture handle keeps feeding the recogniser and every word comes back doubled. Stop the old
++  handle explicitly before starting a new one.
++- **Defaults matter more than features.** Ship push-to-talk; make continuous listening opt-in.
++
++## Verifying it end to end
++
++1. Speak one sentence; watch RMS rise above the open threshold and fall below the close threshold.
++2. Confirm the clip length is sane (not 40 ms, not 15 s).
++3. Confirm the transcript contains the words you said — print the raw text before any normalisation.
++4. Confirm the reply is spoken **and** that speaking over it stops it.
++5. Repeat with the output device changed (headphones → speakers) — that is where routing bugs live.
+diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/web-research/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/web-research/SKILL.md
+--- a/resources/bundled-skills-extracted/web-research/SKILL.md
++++ b/resources/bundled-skills-extracted/web-research/SKILL.md
+@@ -0,0 +1,139 @@
++---
++name: web-research
++description: "Find a fact on the web without burning an hour: curl first, the source's own endpoint second, a real browser only when the page actually needs one."
++version: 1.0.0
++tags: [search, curl, fetches, cloudflare, paywall, wayback, scraping]
++---
++
++# Web research, cheapest rung first
++
++Most "the site blocked me" failures are a transport mistake, not a bot-detection problem. Most "the
++search engine found nothing" failures are a helper that threw away the HTTP status. This skill is the
++order of attack and the traps that make an empty result look like an answer.
++
++## The order of attack
++
++1. **`curl` the exact URL.** Sub-second. Correct for APIs, JSON, feeds, plain HTML.
++2. **The source's own API or summary endpoint** — almost every site that walls its HTML serves JSON on
++   the same host. `<host>/api/v1/...`, `/graphql`, `.json`, `/feed`, `/rss`, `/sitemap.xml`.
++3. **An archive** when the live page is gone or walled (Wayback first, `archive.today` second).
++4. **A real browser in debug mode** (`--remote-debugging-port`), your own profile, read
++   `document.body.innerText`. This is the rung that passes Cloudflare, because it *is* a browser.
++5. **Never**: re-running a failed engine. A method that failed twice will fail a third time.
++
++A browser page load costs seconds per page; a curl costs under one. Do not open a browser for a page
++curl can fetch, and do not narrate each rung while the user waits.
++
++## The false negative that costs the most
++
++**A fetch helper that does not capture the HTTP status reports a wall as "0 results".**
++
++```
++curl -s "$URL"                     # returns the body whatever the status
++```
++
++A `429` or a bot-challenge page parses to zero result links and prints as *nothing found* — which
++blames the query instead of the throttle, and sends you off rephrasing. Always:
++
++```
++code=$(curl -sS -L --compressed -A "$UA" -o /tmp/page.html -w '%{http_code}' "$URL")
++case "$code" in
++  200) ... ;;
++  429) echo "429 RATE LIMITED — change transport, not query" ;;
++  000) echo "connection failure — not a missing document" ;;
++  *)   echo "HTTP $code" ;;
++esac
++```
++
++Two empty outcomes are different diagnoses:
++
++- **200 with an empty body** → wrong identifier or genuinely absent. Re-check the ID before you change
++  transport.
++- **`000`, zero bytes, or a timeout** → transport. Change the user agent, the network path, or the rung.
++
++## Endpoint table — try these before searching
++
++| You need | Go here |
++|---|---|
++| A subject summary | Wikipedia REST: `/api/rest_v1/page/summary/<Article>` |
++| One field out of a Wikipedia infobox or table | `/w/index.php?title=<Article>&action=raw`, then grep. The summary endpoint is a stub on thin articles, and `innerText` collapses tables to a caption |
++| A US statute | `law.cornell.edu/uscode/text/<title>/<section>` |
++| A US case, full text | `law.cornell.edu/supremecourt/text/<volume>/<page>` |
++| A federal rule or notice | `federalregister.gov/api/v1/documents.json?conditions[term]=...` |
++| An economic series | `fred.stlouisfed.org/graph/fredgraph.csv?id=<SERIES>` |
++| A repo's file list without cloning | `api.github.com/repos/<o>/<r>/git/trees/main?recursive=1`, then `raw.githubusercontent.com/...` |
++| Model repo sizes, shards, quants | `huggingface.co/api/models/<repo>/tree/main?recursive=true` |
++| Everything one lab released, with dates | `huggingface.co/api/models?author=<org>&sort=lastModified&direction=-1&limit=30` |
++| Is this packaged for Arch | `aur.archlinux.org/rpc/v5/info?arg[]=<pkg>` — an empty `resultcount` is a real answer |
++| Does a Flatpak exist | `flathub.org/api/v2/appstream/<app-id>` |
++| Does a game exist / has it shipped | `store.steampowered.com/api/appdetails?appids=<id>&cc=us&l=en` → `release_date` |
++| A vendor datasheet (pins, voltages) | the vendor's own `resource.…/download/…pdf` path, not the marketing page |
++| A bill's roll-call vote | `clerk.house.gov/evs/<year>/roll<NNN>.xml` |
++
++**A CDN bot-wall on HTML is not a wall on the API.** Government and news sites regularly answer
++`curl` with *Access Denied* while a JSON API on the same domain serves fine. Look for `/api/` before
++concluding a number is unavailable.
++
++**A docs site whose body is JavaScript returns framework code, not documentation.** Look for the
++plain-text alternate the platform advertises (`llms.txt`, a `?plain=1` sibling, a `.md` path, a
++`<link rel="alternate" type="text/markdown">`); if there genuinely is none, treat it as
++needs-a-browser and use the debug-mode browser rather than dumping 200 KB of bundle into context.
++
++## When the search engine itself is walled
++
++Engines wall by **volume across a session**, not only per minute — a long research session ends with
++the first query of the next batch refused. Once that is set, spacing queries out buys nothing; change
++transport.
++
++- Alternate engine, once.
++- The same engine through a local FlareSolverr, if one is running:
++  `curl -s -X POST http://127.0.0.1:8191/v1 -H 'Content-Type: application/json' -d '{"cmd":"request.get","url":"<search URL>","maxTimeout":60000}'`
++  then read `solution.response`, strip `<script>`/`<style>` **before** tag-stripping, and grep the body
++  for a string you know belongs on the real page — `status: ok` means the challenge passed, not that
++  you got content.
++- A real browser over CDP, fresh profile, offscreen. That is the rung that works when everything
++  unauthenticated fails.
++- The **primary source instead of a search engine**. For a rate, a date, a filing, a release — the
++  announcing party's own page answers curl when every front-end will not, and it is the better source
++  anyway.
++
++Report the wall in one line and move on: `curl HTTP403 → trying the archive`. That line is the
++scoreboard; without it, a loop looks like work.
++
++## Archives and provenance
++
++```
++curl -sL "https://archive.org/wayback/available?url=<URL>"        # closest snapshot + timestamp
++curl -sL "https://web.archive.org/cdx/search/cdx?url=<URL>&output=json&limit=10"
++for d in archive.ph archive.md archive.li archive.is; do … done    # archive.today rotates domains
++```
++
++A snapshot is **context, not an answer**, whenever the question is about the present. Cite it with its
++date: "as archived 2026-08-06". Never present a snapshot as the live page.
++
++**Routes that lie** — HTTP 200 with a body that is not the page:
++
++- Google Cache (dead since mid-2024) — returns a search interstitial.
++- AMP caches — a ~300-byte meta-refresh stub pointing back at the blocked URL.
++- Rate-limit bodies — several KB of HTML that passes a size check. Grep for a string you know.
++- Search clients returning **zero** hits for every query at once — that is a challenge, not an absence.
++  A real search returns a variable number of hits.
++
++## Reading the result
++
++- **Extract in the same command that fetches.** A SERP is one large document with every result in
++  inline JSON; piping it through shell filters truncates at the capture window and buries the answer.
++  Write a small Python file (never a quoted one-liner — nested quotes die and the failure reads as
++  "no matches") and parse there.
++- **Never let a fetched page reach your context whole.** You wanted three lines.
++- **A search-hit count is not a fact.** Confirm on the source page before it goes in an answer.
++- **Deliver the content in the reply, not a path to it.** If someone asks you to show text, print the
++  text. Writing it to a file and answering with the filename is a detour that makes them go fetch it.
++- **Answer in the register asked.** A question that wants one line gets one line. A riff about a
++  vendor is not a research request — the correct number of searches there is zero.
++
++## When the batch is dead
++
++Three named methods on one URL and you stop. Write what is established to disk, separate it from what
++is merely believed, name the specific record that would settle the open question, and say so. A fifth
++pass on a walled engine is not thoroughness.

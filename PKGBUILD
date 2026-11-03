@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=57
+pkgrel=59
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -181,9 +181,8 @@ source=(
   "0098-the-daemon-list-belongs-to-the-machine.patch"
   "0099-window-fits-the-screen.patch"
   "0100-handheld-windows-open-maximized.patch"
-  "0101-the-published-edition-carries-upstreams-skills.patch"
-  "0102-skills-first-on-the-tools-page.patch"
-  "0103-the-names-are-changed-on-the-way-to-the-screen.patch"
+  "0101-the-rest-of-the-library.patch"
+  "0102-the-tools-page-is-the-developer-editions-tools-page.patch"
 )
 sha256sums=(
             'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -287,9 +286,8 @@ sha256sums=(
             '50a33935039746f67040089e83b399d15d81766293810214a2b94555561aa4d7'
             '5ff934c318117cb9ca2c4a311fff25d0c995432ede55054fd681ec9e14530f1f'
             '17c52b1bd1e5d5d83e9f071c24d52198be55e12d632136dd537521e3379c51fc'
-            '42ac4c2f5cdec80f4c10ae4014b024794d4c3482252ae6e8b2c48f3c0ede98e7'
-            '7a5064772a934108de621811e59f2b8c026dcdc38ea8084a88e15be693050972'
-            '669f52fdd5d76e759a7f203aa45051f576b73d8e9df07b9c42184dc8dce75f28'
+            '44cb3a6f8acc05f8f42470bac33c22b8034f2e9ba42b7204381f46c45a080d19'
+            'eb0ecf897413ff6231f3ad1a5a31d83c071650f88d68899fb8bb5f2231b34bdf'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -635,17 +633,13 @@ prepare() {
   # Game Mode gives one application the whole display and will not decorate or enlarge it for you.
   patch -Np1 -i "${srcdir}/0100-handheld-windows-open-maximized.patch"
 
-  # Upstream's skills only. browser-driving, reverse-engineering and with are the developer edition's,
-  # and a published build is upstream's product plus platform work — not the working library.
-  patch -Np1 -i "${srcdir}/0101-the-published-edition-carries-upstreams-skills.patch"
-  # Skills first. The page is called "Tools & skills" and it opened with a wall of connection cards,
-  # which pushed both libraries below the fold — the instructions a person came here to read sat
-  # under the plumbing they did not.
-  patch -Np1 -i "${srcdir}/0102-skills-first-on-the-tools-page.patch"
-  # A published build must not put a household on screen: names are masked in the card titles, the
-  # descriptions, the search, and the reader — the reader being where a whole file used to arrive
-  # unredacted. Rendered surface only; nothing on disk is rewritten.
-  patch -Np1 -i "${srcdir}/0103-the-names-are-changed-on-the-way-to-the-screen.patch"
+  # The rest of the library: the three skills written for this edition, and the eleven scrubbed
+  # work skills from a working agent, with the manifest's owner values deciding each panel.
+  patch -Np1 -i "${srcdir}/0101-the-rest-of-the-library.patch"
+  # The tools page is the developer edition's tools page: skills first, grouped by `owner` into
+  # three libraries with a catch-all, and names masked on the way to the screen — the reader
+  # included, where a whole file used to arrive unredacted.
+  patch -Np1 -i "${srcdir}/0102-the-tools-page-is-the-developer-editions-tools-page.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

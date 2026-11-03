@@ -1,0 +1,125 @@
+The tools page is the developer edition's tools page
+====================================================
+
+Skills already come first here, but the section itself was not the same section: this edition kept its
+own two-panel split and its own blurbs, while the developer edition groups by the manifest's `owner`
+field into three libraries — what QuixiDesk ships, what the edition adds, and the agent's own Hermes
+library — with a catch-all so a skill whose owner has no panel still appears instead of vanishing.
+
+This is that section, taken across whole rather than approximated: the same owner grouping, the same
+three panels in the same order, the same blurbs. It stays honest in this edition — no skill here is
+filed `volkdude85`, because the published build does not ship the developer's working library — so the
+middle panel is empty here and fills the moment a skill carries that owner.
+
+The names are masked on the way to the screen, as before: the owner becomes "the user", everybody else
+becomes "someone". `Max` is deliberately not mapped — it is a first name and also `Max: 250`, and the
+reader redacts file bodies.
+
+---
+--- a/resources/ui/capability-workflows.js
++++ b/resources/ui/capability-workflows.js
+@@ -163,12 +163,16 @@
+       if (!Array.isArray(files) || !files.length) throw new Error("This skill’s instructions could not be loaded.");
+       return files;
+     }
+-    // Two libraries, two searches.
+-    //
+-    // QuixiDesk ships a small set of its own tools and skills. The Hermes roots are discovered by
+-    // convention, so this machine also carries the agent's whole procedural library — hundreds of
+-    // skills, named area/name. Mixing them in one list made the smaller set look like the whole
+-    // thing and buried the larger one.
++    // Dragnet. The Hermes panel lists this machine's own library, and that library is written in the
++    // first person about the person sitting in front of it — names included. Nothing is rewritten on
++    // disk; this is what the page SHOWS, so a screenshot of the app does not carry a household with it.
++    // The user themselves keep their handle (it is on the tin); everybody else loses their name.
++    const NAME_MAP = [
++      [/\bSean('s)?\b/gi, (m, possessive) => (possessive ? "the user's" : "the user")],
++      [/\b(Volk)\b/gi, "the user"],
++      [/\b(Haeligh|Belladonna|Ceili|Lillie|Michelle|Robin|Tiffany)\b/gi, "someone"],
++    ];
++    const redact = (text) => NAME_MAP.reduce((acc, [re, to]) => acc.replace(re, to), String(text ?? ""));
+     function skillArea(skill) {
+       const id = String(skill.skillId || skill.name || "");
+       const slash = id.indexOf("/");
+@@ -177,7 +181,7 @@
+     function skillList(skills, query, areas) {
+       const needle = query.trim().toLocaleLowerCase();
+       const matched = skills.filter((skill) => {
+-        const hay = `${skill.displayName || ""} ${skill.skillId || skill.name || ""} ${skill.description || ""} ${skillArea(skill)}`;
++        const hay = redact(`${skill.displayName || ""} ${skill.skillId || skill.name || ""} ${skill.description || ""} ${skillArea(skill)}`);
+         if (needle && !hay.toLocaleLowerCase().includes(needle)) return false;
+         if (areas && areas.size && !areas.has(skillArea(skill) || "misc")) return false;
+         return true;
+@@ -188,12 +192,12 @@
+       return el("article", { class: "card skill-card" },
+         el("h3", {}, skill.displayName || names[skill.name] || skill.name),
+         skillArea(skill) ? el("span", { class: "tag" }, skillArea(skill)) : null,
+-        el("p", {}, skill.description || "Instructions for a task workflow."),
++        el("p", {}, redact(skill.description) || "Instructions for a task workflow."),
+         button("Try in a new instance", async () => { const files = await readSkill(skill); await ctx.startSkill(skill, files); }, "primary"),
+         button("Read instructions", async () => {
+           const files = await readSkill(skill);
+-          dialog(skill.displayName || skill.name, files.map((file) => el("details", { open: file.path === "SKILL.md" }, el("summary", {}, file.path),
+-            el("pre", { class: "skill-file" }, file.content))));
++          dialog(redact(skill.displayName || skill.name), files.map((file) => el("details", { open: file.path === "SKILL.md" }, el("summary", {}, file.path),
++            el("pre", { class: "skill-file" }, redact(file.content)))));
+         }, "quiet"));
+     }
+     function skillPanel(title, blurb, skills) {
+@@ -224,15 +228,29 @@
+         query, results);
+     }
+     function skillsSection(skills) {
+-      const isHermes = (s) => skillArea(s) !== "";
+-      const own = skills.filter((s) => !isHermes(s));
+-      const hers = skills.filter(isHermes);
++      // Three libraries, three searches. The bundled directory holds upstream's skills AND this
++      // edition's own additions, and the engine says which is which: `owner` is `volkdude85` for what
++      // this build brings, `quixidesk` for what upstream ships, `hermes` for the agent's library.
++      // Mixing the first two made the edition's work invisible inside a stock-looking list.
++      //
++      // The catch-all matters: a skill whose owner this page does not recognise lands in the first
++      // panel instead of nowhere. An owner value added to the manifest before a panel exists for it is
++      // a filter that silently eats the skill — which is exactly what happened to With when it was
++      // briefly filed under its author instead of under the build that ships it.
++      const ownerOf = (s) => s.owner || (skillArea(s) !== "" ? "hermes" : "quixidesk");
++      const known = new Set(["quixidesk", "volkdude85", "hermes"]);
++      const own = skills.filter((s) => { const o = ownerOf(s); return o === "quixidesk" || !known.has(o); });
++      const mine = skills.filter((s) => ownerOf(s) === "volkdude85");
++      const hers = skills.filter((s) => ownerOf(s) === "hermes");
+       return el("div", { class: "skill-libraries" },
+         skillPanel("QuixiDesk tools & skills",
+-          "What ships with this app: the bundled skills plus anything in your data directory.",
++          "What QuixiDesk ships itself: the office-document skills every build has, plus With — Eric Hartford's language — in the builds that carry its compiler.",
+           own),
++        skillPanel("volkdude85 tools",
++          "What this edition adds on top: the browser and reverse-engineering skills, the field notes, and the eleven work skills taken from a real agent's library — scrubbed of anything identifying.",
++          mine),
+         skillPanel("Hermes",
+-          "Your agent's own procedural library, discovered from the Hermes profiles on this machine and grouped by area.",
++          "Hermes already maintains a large, established library of tools and procedures. This is a live tap into it — read from the Hermes profiles on this machine and grouped by area — so the agent starts from what has already been proven.",
+           hers));
+     }
+     // One search across connections, the tools inside them, and skills. Skills had a filter of their
+@@ -264,13 +282,19 @@
+     }
+     function renderTools(host) {
+       const data = ctx.getToolsData();
+-      host.replaceChildren(header("Tools & skills", "Connect services and start tasks with reusable instructions."),
++      // Skills first. This page is called "Tools & skills" and the first thing on it was a wall of
++      // connection cards, which pushed the libraries below the fold — the instructions a person came to
++      // read sat under the plumbing they did not. The order now matches the name: the three libraries
++      // (upstream's, this edition's, Hermes), then the connections that feed tools into them.
++      host.replaceChildren(header("Tools & skills", "Reusable instructions first, the connections that feed them below."),
+         toolsFilter(),
++        skillsSection(data.skills || []),
++        el("hr"),
+         el("div", { class: "row" }, el("h2", { class: "grow" }, "Connections"),
+           button("Add connection", () => connectionEditor(), "primary"), button("Advanced JSON", ctx.advancedMcpEditor, "quiet")),
+         el("p", { class: "muted" }, "Ready means initialization and tool discovery completed. Sign-in requests, failures and last-known catalogs stay visible."),
+         el("p", { id: "mcp-load-error", class: "error-text", role: "alert", hidden: !data.error }, data.error || ""),
+-        el("div", { id: "mcp-connections", class: "mcp-connections" }), el("hr"), skillsSection(data.skills || []));
++        el("div", { id: "mcp-connections", class: "mcp-connections" }));
+       ctx.updateMcpConnections(); enhanceConnections();
+     }
+ 
