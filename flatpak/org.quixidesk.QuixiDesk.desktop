@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=QuixiDesk
-Comment=Native Rust desktop workspace for AI
+Name=volkdude85's QuixiCore
+Comment=volkdude85's QuixiCore — native Rust desktop workspace for AI
 Exec=quixidesk-flatpak %U
 Icon=org.quixidesk.QuixiDesk
 Terminal=false

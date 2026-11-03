@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>org.quixidesk.QuixiDesk</id>
-  <name>QuixiDesk</name>
-  <summary>Native Rust desktop workspace for AI</summary>
+  <name>volkdude85's QuixiCore</name>
+  <summary>volkdude85's QuixiCore — native Rust desktop workspace for AI</summary>
   <metadata_license>MIT</metadata_license>
   <project_license>MIT</project_license>
   <description>
