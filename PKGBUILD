@@ -179,6 +179,7 @@ source=(
   "0095-a-published-build-chooses-nothing.patch"
   "0096-recents-grouped-by-day-like-hermes.patch"
   "0097-project-rules-beside-the-work.patch"
+  "0098-the-daemon-list-belongs-to-the-machine.patch"
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -280,6 +281,7 @@ sha256sums=(
   '916fa7dc7d33de330823a42ba741baad797dafa7005d566097fa6f936dc6f2e7'
   'e560d707eb7865a9053b4278aebba2b4964000fb3f9099b01b1c3f64a21df166'
   'ef56d907bd00803faa8efacc8b490483b6126c95040d3b6825e61efa21124995'
+  '46e634c2dfdc6a2b8eb81387324e830cad2ee58f71fb6e2f0b8929557806eb6d'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -605,6 +607,9 @@ prepare() {
 
   # No diagnosis in a published build, and the project rules sit beside the work.
   patch -Np1 -i "${srcdir}/0097-project-rules-beside-the-work.patch"
+
+  # The daemon list belongs to the machine: it comes from <data_dir>/daemons.json.
+  patch -Np1 -i "${srcdir}/0098-the-daemon-list-belongs-to-the-machine.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

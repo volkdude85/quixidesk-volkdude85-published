@@ -1,0 +1,77 @@
+The daemon list belongs to the machine, not to the program
+=========================================================
+
+The page shipped with one particular computer's services baked into it: a speech-to-text unit, a voice
+unit, an embedding index, a model server and a vision unit, each with the port that machine happened to
+use. On the machine those came from, that is a useful page. Anywhere else it is a list of somebody else's
+daemons, with somebody else's port numbers, presented as if they were yours.
+
+It reads `<data_dir>/daemons.json` now:
+
+```json
+[{"name":"Speech to text","unit":"stt.service","port":8080,"what":"dictation and transcription"}]
+```
+
+With no file, the single row is `ydotoold` — the one service this app can name without guessing, because
+input synthesis does not work without it. The page says where the list comes from, so an empty page is an
+instruction rather than a mystery.
+
+diff -ruN -x .git crates/quixi-engine/src/lib.rs crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs	2026-11-03 01:11:31.165559370 -0800
++++ b/crates/quixi-engine/src/lib.rs	2026-11-03 01:11:29.937023106 -0800
+@@ -1873,15 +1873,34 @@
+                 .is_ok()
+             };
+             let mut list: Vec<Value> = Vec::new();
+-            for (name, unit, port, what) in [
+-                ("Streaming speech", "nora-talk.service", Some(8791u16), "dictation and transcription"),
+-                ("Kokoro voice", "kokoro.service", Some(8765u16), "read aloud"),
+-                ("Embedding index", "embeddinggemma.service", Some(42666u16), "memory recall"),
+-                ("Model server", "llama-swap.service", Some(8086u16), "local models"),
+-                ("Vision", "qwen3vl.service", Some(8100u16), "looking at images"),
+-                ("Input injection", "ydotoold", None, "the agent driving mouse and keyboard"),
+-            ] {
+-                let state = if unit.is_empty() { "n/a".to_string() } else { unit_state(unit) };
++            // The list is the machine's, not the program's: it comes from <data_dir>/daemons.json —
++            //   [{"name":"Speech to text","unit":"stt.service","port":8080,"what":"dictation"}]
++            // With no file, the one row shown is ydotool's daemon, because that is the only service
++            // this app can name without guessing at somebody else's unit names and ports.
++            let mut configured: Vec<(String, String, Option<u16>, String)> = Vec::new();
++            if let Ok(text) = std::fs::read_to_string(self.data_dir.join("daemons.json")) {
++                if let Ok(rows) = serde_json::from_str::<Vec<Value>>(&text) {
++                    for row in rows {
++                        let name = row.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
++                        let unit = row.get("unit").and_then(|v| v.as_str()).unwrap_or("").to_string();
++                        let what = row.get("what").and_then(|v| v.as_str()).unwrap_or("").to_string();
++                        let port = row.get("port").and_then(|v| v.as_u64()).map(|p| p as u16);
++                        if !name.is_empty() {
++                            configured.push((name, unit, port, what));
++                        }
++                    }
++                }
++            }
++            if configured.is_empty() {
++                configured.push((
++                    "Input injection".to_string(),
++                    "ydotoold".to_string(),
++                    None,
++                    "the agent driving mouse and keyboard".to_string(),
++                ));
++            }
++            for (name, unit, port, what) in configured {
++                let state = if unit.is_empty() { "n/a".to_string() } else { unit_state(&unit) };
+                 let listening = port.map(port_open);
+                 // One decision, used by both the dot and the label. They used to be computed
+                 // separately, so a row could read "inactive" with its light on.
+diff -ruN -x .git resources/ui/app.js resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-03 01:11:31.180483693 -0800
++++ b/resources/ui/app.js	2026-11-03 01:06:43.482261318 -0800
+@@ -4404,7 +4404,7 @@
+             : null,
+         )),
+       el("p", { class: "muted small daemon-note" },
+-        "To create a daemon, open a new instance and ask — this page shows what is running, it does not write units."),
++        "Which services appear here comes from daemons.json in the app's data directory — name, unit and port. This page shows what is running; it does not write units."),
+     );
+   }
+   function schedulesPage(host) {
