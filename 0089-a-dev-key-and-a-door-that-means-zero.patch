@@ -1,0 +1,299 @@
+A dev key, and a door that means zero
+=====================================
+
+Two things at the bottom of the rail.
+
+**A key box, labelled "dev key" and nothing else.** Paste an Ollama Cloud key and that is the whole
+setup: the key is saved, the provider becomes active, the model is set to `deepseek-v4.1-flash:1017`,
+setup is marked answered, and the app opens on a new conversation. No Enter, no button — a key that
+has stopped arriving for 600 ms is a key somebody finished typing. It exists because configuring a
+build you are testing should cost one paste.
+
+**The door still resets, and now it means zero.** Clearing credentials alone left the conversations
+and the memory palace behind, so "back to onboarding" was a rehearsal rather than a reset. The button
+clears credentials, unsets the provider and model, deletes the conversations, artifacts and
+scratchpad, deletes the memory palace, and marks setup unanswered. The dialog names the palace path
+before it goes, because that is the one item somebody might not expect to lose.
+
+The engine refuses to delete a palace outside its own data directory or the home directory the
+process started with, and reports what it refused, so the door cannot reach across a filesystem.
+
+The workspace also opens on the memory palace now instead of "No folder selected" — the folder the
+assistant is supposed to remember into is a better default than none, and the label reads
+`memory-palace` rather than a placeholder.
+
+`quixi-in-container` gives the container a persistent home volume by default (`quixi-home-<name>`),
+so saved personas, the palace and the provider list survive a restart; `QUIXI_FRESH=1` asks for the
+throwaway profile that every launch rebuilds.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest14/QuixiDesk-3.6556.12/crates/quixi-engine/src/lib.rs qcur/QuixiDesk-3.6556.12/crates/quixi-engine/src/lib.rs
+--- a/crates/quixi-engine/src/lib.rs	2026-11-02 21:10:16.560961436 -0800
++++ b/crates/quixi-engine/src/lib.rs	2026-11-02 21:26:50.202683959 -0800
+@@ -1220,6 +1220,45 @@
+         quixi_proto::paths::documents_dir().join("memory-palace")
+     }
+ 
++    /// The development door: back to the state a stranger's install is in.
++    ///
++    /// Credentials always go. Conversations and the memory palace only when asked for, because a
++    /// palace is somebody's accumulated work — and even then only inside this app's data directory or
++    /// the home directory this process started with, so the door cannot reach across a filesystem and
++    /// delete a folder it was only ever told about.
++    pub fn reset_first_run(&self, clear_sessions: bool, clear_memory: bool) -> serde_json::Value {
++        let credentials = self.provider_manager.reset_first_run();
++        let mut removed: Vec<String> = Vec::new();
++        let mut refused: Vec<String> = Vec::new();
++
++        if clear_sessions {
++            for sub in ["sessions", "chats", "artifacts", "scratchpad"] {
++                let dir = self.data_dir.join(sub);
++                if dir.exists() {
++                    if std::fs::remove_dir_all(&dir).is_ok() {
++                        removed.push(dir.to_string_lossy().to_string());
++                        let _ = std::fs::create_dir_all(&dir);
++                    }
++                }
++            }
++        }
++
++        if clear_memory {
++            let palace = self.palace_root();
++            let inside_data = palace.starts_with(&self.data_dir);
++            let inside_home = palace.starts_with(quixi_proto::paths::home_dir());
++            if palace.exists() && (inside_data || inside_home) {
++                if std::fs::remove_dir_all(&palace).is_ok() {
++                    removed.push(palace.to_string_lossy().to_string());
++                }
++            } else if palace.exists() {
++                refused.push(palace.to_string_lossy().to_string());
++            }
++        }
++
++        serde_json::json!({ "ok": true, "credentials": credentials, "removed": removed, "refused": refused })
++    }
++
+     /// What the palace actually holds, for the screen that asks where to put it. Counts rather than
+     /// estimates: a person deciding where their memory lives should see the real size of it.
+     pub fn palace_info(&self) -> serde_json::Value {
+@@ -2125,7 +2164,9 @@
+             return Self::json_resp(200, &res);
+         }
+         if clean_path == "/api/quixi/first-run/reset" && method == "POST" {
+-            return Self::json_resp(200, &self.provider_manager.reset_first_run());
++            let clear_sessions = body_json.get("clearSessions").and_then(|v| v.as_bool()).unwrap_or(false);
++            let clear_memory = body_json.get("clearMemory").and_then(|v| v.as_bool()).unwrap_or(false);
++            return Self::json_resp(200, &self.reset_first_run(clear_sessions, clear_memory));
+         }
+         if clean_path == "/api/quixi/providers/complete-onboarding" {
+             let res = self.provider_manager.complete_onboarding(&body_json);
+diff -ruN '--exclude=target' '--exclude=.git' qtest14/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs qcur/QuixiDesk-3.6556.12/crates/quixi-engine/src/providers.rs
+--- a/crates/quixi-engine/src/providers.rs	2026-11-02 19:18:42.323714696 -0800
++++ b/crates/quixi-engine/src/providers.rs	2026-11-02 21:26:23.375285161 -0800
+@@ -1339,6 +1339,10 @@
+     /// can be seen the way a stranger sees it. A stranger has no keys, no active provider and no
+     /// completed flag, so this clears all three rather than only reopening the wizard — reopening
+     /// the questions while the old key is still in the store is a rehearsal, not a first run.
++    /// `clear` may name extra state to remove: `sessions`, `memory`. Credentials are always
++    /// cleared — that is the whole point of the door — but a memory palace is somebody's work, so it
++    /// only goes when the caller says so and only when it is inside this app's own data directory or
++    /// under the home directory this process was started with. Never anything outside those.
+     pub fn reset_first_run(&self) -> Value {
+         {
+             let mut st = self.state.write();
+diff -ruN '--exclude=target' '--exclude=.git' qtest14/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 20:58:35.519103246 -0800
++++ b/resources/ui/app.css	2026-11-02 21:31:43.916340369 -0800
+@@ -505,9 +505,40 @@
+ .sidebar footer .footer-rows {
+   flex: 0 0 100%;
+   display: flex;
++  /* The key box takes the whole row, so the door under it has to be allowed to wrap onto the next
++     one. Without this the button is pushed out of the rail and simply does not appear. */
++  flex-wrap: wrap;
+   margin-bottom: 2px;
+ }
++/* The dev key box: a password field that looks like what it is — a place to paste one thing. */
++.sidebar footer .dev-key-input {
++  /* Its own row, above the onboarding door, not a neighbour of it. */
++  flex: 0 0 100%;
++  width: 100%;
++  margin: 0 0 2px;
++  padding: 7px 10px;
++  border: 1px dashed var(--line);
++  border-radius: 8px;
++  background: transparent;
++  color: var(--text);
++  font-size: 11px;
++  font-family: "JetBrains Mono", ui-monospace, monospace;
++}
++.dev-key-input::placeholder { color: var(--muted); }
++.dev-key-input:focus { border-color: var(--accent); border-style: solid; outline: none; }
++.dev-key-input:disabled { opacity: 0.5; }
++
+ .sidebar footer .dev-entry {
++  /* Its own row under the key box, so the two read as a stack rather than a row of neighbours. */
++  flex: 0 0 100%;
++  justify-content: flex-start;
++  text-align: left;
++  font-size: 12px;
++  color: var(--muted);
++  border: 1px dashed color-mix(in srgb, var(--line) 80%, transparent);
++  border-radius: 8px;
++}
++.dev-entry {
+   flex: 1;
+   justify-content: flex-start;
+   text-align: left;
+diff -ruN '--exclude=target' '--exclude=.git' qtest14/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 20:58:35.519447291 -0800
++++ b/resources/ui/app.js	2026-11-02 21:33:11.060409623 -0800
+@@ -936,23 +936,90 @@
+         el(
+           "div",
+           { class: "footer-rows" },
++          // A key box that does the whole job. Paste, press Enter, and the app is configured: key
++          // saved, provider active, model chosen, setup marked done. Nothing to click after the
++          // paste, because a development helper that needs three more clicks is not a shortcut.
++          (() => {
++            const input = el("input", {
++              id: "dev-key",
++              type: "password",
++              class: "dev-key-input",
++              placeholder: "dev key",
++              "aria-label": "Development API key for Ollama Cloud",
++              autocomplete: "off",
++              spellcheck: "false",
++            });
++            let busy = false;
++            const configure = async () => {
++              const key = input.value.trim();
++              if (!key || busy) return;
++              busy = true;
++              input.disabled = true;
++              try {
++                const saved = await api("/api/quixi/providers/save", {
++                  providerId: "ollama-cloud",
++                  apiKey: key,
++                  selectedModel: "deepseek-v4.1-flash:1017",
++                  setAsActive: true,
++                });
++                if (saved && saved.error) throw new Error(saved.error);
++                const done = await api("/api/quixi/providers/complete-onboarding", {
++                  activeProvider: "ollama-cloud",
++                  activeModel: "deepseek-v4.1-flash:1017",
++                });
++                if (done && done.error) throw new Error(done.error);
++                await loadProviders();
++                input.value = "";
++                state.setupDismissed = true;
++                navigate("new");
++                toast("Ollama Cloud configured — deepseek-v4.1-flash:1017.");
++              } catch (error) {
++                toast(`Dev key failed: ${error.message}`, true);
++              } finally {
++                busy = false;
++                input.disabled = false;
++              }
++            };
++            // Paste and go: no Enter, no button. A key that has stopped arriving for half a second
++            // is a key somebody finished entering.
++            let typingTimer = null;
++            input.addEventListener("input", () => {
++              clearTimeout(typingTimer);
++              if (input.value.trim().length < 8) return;
++              typingTimer = setTimeout(configure, 600);
++            });
++            input.addEventListener("keydown", (event) => {
++              if (event.key === "Enter") {
++                event.preventDefault();
++                clearTimeout(typingTimer);
++                configure();
++              }
++            });
++            return input;
++          })(),
+           navigationButton(
+             "Onboarding (development)",
+             "spark",
+             async () => {
+               // Clears the keys as well as the questions. A first run with somebody's live API key
+               // still in the store is not a first run — it is the old install wearing a wizard.
++              const info = await rpc("Memory", "info").catch(() => null);
++              const palace = (info && (info.path || info.defaultPath)) || "";
++              // One button, and it means zero. Everything this app accumulates — credentials, the
++              // active provider and model, the conversations, and the palace — goes, and the door
++              // opens onto first run. The dialog names the palace path, because that is the one item
++              // here somebody might not expect to lose.
+               const ok = await new Promise((resolve) => {
+                 let answered = false;
+                 const dlg = dialog(
+-                  "Clear credentials and start over?",
++                  "Set everything back to zero?",
+                   el(
+                     "div",
+                     { class: "browser-chooser" },
+-                    el("p", {}, "This clears every saved API key and OAuth token, unsets the active provider and model, and marks setup unanswered. Conversations, memory and projects are not touched."),
+-                    el("p", { class: "muted" }, "It exists so this edition can be seen the way somebody downloading it would see it."),
++                    el("p", {}, "Clears every API key and OAuth token, unsets the active provider and model, deletes the conversations and artifacts, deletes the memory palace, and marks setup unanswered."),
++                    palace ? el("p", { class: "muted" }, `Memory palace: ${palace}`) : null,
+                     el("div", { class: "first-run-actions" },
+-                      button("Clear and open onboarding", async () => {
++                      button("Clear everything and open onboarding", () => {
+                         answered = true;
+                         resolve(true);
+                         dlg.close();
+@@ -965,13 +1032,21 @@
+               });
+               if (!ok) return;
+               try {
+-                await api("/api/quixi/first-run/reset", {});
++                const result = await api("/api/quixi/first-run/reset", {
++                  clearSessions: true,
++                  clearMemory: true,
++                });
+                 await loadProviders();
+                 state.setupDismissed = false;
+                 state.sessions = [];
++                palaceFolderCache = null;
+                 localStorage.removeItem("quixi.panelOpacity");
+                 navigate("onboarding");
+-                toast("Credentials cleared. This is what a fresh install looks like.");
++                const gone = (result && result.removed) || [];
++                const refused = (result && result.refused) || [];
++                toast(refused.length
++                  ? `Cleared, except ${refused.join(", ")} — it is outside this profile's home.`
++                  : `Back to zero. ${gone.length} folder${gone.length === 1 ? "" : "s"} removed.`);
+               } catch (e) {
+                 toast(`Could not reset: ${e.message}`, true);
+               }
+@@ -4886,6 +4961,18 @@
+     );
+   }
+   // The persona page: what is loaded, where the file lives, and an editor that writes it.
++  // The palace as a working folder. Read from the engine, never reconstructed from a preference that
++  // may not have been set — the default lives in one place and this asks it.
++  let palaceFolderCache = null;
++  async function palaceFolder() {
++    if (palaceFolderCache) return palaceFolderCache;
++    let info = null;
++    try { info = await rpc("Memory", "info"); } catch {}
++    const path = (info && (info.path || info.defaultPath)) || "";
++    palaceFolderCache = { path, dataDir: (info && info.dataDir) || "" };
++    return palaceFolderCache;
++  }
++
+   function personasFolder() {
+     const file = (state.persona && state.persona.path) || "~/.quixi/persona.md";
+     const cut = file.lastIndexOf("/");
+@@ -6764,7 +6851,10 @@
+         : "linux";
+     try {
+       await Promise.all([loadSessions(), loadProjects(), loadProviders()]);
+-      state.folder = ""; // A new conversation has no implicit access to the source checkout.
++      // A new conversation has no implicit access to the source checkout, but it does have the
++      // memory palace: that is where the things it is supposed to remember live, so opening on
++      // "No folder selected" made the app look like it had forgotten where its own memory is.
++      state.folder = (await palaceFolder()).path;
+       const path = decodeURIComponent(location.pathname.slice(1));
+       navigate(path || "new", null, { replace: true });
+       pollMcpInteractions();
