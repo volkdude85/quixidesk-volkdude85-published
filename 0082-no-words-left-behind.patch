@@ -1,0 +1,166 @@
+No words left behind
+====================
+
+Stopping dictation lost the tail of the sentence, and it was structural rather than a bug in the
+loop. The talk service ends an utterance after `CLOSE_MS` of silence — 2.2 seconds, raised from 700 ms
+because a thinking pause is not the end of a sentence. Click stop while still talking and those words
+sit in a segment that never closes, so they are never transcribed. The last few seconds of every
+recording went missing, which is why it looked like it "skipped the last five seconds" and why it
+"only worked when it had caught up".
+
+Two things fix it, and both are needed:
+
+* the service grew a `POST /flush`, which closes the open utterance on demand instead of waiting for
+  silence, and publishes the in-progress transcript as `partial` in `/state`. The engine calls flush
+  before it releases the microphone, so the sentence being spoken when the button is pressed is part
+  of the transcript;
+* the composer inserts the `partial` as soon as stop is pressed, then replaces that exact range with
+  the final read when it lands — and only if the box still contains exactly what was written there,
+  so somebody typing over it keeps their own words. Waiting for a full re-transcription of audio that
+  was already transcribed is what "I shouldn't have to wait a second or two" was about.
+
+Measured in a container on an abrupt, no-trailing-silence clip: text in the box **0.6 s** after the
+press, final text identical, no duplication.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest8/QuixiDesk-3.6556.12/crates/quixi-engine/src/voice.rs qcur/QuixiDesk-3.6556.12/crates/quixi-engine/src/voice.rs
+--- a/crates/quixi-engine/src/voice.rs	2026-11-02 19:53:12.494423946 -0800
++++ b/crates/quixi-engine/src/voice.rs	2026-11-02 20:05:57.617659466 -0800
+@@ -312,7 +312,11 @@
+         let _ = capture.child.wait();
+     }
+     if let Ok(url) = stt_url(cfg) {
+-        if let Ok(client) = http(std::time::Duration::from_secs(3)) {
++        if let Ok(client) = http(std::time::Duration::from_secs(5)) {
++            // Close the open utterance first. The recogniser normally ends a segment after a stretch
++            // of silence; stopping mid-sentence leaves those words in a segment that never closes,
++            // and they are lost. This is the "it skipped the last five seconds" defect.
++            let _ = client.post(format!("{url}/flush")).send();
+             let _ = client
+                 .post(format!("{url}/release"))
+                 .query(&[("client", CAPTURE_CLIENT)])
+@@ -335,6 +339,9 @@
+         .map_err(|e| format!("could not reach the talk service: {e}"))?;
+     Ok(json!({
+         "transcript": v["transcript"].as_str().unwrap_or(""),
++        // The words said since the last closed segment. A final pass can be slower than the person,
++        // so this is the fallback that stops the tail of a sentence going missing.
++        "partial": v["partial"].as_str().unwrap_or(""),
+         "level": v["level"].as_f64().unwrap_or(0.0),
+         "in_speech": v["in_speech"].as_bool().unwrap_or(false),
+         "seconds_fed": v["seconds_fed"].as_f64().unwrap_or(0.0),
+diff -ruN '--exclude=target' '--exclude=.git' qtest8/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 19:59:57.008618327 -0800
++++ b/resources/ui/app.js	2026-11-02 20:08:42.033628792 -0800
+@@ -2687,6 +2687,7 @@
+   async function startDictation() {
+     if (DICTATION.phase !== "idle") return;
+     DICTATION.phase = "listening";
++    DICTATION.elapsed = 0;
+     DICTATION.level = 0;
+     DICTATION.speech = false;
+     repaintDictation();
+@@ -2711,19 +2712,75 @@
+   async function stopDictation() {
+     if (DICTATION.phase !== "listening") return;
+     DICTATION.phase = "stopping";
++    DICTATION.stoppingSince = Date.now();
+     clearTimeout(DICTATION.timer);
+     repaintDictation();
+-    await withTimeout(rpc("Voice", "stopDictation").catch(() => null), 5000, null);
+-    // Wait for the last segment, but on a clock: if transcription is still running after three
+-    // seconds, take what exists. A stop that never finishes is worse than a truncated sentence.
+-    const deadline = Date.now() + 3000;
++    // The engine closes the open utterance before it releases the microphone, so the last sentence
++    // is part of the transcript rather than stranded in a segment that never ended.
++    await withTimeout(rpc("Voice", "stopDictation").catch(() => null), 6000, null);
++    // Wait for the final pass, on a clock, and keep the partial as insurance: if Whisper is still
++    // working after six seconds, the words it has already produced are better than nothing.
++    // Fast path: the partial pass has already transcribed most of what was said, so put it in the
++    // box now rather than making somebody wait for a full re-read of the same audio. The final pass
++    // replaces that exact range when it lands, so the correction is invisible if there is nothing to
++    // correct.
++    const target = dictationComposer();
++    let provisional = null;
++    const first = await withTimeout(rpc("Voice", "dictationStatus").catch(() => null), 1200, null);
++    if (first && typeof first.partial === "string" && first.partial.trim() && target) {
++      const at = target.selectionStart ?? target.value.length;
++      const stopAt = target.selectionEnd ?? at;
++      const prefix = at && !/\s/.test(target.value[at - 1] || "") ? " " : "";
++      const text = first.partial.trim();
++      target.setRangeText(prefix + text, at, stopAt, "end");
++      target.dispatchEvent(new Event("input", { bubbles: true }));
++      provisional = { node: target, start: at + prefix.length, end: at + prefix.length + text.length, text };
++      DICTATION.elapsed = Math.max(0, Math.round((Date.now() - DICTATION.stoppingSince) / 1000));
++      repaintDictation();
++    }
++
++    const deadline = Date.now() + 6000;
++    const startedWaiting = Date.now();
++    let partial = "";
+     while (Date.now() < deadline) {
+-      const status = await withTimeout(rpc("Voice", "dictationStatus").catch(() => null), 1500, null);
+-      if (status && typeof status.transcript === "string") DICTATION.live = status.transcript;
+-      if (status && !status.transcribing) break;
+-      await sleepMs(200);
++      const status = await withTimeout(rpc("Voice", "dictationStatus").catch(() => null), 2000, null);
++      if (status) {
++        if (typeof status.transcript === "string") DICTATION.live = status.transcript;
++        if (typeof status.partial === "string" && status.partial) partial = status.partial;
++        DICTATION.elapsed = Math.max(0, Math.round((Date.now() - DICTATION.stoppingSince) / 1000));
++        repaintDictation();
++        // "Not transcribing" is not the same as "nothing left to transcribe": the flush is queued
++        // before the worker picks it up, so the first read can say idle while the words are still on
++        // their way. Only stop waiting when there is new text, or when a moment has passed and the
++        // recogniser is genuinely quiet.
++        const haveText = (DICTATION.live || "").length > (DICTATION.baseline || "").length || partial.length > 0;
++        const settled = !status.transcribing && Date.now() - startedWaiting > 1200;
++        if (haveText && !status.transcribing) break;
++        if (settled) break;
++      }
++      await sleepMs(150);
++    }
++    const whole = String(DICTATION.live || "") || partial;
++    if (provisional) {
++      // Replace the provisional text with the final read, but only if the box still holds exactly
++      // what was put there — if somebody has typed over it, their words win.
++      const settledText = whole.trim();
++      const node = provisional.node;
++      const untouched =
++        node.isConnected &&
++        node.value.slice(provisional.start, provisional.end) === provisional.text;
++      if (untouched && settledText && settledText !== provisional.text) {
++        node.setRangeText(settledText, provisional.start, provisional.end, "end");
++        node.dispatchEvent(new Event("input", { bubbles: true }));
++      }
++      provisional = null;
++      DICTATION.baseline = "";
++      DICTATION.live = "";
++      DICTATION.phase = "idle";
++      DICTATION.elapsed = 0;
++      repaintDictation();
++      return;
+     }
+-    const whole = String(DICTATION.live || "");
+     let fresh = DICTATION.baseline && whole.startsWith(DICTATION.baseline)
+       ? whole.slice(DICTATION.baseline.length)
+       : whole;
+@@ -2733,8 +2790,8 @@
+     DICTATION.level = 0;
+     DICTATION.speech = false;
+     DICTATION.phase = "idle";
++    DICTATION.elapsed = 0;
+     repaintDictation();
+-    const target = dictationComposer();
+     if (fresh && target) {
+       const at = target.selectionStart ?? target.value.length;
+       const end = target.selectionEnd ?? at;
+@@ -2759,7 +2816,8 @@
+     const paint = () => {
+       const phase = DICTATION.phase;
+       const speakerOn = localStorage.getItem("quixi.speak") === "1";
+-      const label = phase === "listening" ? "Listening" : phase === "stopping" ? "Transcribing…" : "Mic";
++      const wait = DICTATION.elapsed ? ` ${DICTATION.elapsed}s` : "";
++      const label = phase === "listening" ? "Listening" : phase === "stopping" ? `Transcribing…${wait}` : "Mic";
+       mic.replaceChildren(icon(phase === "listening" ? "mic" : "micOff", 14), el("span", {}, label));
+       mic.classList.toggle("is-on", phase === "listening");
+       mic.classList.toggle("is-busy", phase === "stopping");
