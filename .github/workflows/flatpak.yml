@@ -24,6 +24,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runner image carries toolchains this build never touches, and the GNOME SDK plus the Rust
+      # extension need more room than the default free space leaves. 894 MB was the difference between
+      # a build and a failed dependency install.
+      - name: Free disk space
+        run: |
+          set -e
+          for d in /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache /usr/local/share/powershell; do
+            [ -d "$d" ] && rm -rf "$d" || true
+          done
+          df -h / | tail -1
+
       # The manifest sources the application tree, and a checkout of this repository does not contain one:
       # the repository carries the patch series, so this turns the series into a tree. Same order as
       # prepare(), because that order is what ships.
