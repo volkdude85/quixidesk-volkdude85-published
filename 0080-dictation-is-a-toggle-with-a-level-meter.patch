@@ -1,0 +1,265 @@
+Dictation is a toggle, with a level meter
+=========================================
+
+The old control streamed text into the draft as Whisper finished each segment, on its own schedule.
+To the person holding the microphone that is indistinguishable from a timer: words appear, stop,
+appear again, while they are still deciding what to say, and the text they are about to edit moves
+under them half a sentence at a time.
+
+Now it is a switch. Press once: the microphone opens, the button says Listening, and a small meter
+beside it shows the input level so there is visible evidence of sound in the room — a light that says
+"on" whether or not the microphone is in the room is not an indicator. Press again: capture stops,
+the engine waits for the last segment to finish rather than cutting the sentence off, and the whole
+thing lands in the box at once, once.
+
+Only the text produced during that press is inserted: the transcript at the moment of starting is
+kept as a baseline and subtracted, so a previous dictation is not duplicated into the draft.
+
+`Voice.dictationStatus` is the new call behind the meter — transcript, level, whether the service
+believes it is hearing speech, and whether it is still transcribing. The engine's `/state` was always
+publishing that; nothing was reading it.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest6/QuixiDesk-3.6556.12/crates/quixi-engine/src/voice.rs qcur/QuixiDesk-3.6556.12/crates/quixi-engine/src/voice.rs
+--- a/crates/quixi-engine/src/voice.rs	2026-11-02 19:46:42.588662626 -0800
++++ b/crates/quixi-engine/src/voice.rs	2026-11-02 19:49:13.681108079 -0800
+@@ -322,6 +322,27 @@
+     Ok("stopped".into())
+ }
+ 
++/// What the talk service is hearing right now: the live transcript, the input level, and whether it
++/// currently believes it is looking at speech. The level is the thing a person needs — without it a
++/// dictation button is a light that says "on" whether or not the microphone is in the room.
++pub fn progress(cfg: &VoiceConfig) -> Result<Value, String> {
++    let url = stt_url(cfg)?;
++    let client = http(std::time::Duration::from_secs(4))?;
++    let v: Value = client
++        .get(format!("{url}/state"))
++        .send()
++        .and_then(|r| r.json::<Value>())
++        .map_err(|e| format!("could not reach the talk service: {e}"))?;
++    Ok(json!({
++        "transcript": v["transcript"].as_str().unwrap_or(""),
++        "level": v["level"].as_f64().unwrap_or(0.0),
++        "in_speech": v["in_speech"].as_bool().unwrap_or(false),
++        "seconds_fed": v["seconds_fed"].as_f64().unwrap_or(0.0),
++        "chunks": v["chunks"].as_u64().unwrap_or(0),
++        "transcribing": v["transcribing"].as_bool().unwrap_or(false),
++    }))
++}
++
+ /// Whether the microphone is open right now.
+ pub fn capturing() -> bool {
+     capture_cell().lock().map(|c| c.is_some()).unwrap_or(false)
+diff -ruN '--exclude=target' '--exclude=.git' qtest6/QuixiDesk-3.6556.12/crates/quixi-ipc/src/lib.rs qcur/QuixiDesk-3.6556.12/crates/quixi-ipc/src/lib.rs
+--- a/crates/quixi-ipc/src/lib.rs	2026-11-02 19:46:42.588998997 -0800
++++ b/crates/quixi-ipc/src/lib.rs	2026-11-02 19:49:13.682121440 -0800
+@@ -740,6 +740,12 @@
+                 }
+             }
+             ("Voice", "dictating") => json!({ "capturing": quixi_engine::voice::capturing() }),
++            ("Voice", "dictationStatus") => {
++                let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
++                let mut out = quixi_engine::voice::progress(&cfg).unwrap_or_else(|error| json!({ "error": error }));
++                out["capturing"] = json!(quixi_engine::voice::capturing());
++                out
++            }
+             ("Voice", "getTranscript") => {
+                 let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
+                 match quixi_engine::voice::transcript(&cfg) {
+diff -ruN '--exclude=target' '--exclude=.git' qtest6/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 19:31:50.399697477 -0800
++++ b/resources/ui/app.css	2026-11-02 19:49:41.147997066 -0800
+@@ -840,6 +840,28 @@
+   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+   background: color-mix(in srgb, var(--accent) 12%, transparent);
+ }
++/* A level meter while the microphone is open. Without it the button is a light that says "on"
++   whether or not the microphone can hear anything, which is the complaint it exists to answer. */
++.mic-meter {
++  display: inline-block;
++  width: 34px;
++  height: 5px;
++  border-radius: 3px;
++  background: color-mix(in srgb, var(--muted) 30%, transparent);
++  overflow: hidden;
++  vertical-align: middle;
++}
++.mic-meter[hidden] { display: none; }
++.mic-meter i {
++  display: block;
++  height: 100%;
++  width: 2%;
++  border-radius: 3px;
++  background: var(--muted);
++  transition: width 90ms linear, background 120ms linear;
++}
++.mic-meter.is-speech i { background: var(--accent); }
++
+ .conversation-chip {
+   font-size: 9px;
+   letter-spacing: 0.12em;
+diff -ruN '--exclude=target' '--exclude=.git' qtest6/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 19:46:42.589407826 -0800
++++ b/resources/ui/app.js	2026-11-02 19:49:35.706575520 -0800
+@@ -2646,28 +2646,35 @@
+   }
+ 
+   // --- Mic and Speaker, as two switches ---------------------------------------
+-  // Device choice lives in Settings → Voice, where the input and output lists already are. Two
+-  // dropdowns in the composer repeated that list in a worse place and made the toolbar look like a
+-  // control panel; what belongs next to the message is a switch. Both on is a conversation, and it
+-  // says so.
++  // Mic is press-to-start, press-to-stop: while it is on it shows the input level so you can see the
++  // microphone is in the room, and it puts nothing in the box until you stop. Streaming words into a
++  // draft while somebody is still thinking is worse than useless — it moves the text under them.
++  const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+   function voiceControls(ta) {
+     const bar = el("div", { class: "voice-controls" });
+-    const dictation = capabilityUI.dictationControl(ta);
+-    dictation.hidden = true;
+-    dictation.setAttribute("aria-hidden", "true");
+-    bar.append(dictation);
+-
+     const chip = el("span", { class: "conversation-chip", hidden: true }, "Conversation");
++    const meterFill = el("i");
++    const meter = el("span", { class: "mic-meter", title: "Input level" }, meterFill);
+     const mic = el("button", { class: "device-button", type: "button", "aria-pressed": "false" });
+     const speaker = el("button", { class: "device-button", type: "button", "aria-pressed": "false" });
+ 
++    let collecting = false;
++    let timer = null;
++    let baseline = "";
++    let live = "";
++    let lastLevel = 0;
++    let lastSpeech = false;
++
+     const paint = () => {
+-      const micOn = localStorage.getItem("quixi.micOn") === "1";
++      const micOn = collecting;
+       const speakerOn = localStorage.getItem("quixi.speak") === "1";
+-      mic.replaceChildren(icon("mic", 14), el("span", {}, micOn ? "Listening" : "Mic"));
++      mic.replaceChildren(icon(micOn ? "mic" : "micOff", 14), el("span", {}, micOn ? "Listening" : "Mic"));
+       mic.classList.toggle("is-on", micOn);
+       mic.setAttribute("aria-pressed", micOn ? "true" : "false");
+-      mic.title = micOn ? "Microphone is open — click to stop" : "Dictate into the prompt";
++      mic.title = micOn ? "Recording — click to stop and put it in the box" : "Dictate: click to start, click again to stop";
++      meter.hidden = !micOn;
++      meter.classList.toggle("is-speech", lastSpeech);
++      meterFill.style.width = `${Math.max(2, Math.min(100, lastLevel))}%`;
+       speaker.replaceChildren(icon(speakerOn ? "speaker" : "speakerOff", 14), el("span", {}, speakerOn ? "Speaking" : "Speaker"));
+       speaker.classList.toggle("is-on", speakerOn);
+       speaker.setAttribute("aria-pressed", speakerOn ? "true" : "false");
+@@ -2675,34 +2682,79 @@
+       chip.hidden = !(micOn && speakerOn);
+     };
+ 
+-    mic.addEventListener("click", async () => {
+-      const on = localStorage.getItem("quixi.micOn") === "1";
+-      localStorage.setItem("quixi.micOn", on ? "0" : "1");
+-      if (on) {
+-        // Stop polling first, then close the microphone: the last poll should read the final words
+-        // rather than a stream that has already been released.
+-        dictation.click();
+-        try { await rpc("Voice", "stopDictation"); } catch {}
+-      } else {
+-        // Open the microphone in the engine before polling, so the first words are captured while
+-        // the transcript is still empty.
++    const insertText = (spoken) => {
++      const at = ta.selectionStart ?? ta.value.length;
++      const end = ta.selectionEnd ?? at;
++      const prefix = at && !/\s/.test(ta.value[at - 1] || "") ? " " : "";
++      const suffix = end < ta.value.length && !/\s/.test(ta.value[end] || "") ? " " : "";
++      ta.setRangeText(prefix + spoken + suffix, at, end, "end");
++      ta.dispatchEvent(new Event("input", { bubbles: true }));
++      ta.focus();
++    };
++
++    const poll = async () => {
++      if (!collecting) return;
++      try {
++        const status = await rpc("Voice", "dictationStatus");
++        lastLevel = Number(status && status.level) || 0;
++        lastSpeech = Boolean(status && status.in_speech);
++        if (status && typeof status.transcript === "string") live = status.transcript;
++        paint();
++      } catch {}
++      if (collecting) timer = setTimeout(poll, 250);
++    };
++
++    const startDictation = async () => {
++      let opened = null;
++      try {
++        opened = await rpc("Voice", "startDictation");
++      } catch (error) {
++        toast(`The microphone did not open: ${error.message}`, true);
++        return;
++      }
++      if (opened && opened.ok === false) {
++        toast(`The microphone did not open: ${opened.error}`, true);
++        return;
++      }
++      try {
++        const before = await rpc("Voice", "getTranscript");
++        baseline = (before && before.transcript) || "";
++      } catch { baseline = ""; }
++      live = baseline;
++      collecting = true;
++      lastLevel = 0;
++      lastSpeech = false;
++      paint();
++      poll();
++    };
++
++    const stopDictation = async () => {
++      collecting = false;
++      clearTimeout(timer);
++      try { await rpc("Voice", "stopDictation"); } catch {}
++      // Whisper needs a moment on the last segment; wait for it rather than cutting the sentence off.
++      for (let attempt = 0; attempt < 20; attempt += 1) {
++        await sleepMs(250);
+         try {
+-          const opened = await rpc("Voice", "startDictation");
+-          if (opened && opened.ok === false) {
+-            toast(`The microphone did not open: ${opened.error}`, true);
+-            localStorage.setItem("quixi.micOn", "0");
+-            paint();
+-            return;
+-          }
+-        } catch (error) {
+-          toast(`The microphone did not open: ${error.message}`, true);
+-          localStorage.setItem("quixi.micOn", "0");
+-          paint();
+-          return;
+-        }
+-        dictation.click();
++          const status = await rpc("Voice", "dictationStatus");
++          if (status && typeof status.transcript === "string") live = status.transcript;
++          if (status && !status.transcribing) break;
++        } catch { break; }
+       }
++      const whole = String(live || "");
++      let fresh = baseline && whole.startsWith(baseline) ? whole.slice(baseline.length) : whole;
++      fresh = fresh.trim();
++      baseline = "";
++      live = "";
++      lastLevel = 0;
++      lastSpeech = false;
+       paint();
++      if (fresh) insertText(fresh);
++    };
++
++    mic.addEventListener("click", () => {
++      if (collecting) stopDictation();
++      else startDictation();
+     });
+     speaker.addEventListener("click", () => {
+       const on = localStorage.getItem("quixi.speak") === "1";
+@@ -2711,7 +2763,7 @@
+       paint();
+     });
+ 
+-    bar.append(mic, chip, speaker);
++    bar.append(mic, meter, chip, speaker);
+     paint();
+     return bar;
+   }

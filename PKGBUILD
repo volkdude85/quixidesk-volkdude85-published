@@ -161,6 +161,7 @@ source=(
   0077-mic-and-speaker-are-switches.patch
   0078-a-key-where-the-question-is-asked.patch
   0079-the-microphone-is-actually-opened.patch
+  0080-dictation-is-a-toggle-with-a-level-meter.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -244,6 +245,7 @@ sha256sums=(
   'a90f53ac3466de75c67a1be0b36bc0725d60ae78c2059e0e9d1a0cf248de8f17'
   'ac07c9dfabf0978e0317d54b89dc7f163ec0b1321d9920fc225e6e834257b2e2'
   '02d660759bf16ea5d25271f574460d4b93f9133f96d573e0fb9f825738df5e3b'
+  'f1f3221f79c6a42f4f8310a0b8fe5c90e2e6a5accb20ba65dbe2580726393325'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -515,6 +517,9 @@ prepare() {
 
   # Dictation opens the microphone instead of reading a transcript somebody else produced.
   patch -Np1 -i "${srcdir}/0079-the-microphone-is-actually-opened.patch"
+
+  # Dictation is press-to-start, press-to-stop, with a level meter while it is open.
+  patch -Np1 -i "${srcdir}/0080-dictation-is-a-toggle-with-a-level-meter.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
