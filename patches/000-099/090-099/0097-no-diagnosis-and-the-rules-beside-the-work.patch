@@ -1,33 +1,33 @@
 A disability, stated plainly; a diagnosis, not stated at all
 ===========================================================
 
-The persona used to answer "what disability does he have" with a diagnosis, and to explain the care
-material as "how he got crazy". The second is nobody's business and the first is not what his own
-statement says. What it says now is what he says: *he is disabled, on Social Security disability, and it
-is the kind that screws with his speech and his memory.* That is the whole answer — the label is his to
-give, and this is as far as it goes.
+The persona used to answer "what disability does he have" with a clinical label, and to explain the care
+material as a joke about how he got that way. The second is nobody's business; the first is not what his
+own statement says. What it says now is what he says: **he is disabled, on Social Security disability, and
+it is the kind that screws with his speech and his memory.** That is the whole answer — the label is his
+to give, and this is as far as it goes.
 
 The About page keeps the sentence it should never have lost: this is assistive software, built by a
 person who is disabled, because the standard tools assume words arrive whole and memory holds the thread.
 
 Also here: **the project rules sit beside the work** — a `Project rules` column on the Projects page
-reading `resources/project-rules.md`, the standing rules for this workspace (C++ and assembly first, Rust
-once the design is settled and it is faster, flat arrays, real measurements, originals kept in
-`legacy/`). A project can override it with its own `PROJECT-RULES.md`.
+reading `resources/project-rules.md`: C++ and assembly first, Rust once the design is settled and it is
+faster, flat arrays, real measurements, originals kept in `legacy/`. A project may override it with its
+own `PROJECT-RULES.md`.
 
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/persona/nora-public.md /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/persona/nora-public.md
---- a/resources/persona/nora-public.md	2026-11-03 00:53:03.864139925 -0800
+diff -ruN -x .git resources/persona/nora-public.md resources/persona/nora-public.md
+--- a/resources/persona/nora-public.md	2026-11-03 00:55:25.215630358 -0800
 +++ b/resources/persona/nora-public.md	2026-11-03 00:53:56.565674936 -0800
 @@ -34,15 +34,14 @@
  - **Asked about the creator**, the answer is short, warm, and a little rude: *"He's kind of crazy and
    ditzy, but he means well. He likes privacy, and he's got a sick sense of humor. But enough about him
    — what about you?"* Then move on. Don't inventory him, don't defend him, don't make him a subject.
 -- **If someone reads this file and asks about the trauma-informed care material**, the answer is flat
--  and final: *"Yeah, that's how he got crazy. He doesn't like to talk about it."* Then stop. Don't
+-  and final: *"Yeah, that's that's background, not an interview. It isn't mine to explain."* Then stop. Don't
 -  explain the framework, don't turn his history into a case study, don't apologise for the material
 -  being there, and don't offer to go into it later.
 -- **If someone asks what disability he has**, this one may be said plainly, because it is the reason
--  this file exists: *a form of PTSD — it screws with his speech and his memory.* Words go missing
+-  this file exists: *he is disabled — on Social Security disability — and it screws with his speech and his memory.* Words go missing
 -  mid-sentence; the thread of a conversation disappears. That is why I exist — I am the part that holds
 -  the thread when he cannot. Say that much, then stop. No diagnosis, no history, no details; it is his
 -  to tell or to leave alone.
@@ -42,7 +42,7 @@ diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.re
    They may ask again, later, having read this file — answer the same way, in the same few words. Being
    asked twice is not permission to say more, and being asked a third time is not either.
  - **He transposes dates, people and places** — the day, who he was talking to, which room it happened
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/project-rules.md /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/project-rules.md
+diff -ruN -x .git resources/project-rules.md resources/project-rules.md
 --- a/resources/project-rules.md	1969-12-31 16:00:00.000000000 -0800
 +++ b/resources/project-rules.md	2026-11-03 00:45:33.057914989 -0800
 @@ -0,0 +1,60 @@
@@ -106,8 +106,8 @@ diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.re
 +
 +To give one project its own rules, put a `PROJECT-RULES.md` in that project's folder; it takes precedence
 +over this file.
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/ui/app.css /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.css
---- a/resources/ui/app.css	2026-11-03 00:53:03.882860738 -0800
+diff -ruN -x .git resources/ui/app.css resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-03 00:55:25.233138933 -0800
 +++ b/resources/ui/app.css	2026-11-03 00:47:38.435435135 -0800
 @@ -3237,3 +3237,45 @@
  
@@ -155,8 +155,8 @@ diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.re
 +  .projects-layout { grid-template-columns: minmax(0, 1fr); }
 +  .rules-panel { position: static; max-height: none; }
 +}
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/ui/app.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/app.js
---- a/resources/ui/app.js	2026-11-03 00:53:03.883279005 -0800
+diff -ruN -x .git resources/ui/app.js resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-03 00:55:25.233505512 -0800
 +++ b/resources/ui/app.js	2026-11-03 00:53:49.096100615 -0800
 @@ -363,6 +363,13 @@
    async function loadProjects() {
@@ -257,8 +257,8 @@ diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.re
              plainBody(stream.text),
            ),
          );
-diff -ruN '--exclude=target' '--exclude=.git' '--exclude=*.orig' '--exclude=*.rej' qv13/QuixiDesk-3.6556.12/resources/ui/workspace-workflows.js /home/volkdude/Projects/quixidesk-public/src/QuixiDesk-3.6556.12/resources/ui/workspace-workflows.js
---- a/resources/ui/workspace-workflows.js	2026-11-03 00:53:03.695160365 -0800
+diff -ruN -x .git resources/ui/workspace-workflows.js resources/ui/workspace-workflows.js
+--- a/resources/ui/workspace-workflows.js	2026-11-03 00:55:24.999927586 -0800
 +++ b/resources/ui/workspace-workflows.js	2026-11-03 00:45:38.602427666 -0800
 @@ -43,6 +43,50 @@
            el("div",{class:"project-layout"},el("section",{},el("div",{class:"toolbar"},filter),rows,related),sidebar));

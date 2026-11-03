@@ -10,7 +10,7 @@ the two that decide what the app is.
 companion on your machine, one user, memory you own), what we are aiming for (software that treats the
 person in front of it as the authority on their own life, with a persona that is a file and a memory
 that is a folder), and — before anything else gets configured — **that this is assistive software**.
-The person it was built for lives with C-PTSD; words go missing mid-sentence and the thread of a
+The person it was built for is disabled; words go missing mid-sentence and the thread of a
 conversation disappears. Nora exists to hold that thread. Under the ADA that is not a disclaimer
 attached to the product, it is the point of an effective communication aid.
 
@@ -111,7 +111,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
 +      el(
 +        "p",
 +        {},
-+        "This is assistive software. The person it was built for lives with C-PTSD; words go missing mid-sentence and the thread of a conversation disappears. Nora exists to hold that thread — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
++        "This is assistive software. The person it was built for is disabled; words go missing mid-sentence and the thread of a conversation disappears. Nora exists to hold that thread — to remember what was said, to keep the record straight when memory is not, and to do it without making anyone feel managed. Under the ADA that is the point of an effective communication aid: it has to work for the person using it, in the form that person needs.",
 +      ),
 +    );
 +
