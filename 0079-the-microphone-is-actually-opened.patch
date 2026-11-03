@@ -1,0 +1,239 @@
+The microphone is actually opened
+=================================
+
+Dictation read a transcript that somebody else was producing. The talk service does not open the
+microphone — it transcribes what it is fed, and it keeps one owner at a time — so the button said
+Listening while nothing was ever captured, and the transcript stayed empty until some other tool
+happened to be recording. That reads exactly like "speech is broken", and it was not the recogniser.
+
+The engine now owns the microphone for as long as the switch is on: claim the recognizer, run
+`parecord --raw --format=s16le --rate 16000 --channels=1 --latency-msec=100`, post each 100 ms block
+to `/chunk`, and release on stop. Two details that cost a round trip each:
+
+* the talk service reads the owner name from the **JSON body** of `/claim` and from the **query** of
+  `/chunk`. Sending it in the wrong place claims the microphone as `anon` and then has every chunk
+  refused as somebody else's — a capture loop that runs and delivers nothing;
+* claim before the microphone opens. A chunk that arrives first is refused, and the first chunk of a
+  sentence is the one with the first word in it.
+
+`Voice.startDictation`, `Voice.stopDictation` and `Voice.dictating` are the new IPC calls; the Mic
+switch in the composer drives them, and reports the engine's own error if the microphone will not
+open instead of flipping to Listening and lying.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest5/QuixiDesk-3.6556.12/crates/quixi-engine/src/voice.rs qcur/QuixiDesk-3.6556.12/crates/quixi-engine/src/voice.rs
+--- a/crates/quixi-engine/src/voice.rs	2026-11-02 19:13:55.072042766 -0800
++++ b/crates/quixi-engine/src/voice.rs	2026-11-02 19:44:53.743007124 -0800
+@@ -19,8 +19,11 @@
+ //!   consumer is released; the talk backend handles that, and this module never stops it to start it.
+ 
+ use std::fs;
++use std::io::Read;
+ use std::path::Path;
+-use std::process::Command;
++use std::process::{Child, Command, Stdio};
++use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::{Arc, Mutex, OnceLock};
+ 
+ use serde_json::{json, Value};
+ 
+@@ -196,6 +199,134 @@
+         .map_err(|e| format!("could not build HTTP client: {e}"))
+ }
+ 
++/// The microphone, while dictation is running.
++///
++/// The talk service does not open the microphone itself; it transcribes what it is fed and keeps one
++/// owner at a time. Reading its `/state` without ever feeding it was the whole defect — the button
++/// said Listening and nothing was ever captured. This owns the microphone properly: claim, capture,
++/// stream, release.
++struct Capture {
++    child: Child,
++    stop: Arc<AtomicBool>,
++}
++
++static CAPTURE: OnceLock<Mutex<Option<Capture>>> = OnceLock::new();
++
++fn capture_cell() -> &'static Mutex<Option<Capture>> {
++    CAPTURE.get_or_init(|| Mutex::new(None))
++}
++
++const CAPTURE_CLIENT: &str = "quixidesk";
++const CAPTURE_RATE: &str = "16000";
++
++fn stt_url(cfg: &VoiceConfig) -> Result<String, String> {
++    match &cfg.stt {
++        Stt::StreamingStt { url } => Ok(url.trim_end_matches('/').to_string()),
++        Stt::Command(_) => Err("this backend reads a command's stdout; there is no microphone to open".into()),
++        Stt::Off => Err("speech-to-text is off".into()),
++    }
++}
++
++fn post(url: &str, body: Vec<u8>) -> Result<(), String> {
++    let client = http(std::time::Duration::from_secs(15))?;
++    client
++        .post(url)
++        .header("content-type", "application/octet-stream")
++        .body(body)
++        .send()
++        .map(|_| ())
++        .map_err(|e| format!("{e}"))
++}
++
++/// Take the recognizer and start feeding it the microphone.
++pub fn start_capture(cfg: &VoiceConfig) -> Result<String, String> {
++    let url = stt_url(cfg)?;
++    {
++        let cell = capture_cell().lock().map_err(|_| "capture state poisoned".to_string())?;
++        if cell.is_some() {
++            return Ok("already listening".into());
++        }
++    }
++    // Claim before the microphone opens: a chunk that arrives before the claim is refused, and the
++    // first word of a sentence is exactly the chunk that would be lost.
++    let client = http(std::time::Duration::from_secs(5))?;
++    // The talk service reads the owner name from the JSON body of /claim (not from the query, which
++    // is only used by /chunk). Sending it in the query claimed the microphone as "anon" and then had
++    // every chunk refused as somebody else's — a running capture that delivers nothing.
++    client
++        .post(format!("{url}/claim"))
++        .json(&serde_json::json!({ "client": CAPTURE_CLIENT }))
++        .send()
++        .map_err(|e| format!("could not reach the talk service: {e}"))?;
++
++    let mut child = Command::new("parecord")
++        .args([
++            "--raw",
++            "--format=s16le",
++            "--rate",
++            CAPTURE_RATE,
++            "--channels=1",
++            "--latency-msec=100",
++        ])
++        .stdout(Stdio::piped())
++        .stderr(Stdio::null())
++        .spawn()
++        .map_err(|e| format!("could not open the microphone (parecord): {e}"))?;
++    let mut stdout = child.stdout.take().ok_or_else(|| "parecord produced no stream".to_string())?;
++
++    let stop = Arc::new(AtomicBool::new(false));
++    let stop_flag = Arc::clone(&stop);
++    let feed_url = format!("{url}/chunk?client={CAPTURE_CLIENT}");
++    std::thread::spawn(move || {
++        // 100 ms of s16le mono 16 kHz. Small enough that a word lands promptly, large enough that the
++        // service is not handling a request every few milliseconds.
++        let mut buffer = [0u8; 3200];
++        while !stop_flag.load(Ordering::Relaxed) {
++            match stdout.read(&mut buffer) {
++                Ok(0) => break,
++                Ok(n) => {
++                    if post(&feed_url, buffer[..n].to_vec()).is_err() {
++                        // A dropped chunk is not fatal; the recognizer simply hears a gap.
++                        std::thread::sleep(std::time::Duration::from_millis(20));
++                    }
++                }
++                Err(_) => break,
++            }
++        }
++    });
++
++    let mut cell = capture_cell().lock().map_err(|_| "capture state poisoned".to_string())?;
++    *cell = Some(Capture { child, stop });
++    Ok("listening".into())
++}
++
++/// Stop the microphone and give the recognizer back.
++pub fn stop_capture(cfg: &VoiceConfig) -> Result<String, String> {
++    let taken = {
++        let mut cell = capture_cell().lock().map_err(|_| "capture state poisoned".to_string())?;
++        cell.take()
++    };
++    if let Some(mut capture) = taken {
++        capture.stop.store(true, Ordering::Relaxed);
++        let _ = capture.child.kill();
++        let _ = capture.child.wait();
++    }
++    if let Ok(url) = stt_url(cfg) {
++        if let Ok(client) = http(std::time::Duration::from_secs(3)) {
++            let _ = client
++                .post(format!("{url}/release"))
++                .query(&[("client", CAPTURE_CLIENT)])
++                .send();
++        }
++    }
++    Ok("stopped".into())
++}
++
++/// Whether the microphone is open right now.
++pub fn capturing() -> bool {
++    capture_cell().lock().map(|c| c.is_some()).unwrap_or(false)
++}
++
+ /// POST to a Kokoro-style endpoint and return the WAV.
+ pub fn kokoro_fetch(url: &str, voice: &str, speed: f64, text: &str) -> Result<Vec<u8>, String> {
+     let client = http(std::time::Duration::from_secs(180))?;
+diff -ruN '--exclude=target' '--exclude=.git' qtest5/QuixiDesk-3.6556.12/crates/quixi-ipc/src/lib.rs qcur/QuixiDesk-3.6556.12/crates/quixi-ipc/src/lib.rs
+--- a/crates/quixi-ipc/src/lib.rs	2026-11-02 19:13:55.139015992 -0800
++++ b/crates/quixi-ipc/src/lib.rs	2026-11-02 19:42:30.376833195 -0800
+@@ -723,6 +723,23 @@
+                 let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
+                 quixi_engine::voice::status(&cfg)
+             }
++            // Opening the microphone. Without these the UI could only read a transcript somebody
++            // else was producing — the button said Listening while nothing was captured.
++            ("Voice", "startDictation") => {
++                let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
++                match quixi_engine::voice::start_capture(&cfg) {
++                    Ok(state) => json!({ "ok": true, "state": state }),
++                    Err(error) => json!({ "ok": false, "error": error }),
++                }
++            }
++            ("Voice", "stopDictation") => {
++                let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
++                match quixi_engine::voice::stop_capture(&cfg) {
++                    Ok(state) => json!({ "ok": true, "state": state }),
++                    Err(error) => json!({ "ok": false, "error": error }),
++                }
++            }
++            ("Voice", "dictating") => json!({ "capturing": quixi_engine::voice::capturing() }),
+             ("Voice", "getTranscript") => {
+                 let cfg = quixi_engine::voice::VoiceConfig::load(&self.engine.data_dir);
+                 match quixi_engine::voice::transcript(&cfg) {
+diff -ruN '--exclude=target' '--exclude=.git' qtest5/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 19:35:36.538176433 -0800
++++ b/resources/ui/app.js	2026-11-02 19:42:36.294470308 -0800
+@@ -2675,10 +2675,33 @@
+       chip.hidden = !(micOn && speakerOn);
+     };
+ 
+-    mic.addEventListener("click", () => {
++    mic.addEventListener("click", async () => {
+       const on = localStorage.getItem("quixi.micOn") === "1";
+       localStorage.setItem("quixi.micOn", on ? "0" : "1");
+-      dictation.click();               // the real control does the real work
++      if (on) {
++        // Stop polling first, then close the microphone: the last poll should read the final words
++        // rather than a stream that has already been released.
++        dictation.click();
++        try { await rpc("Voice", "stopDictation"); } catch {}
++      } else {
++        // Open the microphone in the engine before polling, so the first words are captured while
++        // the transcript is still empty.
++        try {
++          const opened = await rpc("Voice", "startDictation");
++          if (opened && opened.ok === false) {
++            toast(`The microphone did not open: ${opened.error}`, true);
++            localStorage.setItem("quixi.micOn", "0");
++            paint();
++            return;
++          }
++        } catch (error) {
++          toast(`The microphone did not open: ${error.message}`, true);
++          localStorage.setItem("quixi.micOn", "0");
++          paint();
++          return;
++        }
++        dictation.click();
++      }
+       paint();
+     });
+     speaker.addEventListener("click", () => {

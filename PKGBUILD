@@ -160,6 +160,7 @@ source=(
   0076-approvals-voice-and-a-real-reset.patch
   0077-mic-and-speaker-are-switches.patch
   0078-a-key-where-the-question-is-asked.patch
+  0079-the-microphone-is-actually-opened.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -242,6 +243,7 @@ sha256sums=(
   '86a7c612f60d4a538d2e90df1743c3b558ae0fd303ef2a4efa02badcbaa5fd8b'
   'a90f53ac3466de75c67a1be0b36bc0725d60ae78c2059e0e9d1a0cf248de8f17'
   'ac07c9dfabf0978e0317d54b89dc7f163ec0b1321d9920fc225e6e834257b2e2'
+  '02d660759bf16ea5d25271f574460d4b93f9133f96d573e0fb9f825738df5e3b'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -510,6 +512,9 @@ prepare() {
 
   # The model chip answers its own question: a key can be added without leaving the composer.
   patch -Np1 -i "${srcdir}/0078-a-key-where-the-question-is-asked.patch"
+
+  # Dictation opens the microphone instead of reading a transcript somebody else produced.
+  patch -Np1 -i "${srcdir}/0079-the-microphone-is-actually-opened.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
