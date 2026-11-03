@@ -80,100 +80,101 @@ optdepends=(
 provides=('quixidesk')
 conflicts=('quixidesk-bin' 'quixidesk-git')
 source=(
-  "0053-journal.patch"
+  "patches/000-099/050-059/0053-journal.patch"
   "${pkgname}-${pkgver}.tar.gz::https://github.com/QuixiAI/QuixiDesk/archive/refs/tags/v${pkgver}.tar.gz"
   "ydotoold.openrc"
-  "0001-linux-support.patch"
-  "0002-local-overrides.patch"
-  "0003-condense-fallback.patch"
-  "0004-skills.patch"
-  "0005-headless.patch"
-  "0009-linux-fixes-keybindings.patch"
-  "0010-rustify-keybindings.patch"
-  "0011-test-portability.patch"
-  "0012-kde-scenario-pinning.patch"
-  "0006-memory.patch"
-  "0007-voice.patch"
-  "0008-voice-local.patch"
-  "0013-artix-love.patch"
-  "0014-hyprland-omarchy.patch"
-  "0015-browser-driving-skill.patch"
-  "0016-test-portability-containers.patch"
-  "0017-cli-usage.patch"
-  "0018-themes-and-fonts.patch"
-  "0019-reverse-engineering-skill.patch"
-  "0020-voice-over-ipc.patch"
-  "0021-dictation-referenceerror.patch"
-  "0022-appearance-is-a-setting.patch"
-  "0023-persona-file.patch"
-  "0024-his-colours-and-his-words.patch"
-  "0025-custom-colours-stay-in-custom.patch"
-  "0026-retro-contrast.patch"
-  "0027-resize-glass-boxes.patch"
-  "0028-its-your-edition.patch"
-  "0029-cron-jobs-explained.patch"
-  "0030-plural-sections-open.patch"
-  "0031-sidebar-tree.patch"
-  "0032-branches-have-leaves.patch"
-  "0033-less-white.patch"
-  "0034-cursor-test-measures-the-move.patch"
-  "0035-no-mac-tooling.patch"
-  "0036-two-libraries-and-about.patch"
-  "0037-privacy-is-paths.patch"
-  "0038-transparency-and-background.patch"
-  "0039-daemons.patch"
-  "0040-sidebar-restyle.patch"
-  "0041-links-open-in-brave.patch"
-  "0042-rail-and-column.patch"
-  "0043-automation-bridge.patch"
-  "0044-shipped-persona.patch"
-  "0045-browser-is-brave.patch"
-  "0046-router-knows-daemons.patch"
-  "0047-dot-and-label-agree.patch"
-  "0048-socket-liveness.patch"
-  "0049-mcp-platform-adapters.patch"
-  "0050-context-button-earns-its-place.patch"
-  "0051-with-skill.patch"
-  "0052-tool-descriptions-know-the-platform.patch"
-  "0056-home-headline.patch"
-  0055-browser-choice.patch
-  0056-engine-tests-carry-their-own-weight.patch
-  0057-ollama-cloud-and-first-run.patch
-  0058-first-contact.patch
-  0059-newcomer-or-old-hand.patch
-  0060-model-order-and-a-reachable-button.patch
-  0061-memory-palace-setup.patch
-  0062-memory-palace-explained.patch
-  0063-encryption-choices.patch
-  0064-pick-your-model.patch
-  0065-visuals-audio-and-your-drives.patch
-  0066-welcome-and-a-memory-folder-that-survives.patch
-  0067-stt-tts-conversation.patch
-  0068-ask-later.patch
-  0069-lowercase.patch
-  0070-doors.patch
-  0071-aide.patch
-  0072-desktop-pickers-and-documents.patch
-  0073-cancel-is-not-a-choice.patch
-  0074-opacity-voice-and-tasks.patch
-  0075-provider-choice-and-the-task-widget.patch
-  0076-approvals-voice-and-a-real-reset.patch
-  0077-mic-and-speaker-are-switches.patch
-  0078-a-key-where-the-question-is-asked.patch
-  0079-the-microphone-is-actually-opened.patch
-  0080-dictation-is-a-toggle-with-a-level-meter.patch
-  0081-dictation-state-survives-a-repaint.patch
-  0082-no-words-left-behind.patch
-  0083-ctrl-f-and-no-second-conversation-mode.patch
-  0084-personas-are-a-settings-section.patch
-  0085-the-greeting-is-sup.patch
-  0086-sup-by-default-sup-bitches-in-his-own-theme.patch
-  0087-volkdude85-edition-and-a-plain-placeholder.patch
-  0088-the-register-is-earned.patch
-  0089-a-dev-key-and-a-door-that-means-zero.patch
-  0090-nora-introduces-herself.patch
-  0091-no-apple-shaped-capabilities-on-linux.patch
-  0092-the-workspace-is-documents.patch
+  "patches/000-099/000-009/0001-linux-support.patch"
+  "patches/000-099/000-009/0002-local-overrides.patch"
+  "patches/000-099/000-009/0003-condense-fallback.patch"
+  "patches/000-099/000-009/0004-skills.patch"
+  "patches/000-099/000-009/0005-headless.patch"
+  "patches/000-099/000-009/0009-linux-fixes-keybindings.patch"
+  "patches/000-099/010-019/0010-rustify-keybindings.patch"
+  "patches/000-099/010-019/0011-test-portability.patch"
+  "patches/000-099/010-019/0012-kde-scenario-pinning.patch"
+  "patches/000-099/000-009/0006-memory.patch"
+  "patches/000-099/000-009/0007-voice.patch"
+  "patches/000-099/000-009/0008-voice-local.patch"
+  "patches/000-099/010-019/0013-artix-love.patch"
+  "patches/000-099/010-019/0014-hyprland-omarchy.patch"
+  "patches/000-099/010-019/0015-browser-driving-skill.patch"
+  "patches/000-099/010-019/0016-test-portability-containers.patch"
+  "patches/000-099/010-019/0017-cli-usage.patch"
+  "patches/000-099/010-019/0018-themes-and-fonts.patch"
+  "patches/000-099/010-019/0019-reverse-engineering-skill.patch"
+  "patches/000-099/020-029/0020-voice-over-ipc.patch"
+  "patches/000-099/020-029/0021-dictation-referenceerror.patch"
+  "patches/000-099/020-029/0022-appearance-is-a-setting.patch"
+  "patches/000-099/020-029/0023-persona-file.patch"
+  "patches/000-099/020-029/0024-his-colours-and-his-words.patch"
+  "patches/000-099/020-029/0025-custom-colours-stay-in-custom.patch"
+  "patches/000-099/020-029/0026-retro-contrast.patch"
+  "patches/000-099/020-029/0027-resize-glass-boxes.patch"
+  "patches/000-099/020-029/0028-its-your-edition.patch"
+  "patches/000-099/020-029/0029-cron-jobs-explained.patch"
+  "patches/000-099/030-039/0030-plural-sections-open.patch"
+  "patches/000-099/030-039/0031-sidebar-tree.patch"
+  "patches/000-099/030-039/0032-branches-have-leaves.patch"
+  "patches/000-099/030-039/0033-less-white.patch"
+  "patches/000-099/030-039/0034-cursor-test-measures-the-move.patch"
+  "patches/000-099/030-039/0035-no-mac-tooling.patch"
+  "patches/000-099/030-039/0036-two-libraries-and-about.patch"
+  "patches/000-099/030-039/0037-privacy-is-paths.patch"
+  "patches/000-099/030-039/0038-transparency-and-background.patch"
+  "patches/000-099/030-039/0039-daemons.patch"
+  "patches/000-099/040-049/0040-sidebar-restyle.patch"
+  "patches/000-099/040-049/0041-links-open-in-brave.patch"
+  "patches/000-099/040-049/0042-rail-and-column.patch"
+  "patches/000-099/040-049/0043-automation-bridge.patch"
+  "patches/000-099/040-049/0044-shipped-persona.patch"
+  "patches/000-099/040-049/0045-browser-is-brave.patch"
+  "patches/000-099/040-049/0046-router-knows-daemons.patch"
+  "patches/000-099/040-049/0047-dot-and-label-agree.patch"
+  "patches/000-099/040-049/0048-socket-liveness.patch"
+  "patches/000-099/040-049/0049-mcp-platform-adapters.patch"
+  "patches/000-099/050-059/0050-context-button-earns-its-place.patch"
+  "patches/000-099/050-059/0051-with-skill.patch"
+  "patches/000-099/050-059/0052-tool-descriptions-know-the-platform.patch"
+  "patches/000-099/050-059/0056-home-headline.patch"
+  patches/000-099/050-059/0055-browser-choice.patch
+  patches/000-099/050-059/0056-engine-tests-carry-their-own-weight.patch
+  patches/000-099/050-059/0057-ollama-cloud-and-first-run.patch
+  patches/000-099/050-059/0058-first-contact.patch
+  patches/000-099/050-059/0059-newcomer-or-old-hand.patch
+  patches/000-099/060-069/0060-model-order-and-a-reachable-button.patch
+  patches/000-099/060-069/0061-memory-palace-setup.patch
+  patches/000-099/060-069/0062-memory-palace-explained.patch
+  patches/000-099/060-069/0063-encryption-choices.patch
+  patches/000-099/060-069/0064-pick-your-model.patch
+  patches/000-099/060-069/0065-visuals-audio-and-your-drives.patch
+  patches/000-099/060-069/0066-welcome-and-a-memory-folder-that-survives.patch
+  patches/000-099/060-069/0067-stt-tts-conversation.patch
+  patches/000-099/060-069/0068-ask-later.patch
+  patches/000-099/060-069/0069-lowercase.patch
+  patches/000-099/070-079/0070-doors.patch
+  patches/000-099/070-079/0071-aide.patch
+  patches/000-099/070-079/0072-desktop-pickers-and-documents.patch
+  patches/000-099/070-079/0073-cancel-is-not-a-choice.patch
+  patches/000-099/070-079/0074-opacity-voice-and-tasks.patch
+  patches/000-099/070-079/0075-provider-choice-and-the-task-widget.patch
+  patches/000-099/070-079/0076-approvals-voice-and-a-real-reset.patch
+  patches/000-099/070-079/0077-mic-and-speaker-are-switches.patch
+  patches/000-099/070-079/0078-a-key-where-the-question-is-asked.patch
+  patches/000-099/070-079/0079-the-microphone-is-actually-opened.patch
+  patches/000-099/080-089/0080-dictation-is-a-toggle-with-a-level-meter.patch
+  patches/000-099/080-089/0081-dictation-state-survives-a-repaint.patch
+  patches/000-099/080-089/0082-no-words-left-behind.patch
+  patches/000-099/080-089/0083-ctrl-f-and-no-second-conversation-mode.patch
+  patches/000-099/080-089/0084-personas-are-a-settings-section.patch
+  patches/000-099/080-089/0085-the-greeting-is-sup.patch
+  patches/000-099/080-089/0086-sup-by-default-sup-bitches-in-his-own-theme.patch
+  patches/000-099/080-089/0087-volkdude85-edition-and-a-plain-placeholder.patch
+  patches/000-099/080-089/0088-the-register-is-earned.patch
+  patches/000-099/080-089/0089-a-dev-key-and-a-door-that-means-zero.patch
+  patches/000-099/090-099/0090-nora-introduces-herself.patch
+  patches/000-099/090-099/0091-no-apple-shaped-capabilities-on-linux.patch
+  patches/000-099/090-099/0092-the-workspace-is-documents.patch
+  patches/000-099/090-099/0093-the-series-rebuilds-what-we-run.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -270,6 +271,7 @@ sha256sums=(
   'c74e088f03930815bc9c23cc445b63760f4f7aebdb246bdb1855c72a14294ff0'
   '4a63477fe7c59e9eff8b176c586d6704735c7b9dad759f6f944c7f0fce506fae'
   '8fb74337a154e33205a38cf48e5d2cfa37d6f95ccfc4e37d7d846317de10cb14'
+  '86eb9a0f154d272300577129affdf6ada1d13206bcf919e2e1d6a9f370a09da0'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -580,6 +582,9 @@ prepare() {
 
   # A new conversation works in Documents, so ordinary file questions are not "outside".
   patch -Np1 -i "${srcdir}/0092-the-workspace-is-documents.patch"
+
+  # Reconcile the tree with the series: the last edits had never been cut into a patch.
+  patch -Np1 -i "${srcdir}/0093-the-series-rebuilds-what-we-run.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
