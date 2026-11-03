@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.quixidesk.QuixiDesk</id>
+  <name>QuixiDesk</name>
+  <summary>Native Rust desktop workspace for AI</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>A desktop workspace that runs AI models locally or over the internet, keeps its memory in a folder of markdown you own, and works on your files.</p>
+  </description>
+  <launchable type="desktop-id">org.quixidesk.QuixiDesk.desktop</launchable>
+  <releases>
+    <release version="3.6556.12" date="2026-11-02"/>
+  </releases>
+</component>
