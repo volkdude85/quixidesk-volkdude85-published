@@ -1,0 +1,61 @@
+The engine says which panel a skill belongs in
+==============================================
+
+The page can group skills into libraries, but it can only group by what the engine tells it, and the
+engine was saying nothing: `list_local_skills` returned a name, a description and a tier. So the last
+commit's three panels could not work — every skill fell through the catch-all into the first one.
+
+The manifest's `owner` value is the only place that can say who made a skill, so it is now read and
+passed through, and a skill found by walking the bundled directory without a manifest entry is
+`quixidesk` — what upstream shipped — while the Hermes roots are `hermes`.
+
+Nothing about discovery changed. This is one field on a JSON object that was already being built.
+
+---
+--- a/crates/quixi-engine/src/lib.rs
++++ b/crates/quixi-engine/src/lib.rs
+@@ -832,12 +832,18 @@
+                     for s in arr {
+                         let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                         let desc = s.get("description").and_then(|v| v.as_str()).unwrap_or("");
++                        // Who the skill belongs to. The bundled directory holds two different kinds
++                        // of thing: what upstream ships, and what this edition added. The manifest is
++                        // where the edition's own entries are named, so they can be shown in their own
++                        // box instead of being mixed in with stock.
++                        let owner = s.get("owner").and_then(|v| v.as_str()).unwrap_or("quixidesk");
+                         if !name.is_empty() {
+                             skills.push(json!({
+                                 "skillId": name,
+                                 "name": name,
+                                 "displayName": name,
+                                 "description": desc,
++                                "owner": owner,
+                                 "updatedAt": now_iso,
+                                 "enabled": true,
+                             }));
+@@ -874,11 +880,25 @@
+                 let desc = fs::read_to_string(&md_path)
+                     .map(|c| Self::skill_description(&c))
+                     .unwrap_or_else(|_| "Custom QuixiDesk skill".to_string());
++                // Which of the three boxes this belongs in. A skill found by walking the SHIPPED
++                // directory is upstream's, one under the Hermes roots is the agent's library, and one
++                // in the data directory is the user's own. The edition's own skills never reach here:
++                // they are named in the manifest, which is the only place that can say who made them,
++                // and they are already listed.
++                let bundled_root = self.resources_dir.join("bundled-skills-extracted");
++                let owner = if root == bundled_root {
++                    "quixidesk"
++                } else if root == self.data_dir.join("skills") {
++                    "user"
++                } else {
++                    "hermes"
++                };
+                 skills.push(json!({
+                     "skillId": skill_id,
+                     "name": skill_id,
+                     "displayName": skill_id,
+                     "description": desc,
++                    "owner": owner,
+                     "path": dir.display().to_string(),
+                     "updatedAt": now_iso,
+                     "enabled": true,
