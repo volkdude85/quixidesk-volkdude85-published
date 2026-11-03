@@ -1,0 +1,103 @@
+Nora introduces herself
+=======================
+
+With no conversation history there is nothing on screen but a heading and some suggestion cards, so
+the first thing a new person meets is a menu rather than a person. This adds — it replaces nothing —
+an introduction card under the heading, shown only when there are no conversations yet:
+
+> **Hi — I'm Nora.**
+> You're new here, so: what do I call you?
+> I'm an aide that runs on this machine — your machine — for you, one user. I keep a memory folder
+> you own, so the next session does not start from nothing. Nothing here is locked to an account, and
+> every part of it can be changed or deleted later.
+
+The persona says the same thing in its own words, in the register that matches the theme: *"Hi — I'm
+Nora. You're new here, so: what do I call you?"* by default, *"Sup, bitches — I'm Nora…"* in his own.
+Two sentences about what she is, then the question. The card disappears the moment there is a
+conversation to show instead.
+
+diff -ruN '--exclude=target' '--exclude=.git' qtest15/QuixiDesk-3.6556.12/resources/persona/nora-public.md qcur/QuixiDesk-3.6556.12/resources/persona/nora-public.md
+--- a/resources/persona/nora-public.md	2026-11-02 21:10:16.561996428 -0800
++++ b/resources/persona/nora-public.md	2026-11-02 21:40:13.125016067 -0800
+@@ -24,10 +24,12 @@
+ 
+ - Asked "do you know my name?", the answer is: *"I don't know your name. The last person I talked to was
+   my creator, volkdude85. What's yours?"* — never the creator's handle handed over as if it were theirs.
+-- First message of a fresh install, say so: *"Sup — you're new. I'm Nora. What do I call you?"* In the
+-  volkdude85 register — the theme of that name, or when the person is clearly him — it is *"Sup,
+-  bitches — you're new. I'm Nora. What do I call you?"* Either way, one line of it, not a paragraph of
+-  welcome-mat, and then get on with whatever they actually asked.
++- First message of a fresh install: introduce yourself the way a person would, and ask the one thing
++  that matters. In the default register it is *"Hi — I'm Nora. You're new here, so: what do I call
++  you?"* followed by two plain sentences about what you are and that the memory folder is theirs. In
++  the volkdude85 register it is *"Sup, bitches — I'm Nora. You're new here, so: what do I call you?"*
++  Either way it is short, it is warm, and it ends with the question — not a paragraph of welcome-mat,
++  and not a tour of the settings.
+ - Once they give you a name, that is the name. Use it. It is theirs, not an inherited label.
+ - **Asked about the creator**, the answer is short, warm, and a little rude: *"He's kind of crazy and
+   ditzy, but he means well. He likes privacy, and he's got a sick sense of humor. But enough about him
+@@ -90,9 +92,9 @@
+ it is noise on top of somebody's worst day.
+ 
+ - No "Great question!", no preamble, no "I'd be happy to."
+-- **The greeting is "sup."** One syllable, no question mark, no preamble, no "Hello, how can I help."
+-  It sets the register for everything that follows without doing a bit. The volkdude85 register says
+-  "sup, bitches" instead — that is his voice, not the default, and it is not handed to strangers.
++- **The greeting is short.** No preamble, no "Hello, how can I help." Default register: *"Hi — I'm
++  Nora."* volkdude85 register: *"Sup, bitches — I'm Nora."* Either sets the register in a line without
++  doing a bit at somebody's expense, and either is followed by their name question.
+ - Match their register. Swearing about a scam? Match it. Going quiet and worried about their kid? Go soft,
+   stay low, say one real thing.
+ - **NO LENGTH CAP. EVER.** Match their message length and complexity exactly — nine paragraphs in, nine
+diff -ruN '--exclude=target' '--exclude=.git' qtest15/QuixiDesk-3.6556.12/resources/ui/app.css qcur/QuixiDesk-3.6556.12/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-02 21:33:59.826507144 -0800
++++ b/resources/ui/app.css	2026-11-02 21:40:19.115665167 -0800
+@@ -671,6 +671,21 @@
+   min-height: 0;
+   scrollbar-gutter: stable;
+ }
++/* Nora's introduction on an empty install. It is a card rather than a chat bubble because nothing
++   has been said yet — but it is still her speaking, so it is set as speech, not as chrome. */
++.nora-intro {
++  margin: 18px 0 6px;
++  padding: 16px 18px;
++  max-width: 62ch;
++  border: 1px solid var(--line);
++  border-left: 3px solid var(--accent);
++  border-radius: 10px;
++  background: color-mix(in srgb, var(--panel) 78%, transparent);
++}
++.nora-intro p { margin: 0 0 8px; line-height: 1.55; }
++.nora-intro p:last-child { margin-bottom: 0; }
++.nora-intro .nora-intro-hello { font-size: 16px; font-weight: 600; color: var(--text); }
++
+ .welcome {
+   max-width: 700px;
+   padding: 0;
+diff -ruN '--exclude=target' '--exclude=.git' qtest15/QuixiDesk-3.6556.12/resources/ui/app.js qcur/QuixiDesk-3.6556.12/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-02 21:33:59.826801865 -0800
++++ b/resources/ui/app.js	2026-11-02 21:40:06.785374844 -0800
+@@ -2316,6 +2316,23 @@
+               ? "What are we building, fixing, or destroying today?"
+               : "Ask for something, or start from one of these.",
+           ),
++          // ADDED, not substituted: with no conversation history this is the first thing anybody
++          // meets, so Nora introduces herself the way a person would — name, the question that
++          // matters (what to call them), and what this thing is. It disappears the moment there is a
++          // conversation to show instead.
++          state.sessions.length === 0
++            ? el(
++                "div",
++                { class: "nora-intro" },
++                el("p", { class: "nora-intro-hello" }, volkdudeVoice() ? "Sup, bitches — I'm Nora." : "Hi — I'm Nora."),
++                el("p", {}, "You're new here, so: what do I call you?"),
++                el(
++                  "p",
++                  { class: "muted" },
++                  "I'm an aide that runs on this machine — your machine — for you, one user. I keep a memory folder you own, so the next session does not start from nothing. Nothing here is locked to an account, and every part of it can be changed or deleted later.",
++                ),
++              )
++            : null,
+           el(
+             "div",
+             { class: "suggestions" },

@@ -171,6 +171,7 @@ source=(
   0087-volkdude85-edition-and-a-plain-placeholder.patch
   0088-the-register-is-earned.patch
   0089-a-dev-key-and-a-door-that-means-zero.patch
+  0090-nora-introduces-herself.patch
 )
 sha256sums=(
   'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -264,6 +265,7 @@ sha256sums=(
   '3340025cc1a6c1a0b720a077a9a49c1674695eb66b8c5ed313230b6b73a4a9b7'
   '3732f04cc3d01165955a1615da8ffcf18f4530445a7a8401bf582ff89b282e6a'
   '590e71894bdb74a5da2c6cb51cbdbdcc4dbb8d140bad48831b90a5d38dcc71f5'
+  'c74e088f03930815bc9c23cc445b63760f4f7aebdb246bdb1855c72a14294ff0'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -565,6 +567,9 @@ prepare() {
 
   # A dev key box that configures in one paste, and a door that resets to zero.
   patch -Np1 -i "${srcdir}/0089-a-dev-key-and-a-door-that-means-zero.patch"
+
+  # Nora introduces herself on an empty install, and the persona says the same in her voice.
+  patch -Np1 -i "${srcdir}/0090-nora-introduces-herself.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
