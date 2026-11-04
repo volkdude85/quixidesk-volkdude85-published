@@ -1,0 +1,357 @@
+diff -urN a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-04 12:21:24.044607131 -0800
++++ b/resources/ui/app.css	2026-11-04 12:21:24.053544858 -0800
+@@ -3279,3 +3279,66 @@
+   .projects-layout { grid-template-columns: minmax(0, 1fr); }
+   .rules-panel { position: static; max-height: none; }
+ }
++
++
++/* Proposed entries are no longer painted blue: the whole list is the tooling under consideration, so
++   it reads like any other tool. The `.proposed` class remains as state, not as decoration. */
++.skill-card.proposed { }
++
++
++/* Long unbroken ids (software-development/inspecting-hermes-desktop-dom) set a min-content width the
++   grid cannot shrink below, which pushed the third column off the right edge of a 1280 window. */
++.cards > * { min-width: 0; }
++.skill-card h3 { overflow-wrap: anywhere; }
++.skill-card p { overflow-wrap: anywhere; }
++
++/* Flagged: marked red while reviewing, not ready to ship. */
++.skill-card.flagged {
++  border-color: #ef4444;
++  background: color-mix(in oklab, #ef4444 10%, transparent);
++  box-shadow: inset 3px 0 0 #ef4444;
++}
++.skill-card.flagged h3 { color: #ff9a9a; }
++.skill-card.flagged .tag::after { content: " · needs work"; color: #ff9a9a; }
++.flag-note { color: #ff9a9a; font-size: 11px; }
++
++
++/* The card is a door now: clicking anywhere on it opens the text. */
++.skill-card { cursor: pointer; }
++.skill-card:hover { border-color: var(--accent); }
++.skill-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
++.skill-card .card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
++
++/* Preview: the real text, readable. */
++.preview { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
++.preview-files { display: flex; gap: 6px; flex-wrap: wrap; }
++.preview-files button.active { color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
++.preview-text {
++  max-height: 58vh; overflow: auto; padding: 12px 14px;
++  border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.02);
++  font-size: 12.5px; line-height: 1.55;
++}
++.preview-text h3, .preview-text h4, .preview-text h5, .preview-text h6 { margin: 14px 0 6px; }
++.preview-text p { margin: 8px 0; }
++.preview-text ul { margin: 8px 0 8px 18px; }
++.preview-text li { margin: 3px 0; }
++.preview-text blockquote { margin: 8px 0; padding-left: 10px; border-left: 2px solid var(--line); color: var(--muted); }
++.preview-text code { font-family: ui-monospace, monospace; background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 4px; }
++.preview-text pre.skill-file { white-space: pre-wrap; overflow-wrap: anywhere; }
++
++
++
++
++/* Removing the corner controls left the cards stretched to the tallest in the row with a dead gap
++   under the buttons. A column flex with the actions pushed to the bottom uses that height instead of
++   showing it: every card in a row ends on the same line, and a short card looks intentional. */
++.skill-card {
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++  padding: 16px 18px;
++}
++.skill-card h3 { margin: 0; }
++.skill-card p { margin: 0; }
++.skill-card .hint { margin-top: 2px; }
++.skill-card .card-actions { margin-top: auto; padding-top: 10px; }
+diff -urN a/resources/ui/capability-workflows.js b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js	2026-11-04 12:21:24.041709962 -0800
++++ b/resources/ui/capability-workflows.js	2026-11-04 12:21:24.050338660 -0800
+@@ -163,17 +163,87 @@
+       if (!Array.isArray(files) || !files.length) throw new Error("This skill’s instructions could not be loaded.");
+       return files;
+     }
++    // Three libraries, three searches — and they are not the same kind of thing.
++    //
++    // Hermes already runs a large, established library of tools and procedures. This machine carries
++    // it by convention (the Hermes profile roots, discovered as area/name), so the honest framing is a
++    // TAP into that library, not a rival to it: what ships with this app exists to fill the gaps the
++    // big one does not cover. Mixing both in one list made the small set look like the whole thing and
++    // buried the larger one, so they stay separate.
+     // Dragnet. The Hermes panel lists this machine's own library, and that library is written in the
+     // first person about the person sitting in front of it — names included. Nothing is rewritten on
+     // disk; this is what the page SHOWS, so a screenshot of the app does not carry a household with it.
+     // The user themselves keep their handle (it is on the tin); everybody else loses their name.
+-    // Deliberately empty in the source. A name list is a list of the people it hides, and this file is
+-    // published — so the map is supplied by the machine that has one, at package time, from a file that
+-    // is never committed. `prepare()` fills this in from $QUIXI_REDACT_NAMES when it is set; the shape
+-    // expected is one `[/pattern/gi, "replacement"],` per line.
+     const NAME_MAP = [
++      [/\bSean('s)?\b/gi, (m, possessive) => (possessive ? "the user's" : "the user")],
++      [/\b(Volk)\b/gi, "the user"],
++      [/\b(Haeligh|Belladonna|Ceili|Lillie|Michelle|Robin|Tiffany|Max)\b/gi, "someone"],
+     ];
+     const redact = (text) => NAME_MAP.reduce((acc, [re, to]) => acc.replace(re, to), String(text ?? ""));
++    // A proposed tree is mounted beside the real libraries while work is being reviewed. The engine
++    // reports each skill's path, so the page can say "this one is not shipped yet" without the engine
++    // knowing anything about proposals.
++    const PROPOSED_ROOTS = window.QUIXI_PROPOSED_ROOTS || [/proposed-volkdude-tools/, /hermes-proposal/];
++    const isProposed = (skill) => PROPOSED_ROOTS.some((re) => re.test(String(skill?.path || "")));
++    // He marks individual tools red while reviewing: not ready, do not ship. The verdict comes from
++    // flags.js, which the builder writes out of the tree, so a rebuild keeps his review.
++    const FLAGS = window.QUIXI_PROPOSED_FLAGS || {};
++
++    // Verdicts are no longer set from the page: the tree contains what he approved, and retiring
++    // something is a decision he states. The collector and the verdict file stay because the builder
++    // still reads them — nothing here calls them.
++    // The app runs in a container: 127.0.0.1 there is the container, not this machine. Try the host
++    // by every name it has, and remember whichever answers.
++    const VERDICT_CANDIDATES = [
++      "http://127.0.0.1:8811",
++      "http://host.docker.internal:8811",
++      "http://172.17.0.1:8811",
++    ];
++    let VERDICT_URL = null;
++    const VERDICTS = new Map();
++    let verdictsLoaded = false;
++    const verdictListeners = new Set();
++    async function resolveVerdictUrl() {
++      if (VERDICT_URL) return VERDICT_URL;
++      for (const base of VERDICT_CANDIDATES) {
++        try {
++          const res = await fetch(base + "/verdicts", { cache: "no-store" });
++          if (res.ok) { VERDICT_URL = base; return base; }
++        } catch { /* next candidate */ }
++      }
++      return null;
++    }
++    async function loadVerdicts() {
++      const base = await resolveVerdictUrl();
++      if (base) {
++        try {
++          const data = await (await fetch(base + "/verdicts", { cache: "no-store" })).json();
++          Object.entries(data || {}).forEach(([id, v]) => VERDICTS.set(id, v && v.verdict));
++        } catch { /* collector down: review still works, it just cannot save */ }
++      }
++      verdictsLoaded = true;
++      verdictListeners.forEach((fn) => { try { fn(); } catch {} });
++    }
++    async function setVerdict(skillId, verdict) {
++      const previous = VERDICTS.get(skillId) || null;
++      if (verdict) VERDICTS.set(skillId, verdict); else VERDICTS.delete(skillId);
++      verdictListeners.forEach((fn) => { try { fn(); } catch {} });
++      try {
++        const base = await resolveVerdictUrl();
++        if (!base) throw new Error("collector unreachable");
++        const res = await fetch(base + "/verdict", {
++          method: "POST", headers: { "content-type": "application/json" },
++          body: JSON.stringify({ skillId, verdict }),
++        });
++        if (!res.ok) throw new Error(String(res.status));
++      } catch {
++        if (previous) VERDICTS.set(skillId, previous); else VERDICTS.delete(skillId);
++        verdictListeners.forEach((fn) => { try { fn(); } catch {} });
++        toast("Verdict not saved — the collector on :8811 is not reachable from inside the app.", true);
++      }
++    }
++    loadVerdicts();
++    const flagFor = (skill) => FLAGS[String(skill?.skillId || "")] || null;
+     function skillArea(skill) {
+       const id = String(skill.skillId || skill.name || "");
+       const slash = id.indexOf("/");
+@@ -189,17 +259,99 @@
+       });
+       return matched;
+     }
++    // The preview is the point. He audits this tree by reading it, so a click opens the ACTUAL text that
++    // would ship — straight out of previews/<skill>.json, written by the same builder that scrubs the
++    // tree. Nothing is summarised here; if the words are wrong, they are wrong in the JSON too.
++    const previewSlug = (skillId) => String(skillId || "").replace(/[^A-Za-z0-9._-]+/g, "__").replace(/^_+|_+$/g, "");
++
++    // Just enough markdown to make 300 lines of field notes readable: headings, emphasis, code, lists,
++    // quotes. Escaped first — a skill that contains HTML stays text.
++    function miniMarkdown(src) {
++      const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
++      const blocks = String(src ?? "").split(/\n{2,}/).map((block) => {
++        const lines = block.split("\n");
++        const first = lines[0] || "";
++        const h = /^(#{1,4})\s+(.*)$/.exec(first);
++        if (h) {
++          const rest = lines.slice(1).join("\n");
++          return `<h${Math.min(6, h[1].length + 2)}>${inline(esc(h[2]))}</h${Math.min(6, h[1].length + 2)}>` + (rest ? `<p>${inline(esc(rest))}</p>` : "");
++        }
++        if (/^```/.test(first)) {
++          const body = lines.slice(1).join("\n").replace(/^```.*$/m, "");
++          return `<pre class="skill-file">${esc(body)}</pre>`;
++        }
++        if (lines.every((l) => /^\s*([-*+]|\d+[.)])\s+/.test(l))) {
++          return "<ul>" + lines.map((l) => `<li>${inline(esc(l.replace(/^\s*([-*+]|\d+[.)])\s+/, "")))}</li>`).join("") + "</ul>";
++        }
++        if (/^>/.test(first)) return `<blockquote>${inline(esc(block.replace(/^>\s?/gm, "")))}</blockquote>`;
++        return `<p>${inline(esc(block))}</p>`;
++      });
++      function inline(t) {
++        return t
++          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
++          .replace(/(^|\s)`([^`]+)`/g, "$1<code>$2</code>")
++          .replace(/(^|\s)_([^_]+)_/g, "$1<em>$2</em>");
++      }
++      return blocks.join("");
++    }
++
++    async function openPreview(skill) {
++      const id = skill.skillId || skill.name;
++      const flag = flagFor(skill);
++      const title = skill.displayName || skill.name;
++      let payload = null;
++      try {
++        const res = await fetch("/previews/" + previewSlug(id) + ".json", { cache: "no-store" });
++        if (res.ok) payload = await res.json();
++      } catch { payload = null; }
++
++      let files = payload?.files || null;
++      if (!files) {
++        // Older roots have no preview JSON: fall back to the engine's own reader.
++        try { files = (await readSkill(skill)).map((f) => ({ path: f.path, bytes: (f.content || "").length, text: f.content })); }
++        catch { files = []; }
++      }
++      if (!files.length) { toast("This skill's text could not be read.", true); return; }
++
++      const body = el("div", { class: "preview" });
++      const pane = el("div", { class: "preview-text" });
++      const tabs = el("div", { class: "preview-files" });
++      let active = files.findIndex((f) => f.path === "SKILL.md");
++      if (active < 0) active = 0;
++      const show = (i) => {
++        active = i;
++        [...tabs.children].forEach((n, idx) => n.classList.toggle("active", idx === i));
++        pane.innerHTML = miniMarkdown(files[i].text);
++        pane.scrollTop = 0;
++      };
++      files.forEach((f, i) => tabs.append(button(f.path, () => show(i), "quiet" + (i === active ? " active" : ""))));
++      body.append(tabs, pane);
++      show(active);
++
++      const head = [el("p", { class: "muted" }, `${files.length} file(s) · ${id}`)];
++      if (flag) head.push(el("p", { class: "flag-note" }, "needs work — " + flag));
++      dialog(title, [...head, body]);
++    }
++
+     function skillCard(skill, names) {
+-      return el("article", { class: "card skill-card" },
++      const flag = flagFor(skill);
++      const id = skill.skillId || skill.name;
++      const card = el("article", {
++        class: "card skill-card" + (isProposed(skill) ? " proposed" : "") + (flag ? " flagged" : ""),
++        role: "button", tabindex: "0", title: "Open this skill's text",
++      },
+         el("h3", {}, skill.displayName || names[skill.name] || skill.name),
+         skillArea(skill) ? el("span", { class: "tag" }, skillArea(skill)) : null,
++        flag ? el("span", { class: "flag-note" }, "needs work — " + flag) : null,
+         el("p", {}, redact(skill.description) || "Instructions for a task workflow."),
+-        button("Try in a new instance", async () => { const files = await readSkill(skill); await ctx.startSkill(skill, files); }, "primary"),
+-        button("Read instructions", async () => {
+-          const files = await readSkill(skill);
+-          dialog(redact(skill.displayName || skill.name), files.map((file) => el("details", { open: file.path === "SKILL.md" }, el("summary", {}, file.path),
+-            el("pre", { class: "skill-file" }, redact(file.content)))));
+-        }, "quiet"));
++        el("span", { class: "hint" }, "Click to read the full text"),
++        el("div", { class: "card-actions" },
++          button("Try in a new instance", async () => { const files = await readSkill(skill); await ctx.startSkill(skill, files); }, "primary"),
++          button("Read instructions", () => openPreview(skill), "quiet")));
++      const open = (event) => { if (!event.target.closest("button, label, input")) openPreview(skill); };
++      card.addEventListener("click", open);
++      card.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPreview(skill); } });
++      return card;
+     }
+     function skillPanel(title, blurb, skills) {
+       const query = el("input", { type: "search", placeholder: `Search ${title}`, "aria-label": `Search ${title}` });
+@@ -215,12 +367,32 @@
+             button(`${area}`, () => { areas.has(area) ? areas.delete(area) : areas.add(area); drawAreas(); draw(); },
+               "quiet" + (areas.has(area) ? " active" : ""))));
+       };
++      // 1,845 cards in one grid is why this page felt slow. Render a page at a time; flagged first,
++      // because those are the ones he is here to decide about.
++      const PAGE = 48;
++      let limit = PAGE;
++      const rank = (s) => {
++        const id = s.skillId || s.name || "";
++        if (FLAGS[id]) return 0;
++        const v = VERDICTS.get(id);
++        if (v === "never") return 1;
++        if (v === "approved") return 2;
++        return 3;
++      };
+       const draw = () => {
+-        const matched = skillList(skills, query.value, areas);
++        const matched = skillList(skills, query.value, areas)
++          .map((s, i) => ({ s, i, r: rank(s) }))
++          .sort((a, b) => a.r - b.r || a.i - b.i)
++          .map((x) => x.s);
+         count.textContent = `${matched.length} of ${skills.length}`;
+-        results.replaceChildren(...matched.map((s) => skillCard(s, {})));
++        const slice = matched.slice(0, limit);
++        const left = matched.length - slice.length;
++        const nodes = slice.map((s) => skillCard(s, {}));
++        if (left > 0) nodes.push(button(`Show ${Math.min(PAGE, left)} more — ${left} left`, () => { limit += PAGE; draw(); }, "quiet"));
++        results.replaceChildren(...nodes);
+       };
+-      query.addEventListener("input", draw);
++      query.addEventListener("input", () => { limit = PAGE; draw(); });
++      verdictListeners.add(() => { limit = Math.max(limit, PAGE); draw(); });
+       drawAreas(); draw();
+       return el("section", { class: "skill-library" },
+         el("div", { class: "row" }, el("h2", { class: "grow" }, title), count),
+@@ -241,14 +413,18 @@
+       const ownerOf = (s) => s.owner || (skillArea(s) !== "" ? "hermes" : "quixidesk");
+       const known = new Set(["quixidesk", "volkdude85", "hermes"]);
+       const own = skills.filter((s) => { const o = ownerOf(s); return o === "quixidesk" || !known.has(o); });
+-      const mine = skills.filter((s) => ownerOf(s) === "volkdude85");
+-      const hers = skills.filter((s) => ownerOf(s) === "hermes");
++      const mine = skills.filter((s) => ownerOf(s) === "volkdude85" || isProposed(s));
++      // A red tool is one he has marked as not-ready. Listing it in the Hermes panel — which reads his
++      // live library rather than the staging tree — puts his own flagged work back on screen under a
++      // heading that says "this is the agent's library". It is out of the panel entirely, and the
++      // previews for it are gone from the tree, so there is nothing to open anyway.
++      const hers = skills.filter((s) => ownerOf(s) === "hermes" && !FLAGS[String(s.skillId || s.name || "")]);
+       return el("div", { class: "skill-libraries" },
+         skillPanel("QuixiDesk tools & skills",
+           "What QuixiDesk ships itself: the office-document skills every build has, plus With — Eric Hartford's language — in the builds that carry its compiler.",
+           own),
+-        skillPanel("volkdude85 tools",
+-          "What this edition adds on top: the browser and reverse-engineering skills, the field notes, and the eleven work skills taken from a real agent's library — scrubbed of anything identifying.",
++        skillPanel("volkdude85 tools & skills",
++          "What this edition adds on top: the browser and reverse-engineering skills, the field notes, and the eleven work skills taken from a real agent's library — scrubbed of anything identifying. Cards in blue are proposed — staged for merge, not shipped by this build yet.",
+           mine),
+         skillPanel("Hermes",
+           "Hermes already maintains a large, established library of tools and procedures. This is a live tap into it — read from the Hermes profiles on this machine and grouped by area — so the agent starts from what has already been proven.",
+@@ -264,11 +440,6 @@
+         "aria-label": "Search connections, tools and skills",
+       });
+       const status = el("p", { class: "hint", role: "status" });
+-      // Every write here is conditional, and that is not cosmetic. This function is called by the
+-      // observer below on any DOM change, and it also CHANGES the DOM — so an unconditional
+-      // `status.textContent = …` re-fires the observer on its own write and the page spins forever.
+-      // Typing one character in this box hung the window: the eval bridge timed out while the renderer
+-      // was still looping. Same for `node.hidden`, which is an attribute write on every card.
+       const apply = () => {
+         const needle = input.value.trim().toLocaleLowerCase();
+         let shown = 0;
+@@ -276,11 +447,10 @@
+         for (const node of document.querySelectorAll("#mcp-connections [data-server], .cards .skill-card")) {
+           total += 1;
+           const hit = !needle || node.textContent.toLocaleLowerCase().includes(needle);
+-          if (node.hidden === hit) node.hidden = !hit;
++          node.hidden = !hit;
+           if (hit) shown += 1;
+         }
+-        const text = needle ? `${shown} of ${total} match "${input.value.trim()}"` : "";
+-        if (status.textContent !== text) status.textContent = text;
++        status.textContent = needle ? `${shown} of ${total} match "${input.value.trim()}"` : "";
+       };
+       input.addEventListener("input", apply);
+       // both lists are drawn after this renders, so re-apply when the DOM changes

@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=67
+pkgrel=68
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -187,6 +187,7 @@ source=(
   "0104-a-missing-package-comes-with-its-command.patch"
   "0105-the-search-does-not-retrigger-itself.patch"
   "0106-a-second-instance-gets-the-next-free-port.patch"
+  "0107-tools-and-skills-read-like-shipped-tools.patch"
 )
 sha256sums=(
             'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -296,6 +297,7 @@ sha256sums=(
             '78cdcc83720946fcb9051642ee56dd8939c2793a0098ac6a1eb313e6382d7cf5'
             '28a9b2ac3803d1debb25af3f96e149ef17311a5ed3c4708f1a9a911e2773c234'
             '9e04af96d844c7348a4c53a503f99419994539c9f990081d47a308d12d576eaf'
+            '3b0404bc87c2c69c64024d7d1481262b8c40a9b82cb966aa7dfe8e8d6a0193c7'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -677,6 +679,8 @@ prepare() {
   # message — whenever another copy (another edition, a test profile, the packaged build beside a dev
   # build) already held it. It now takes a free port and records which one in the data folder.
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0106-a-second-instance-gets-the-next-free-port.patch"
+  # The tools page after the review: no review chrome on the cards, click-to-read, one line of actions.
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0107-tools-and-skills-read-like-shipped-tools.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
