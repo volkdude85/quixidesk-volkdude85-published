@@ -92,14 +92,19 @@ for p in "${ORDER[@]}"; do
 done
 
 # --- 3. build ----------------------------------------------------------------
+# Same two invocations the PKGBUILD's build() runs: `--lib` then `--bins`, over the whole workspace.
+# `-p quixi-app -p quixi-engine` looks equivalent and is not — the workspace has eight binaries spread
+# across crates, and quixi-chrome-native-host / quixi-mcp-* / quixi-ssh-askpass live outside those two.
 echo "== cargo build --release"
 export CARGO_NET_OFFLINE=false
-cargo build --release --locked -p quixi-app -p quixi-engine
+export QUIXI_EDITION_LABEL="(volkdude85 deb) "
+cargo build --release --workspace --locked --lib
+cargo build --release --workspace --locked --bins
 
 BINS=(QuixiDesk quixi quixi-chrome-native-host quixi-disclaimer quixi-guest-daemon
       quixi-mcp-builtin quixi-mcp-worker quixi-ssh-askpass)
 for b in "${BINS[@]}"; do
-  [ -x "target/release/$b" ] || { echo "missing target/release/$b" >&2; exit 1; }
+  [ -x "target/release/$b" ] || { echo "missing target/release/$b (the workspace build should have made it)" >&2; exit 1; }
 done
 
 # --- 4. package root, same layout the PKGBUILD installs -----------------------
