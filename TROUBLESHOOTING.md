@@ -97,6 +97,18 @@ catch-all into panel one.
 **Fix:** the engine passes `owner` through; a skill found by walking the bundled directory with no
 manifest entry reports `quixidesk`. Patch `0103` in this series.
 
+## Skills the build never wrote are filed under the build's own panel
+
+**What it looks like:** the "QuixiDesk tools & skills" panel reads 29 of 29 when the package ships 8.
+
+**What it is:** the panel used to decide provenance from the shape of the id — a slash meant "came from a
+Hermes root". A Hermes library can hold a skill at the TOP of a root with no area folder above it, and
+those have no slash either. 21 of them were shown as if this edition had written them.
+
+**Fix:** group on the engine's `owner`, which comes from the root that was walked (`quixidesk` for the
+bundled directory, `user` for the data directory, `hermes` for everything mounted). The id is a name; the
+owner is a fact.
+
 ## `makepkg` says a source file failed the validity check
 
 **What it looks like:** every patch passes, and the tarball — the source the whole build starts from —
