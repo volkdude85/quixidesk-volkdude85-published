@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=63
+pkgrel=64
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -290,7 +290,7 @@ sha256sums=(
             '5ff934c318117cb9ca2c4a311fff25d0c995432ede55054fd681ec9e14530f1f'
             '17c52b1bd1e5d5d83e9f071c24d52198be55e12d632136dd537521e3379c51fc'
             'e1d93ea627bdfb2566a4cfd354cd4763b5b3e378891027daa4cd476beb2195f1'
-            'eb0ecf897413ff6231f3ad1a5a31d83c071650f88d68899fb8bb5f2231b34bdf'
+            'dd155ca19e22d843ff7c000a40337f4cfdb3f9600b1261c8881931098fa53ef7'
             '1c3c23de8009dd3de03bb0a4fc665fbe412133d0d6e45a2a07eea3d9239756da'
             '78cdcc83720946fcb9051642ee56dd8939c2793a0098ac6a1eb313e6382d7cf5'
             '28a9b2ac3803d1debb25af3f96e149ef17311a5ed3c4708f1a9a911e2773c234'
@@ -646,6 +646,20 @@ prepare() {
   # three libraries with a catch-all, and names masked on the way to the screen — the reader
   # included, where a whole file used to arrive unredacted.
   patch -Np1 -i "${srcdir}/0102-the-tools-page-is-the-developer-editions-tools-page.patch"
+
+  # Personal name map. It is NOT in this repo: the shipped file carries an empty map, because a list of
+  # the names to hide is a list of the people. A builder who has names points this at a file outside the
+  # tree — one `[/pattern/gi, "replacement"],` per line — and the map is filled in here, before build().
+  if [ -n "${QUIXI_REDACT_NAMES:-}" ] && [ -f "${QUIXI_REDACT_NAMES}" ]; then
+    _js="${srcdir}/QuixiDesk-${pkgver}/resources/ui/capability-workflows.js"
+    awk -v m="${QUIXI_REDACT_NAMES}" '
+      /const NAME_MAP = \[$/ { print; while ((getline l < m) > 0) print l; next }
+      { print }
+    ' "$_js" > "${_js}.tmp" && mv "${_js}.tmp" "$_js"
+    echo "   name map: $(grep -c "/gi" "$_js") entries from ${QUIXI_REDACT_NAMES}"
+  else
+    echo "   name map: empty (QUIXI_REDACT_NAMES not set)"
+  fi
   # The page groups by `owner`; the engine has to report it, or every skill falls into the catch-all.
   patch -Np1 -i "${srcdir}/0103-the-engine-says-which-panel.patch"
   # Every capability note carries the install command for the family underneath: pacman on Arch

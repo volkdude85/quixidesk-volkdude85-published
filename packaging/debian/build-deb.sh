@@ -92,6 +92,20 @@ for p in "${ORDER[@]}"; do
 done
 
 # --- 3. build ----------------------------------------------------------------
+# Personal name map, same rule as the PKGBUILD: never in this repo. The shipped file carries an empty
+# map; a builder who has names points this at a file outside the tree, one `[/pattern/gi, "replacement"],`
+# per line, and it is filled in here before compiling.
+if [ -n "${QUIXI_REDACT_NAMES:-}" ] && [ -f "${QUIXI_REDACT_NAMES}" ]; then
+  _js="resources/ui/capability-workflows.js"
+  awk -v m="${QUIXI_REDACT_NAMES}" '
+    /const NAME_MAP = \[$/ { print; while ((getline l < m) > 0) print l; next }
+    { print }
+  ' "$_js" > "${_js}.tmp" && mv "${_js}.tmp" "$_js"
+  echo "== name map: $(grep -c '/gi' "$_js") entries from ${QUIXI_REDACT_NAMES}"
+else
+  echo "== name map: empty (QUIXI_REDACT_NAMES not set)"
+fi
+
 # Same two invocations the PKGBUILD's build() runs: `--lib` then `--bins`, over the whole workspace.
 # `-p quixi-app -p quixi-engine` looks equivalent and is not — the workspace has eight binaries spread
 # across crates, and quixi-chrome-native-host / quixi-mcp-* / quixi-ssh-askpass live outside those two.
