@@ -15,6 +15,13 @@ BUILD="$WORK/build"
 REPO_DIR="$WORK/repo"
 STATE="$WORK/state"
 
+# The identity everything is signed with, defined here because BOTH the commit (flatpak-builder) and the
+# summary (build-update-repo) have to be signed with it. The key lives in its own keyring, not the default
+# one, so GNUPGHOME is passed explicitly rather than relied on.
+SIGN_KEY="${QUIXI_FLATPAK_KEY:-BEA4F4E734ECF3EC}"
+SIGN_HOME="${QUIXI_FLATPAK_GNUPGHOME:-$HOME/.config/quixidesk-flatpak/gnupg}"
+APP_ID="io.github.volkdude85.quixidesk"
+
 PKGVER=$(sed -n 's/^pkgver=//p' "$REPO/PKGBUILD")
 # The series is written against the *upstream* release, so that is what gets patched. The custom tarball
 # in src/ is this machine's prepared tree and cannot be the base for a patch that expects upstream.
@@ -33,24 +40,49 @@ fi
 # used to `exit 0` right after build-bundle and published an UNSIGNED repository while reporting
 # success — the quiet failure the rest of this comment is about.
 #
-# flatpak-builder writes an UNSIGNED repository. Publishing one unsigned is the quiet failure this step
-# exists to prevent: the ref file, `flatpak remote-ls` and the bundle all look right, and every client
-# that actually verifies gets "BAD signature" and refuses to load the summary.
+# Two different objects need two different signatures, and only signing one of them is the trap:
+#   * the COMMIT — signed by flatpak-builder via --gpg-sign (see both invocations below)
+#   * the SUMMARY — signed by build-update-repo here
+# A repo signed only at the summary level looks perfect to `remote-ls` and to the bundle, and every client
+# that actually verifies dies with "GPG verification enabled, but no signatures found". That error cost a
+# night: the failure is in the commit, and the gate at the end of sign_repo exists so it cannot recur unseen.
 #
-# The key lives in its own keyring, not the default one, so GNUPGHOME is set here rather than relied on.
+# The key lives in its own keyring, not the default one, so GNUPGHOME is passed explicitly rather than
+# relied on.
 sign_repo() {
-  SIGN_KEY="${QUIXI_FLATPAK_KEY:-BEA4F4E734ECF3EC}"
-  SIGN_HOME="${QUIXI_FLATPAK_GNUPGHOME:-$HOME/.config/quixidesk-flatpak/gnupg}"
-  if [ -d "$SIGN_HOME" ]; then
-    echo "== signing the repository with $SIGN_KEY"
-    GNUPGHOME="$SIGN_HOME" flatpak build-update-repo \
-      --gpg-sign="$SIGN_KEY" \
-      --generate-static-deltas \
-      "$REPO_DIR"
-  else
+  if [ ! -d "$SIGN_HOME" ]; then
     echo "== NOT SIGNED: no keyring at $SIGN_HOME" >&2
     echo "   A published repo must be signed. Set QUIXI_FLATPAK_GNUPGHOME or create that keyring." >&2
+    exit 1
   fi
+  echo "== signing the summary and generating deltas with $SIGN_KEY"
+  # build-update-repo signs the SUMMARY only. Flatpak verifies each COMMIT's detached signature too, so a
+  # summary-only repo fails on every client with "GPG verification enabled, but no signatures found" while
+  # the summary itself verifies fine. The commits are signed where they are created — the --gpg-sign on
+  # both flatpak-builder invocations below — and this step finishes the job.
+  GNUPGHOME="$SIGN_HOME" flatpak build-update-repo \
+    --gpg-sign="$SIGN_KEY" \
+    --gpg-homedir="$SIGN_HOME" \
+    --generate-static-deltas \
+    "$REPO_DIR"
+
+  # Gate, not a printout. The repo has to install the way a client sees it: a scratch user installation,
+  # GPG verification on, keyring imported from the published key, --no-deps so no runtime is downloaded.
+  # This is the exact step that failed for a whole night and reported success. If it fails, nothing
+  # downstream may publish.
+  echo "== verifying the repo as a verifying client sees it"
+  local KEY="$WORK/sigcheck-key.asc" UD="$WORK/sigcheck-user"
+  GNUPGHOME="$SIGN_HOME" gpg --armor --export "$SIGN_KEY" > "$KEY"
+  rm -rf "$UD"; mkdir -p "$UD"
+  if ( export FLATPAK_USER_DIR="$UD"
+       flatpak remote-add --user --if-not-exists --gpg-import="$KEY" sigcheck "file://$REPO_DIR" >/dev/null
+       flatpak install --user --noninteractive --no-deps -y sigcheck "$APP_ID" >/dev/null ); then
+    echo "  ✓ the signed commit installs on a verifying client"
+  else
+    echo "  ✗ a verifying client CANNOT install from $REPO_DIR — refusing to call this built" >&2
+    exit 1
+  fi
+  rm -rf "$UD"
 }
 
 PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
@@ -115,7 +147,10 @@ rm -rf "$BUILD" "$REPO_DIR"
 # with the same name on every build, so a cache lookup hit and packaged the PREVIOUS export while the
 # new app.js sat in the archive beside it. The build reported success, the bundle looked right, and the
 # published commit carried the old file — caught only by checking a file out of the exported commit.
+# --gpg-sign here, not only at build-update-repo: this is the call that CREATES the commit, and the commit
+# is the object the client verifies.
 flatpak-builder --user --disable-cache --state-dir="$STATE" --force-clean --repo="$REPO_DIR" \
+  --gpg-sign="$SIGN_KEY" --gpg-homedir="$SIGN_HOME" \
   "$BUILD" "$STAGE/manifest.yml"
 # Check the export before it is ever signed or published: the file that was just built has to be the
 # file in the commit, or nothing downstream of this line means anything.
@@ -136,6 +171,21 @@ ls -la "$BUNDLE"
 
 sign_repo
 exit 0
+fi
+
+# --- fallback: patch series from the upstream tarball ---------------------------------------
+# This path extracts the release and applies the series, and then it stops being able to help: it never
+# produces the two things the repository's manifest needs — a directory source at ../flatpak-src, and the
+# compiled binary inside it at prebuilt/QuixiDesk. Nothing here compiles Rust. flatpak-builder's answer to
+# that gap is "Failed to init: Unable to find directory", which reads like a missing dependency and is not,
+# and that misread costs an hour every time it happens. Refuse up front, in plain words.
+if [ -z "${QUIXI_SERIES_PATH:-}" ]; then
+  echo "== no prepared tree at $PREPARED — refusing to fall through to the patch-series path" >&2
+  echo "   That path patches the tree but never compiles the binary and never builds the directory source" >&2
+  echo "   the manifest points at, so it cannot package anything." >&2
+  echo "   Prepare src/QuixiDesk-${PKGVER} with prebuilt/QuixiDesk beside flatpak/, or set QUIXI_SERIES_PATH=1" >&2
+  echo "   if you are working on that path itself." >&2
+  exit 1
 fi
 
 # and it has to be the checksum the PKGBUILD pins, or the build is not reproducible
@@ -180,6 +230,7 @@ flatpak-builder --user --disable-cache \
   --state-dir="$STATE" \
   --force-clean \
   --repo="$REPO_DIR" \
+  --gpg-sign="$SIGN_KEY" --gpg-homedir="$SIGN_HOME" \
   "$BUILD" "$TREE/flatpak/io.github.volkdude85.quixidesk.yml"
 
 BUNDLE="$WORK/QuixiDesk.flatpak"
