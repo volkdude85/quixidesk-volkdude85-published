@@ -86,11 +86,23 @@ sign_repo() {
 }
 
 PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
+# The prepared tree can also be the one a previous run already staged under $WORK/src. That copy is the
+# same patched tree with the compiled binary beside it, and reusing it in place is the difference between
+# this script working on this machine and refusing to package anything. It must be used in place — copying
+# it into $SRC would delete it first, because it lives there.
+if [ ! -d "$PREPARED" ] && [ -d "$WORK/src/QuixiDesk-${PKGVER}" ]; then
+  PREPARED="$WORK/src/QuixiDesk-${PKGVER}"
+fi
 if [ -d "$PREPARED" ]; then
-  echo "== using the prepared tree at $PREPARED"
-  rm -rf "$SRC"; mkdir -p "$SRC"
-  cp -a "$PREPARED" "$SRC/"
-  TREE="$SRC/QuixiDesk-${PKGVER}"
+  if [ "$PREPARED" = "$SRC/QuixiDesk-${PKGVER}" ]; then
+    echo "== using the tree already staged at $PREPARED"
+    TREE="$PREPARED"
+  else
+    echo "== using the prepared tree at $PREPARED"
+    rm -rf "$SRC"; mkdir -p "$SRC"
+    cp -a "$PREPARED" "$SRC/"
+    TREE="$SRC/QuixiDesk-${PKGVER}"
+  fi
   cp -a "$REPO/flatpak" "$TREE/flatpak"
   # The vendored registry is what makes the build work with no network inside the sandbox. If the tree does
 # not have one — a fresh clone, a clean checkout — make it here, once, from the lockfile. That is the
