@@ -1,0 +1,45 @@
+Typing in the search box no longer hangs the page
+==================================================
+
+The tools page has a search that filters connections and skill cards, and an observer on the document so
+the filter survives the lists being redrawn. The filter also WRITES to the document: it sets `hidden` on
+every card and replaces the count's text on every pass.
+
+`status.textContent = …` fires the observer, the observer calls the filter, the filter writes the count
+again — a loop with no exit that keeps the renderer busy for as long as the page is open. It only shows
+up when the box is used, which is why the page looked fine: one character typed into it wedged the
+window, and the automation bridge answered `action_timeout` because the webview never came back.
+
+Both writes are conditional now. `status.textContent` is only assigned when the text differs, and
+`hidden` only when the value changes, so the observer settles after one pass instead of re-firing on its
+own output.
+
+---
+--- a/resources/ui/capability-workflows.js
++++ b/resources/ui/capability-workflows.js
+@@ -263,6 +263,11 @@
+         "aria-label": "Search connections, tools and skills",
+       });
+       const status = el("p", { class: "hint", role: "status" });
++      // Every write here is conditional, and that is not cosmetic. This function is called by the
++      // observer below on any DOM change, and it also CHANGES the DOM — so an unconditional
++      // `status.textContent = …` re-fires the observer on its own write and the page spins forever.
++      // Typing one character in this box hung the window: the eval bridge timed out while the renderer
++      // was still looping. Same for `node.hidden`, which is an attribute write on every card.
+       const apply = () => {
+         const needle = input.value.trim().toLocaleLowerCase();
+         let shown = 0;
+@@ -270,10 +275,11 @@
+         for (const node of document.querySelectorAll("#mcp-connections [data-server], .cards .skill-card")) {
+           total += 1;
+           const hit = !needle || node.textContent.toLocaleLowerCase().includes(needle);
+-          node.hidden = !hit;
++          if (node.hidden === hit) node.hidden = !hit;
+           if (hit) shown += 1;
+         }
+-        status.textContent = needle ? `${shown} of ${total} match "${input.value.trim()}"` : "";
++        const text = needle ? `${shown} of ${total} match "${input.value.trim()}"` : "";
++        if (status.textContent !== text) status.textContent = text;
+       };
+       input.addEventListener("input", apply);
+       // both lists are drawn after this renders, so re-apply when the DOM changes

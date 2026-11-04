@@ -22,7 +22,7 @@ paths. Delete the identity, keep the measurement.
 ---
 --- a/resources/bundled-skills/manifest.json
 +++ b/resources/bundled-skills/manifest.json
-@@ -3,12 +3,92 @@
+@@ -3,12 +3,86 @@
      {
        "name": "browser-driving",
        "description": "Drive a real browser: Brave over CDP, Firefox over WebDriver BiDi, curl as the last resort.",
@@ -46,13 +46,13 @@ paths. Delete the identity, keep the measurement.
 +    },
 +    {
 +      "name": "post-media-read",
-+      "description": "Read a social post someone pasted \u2014 text, thread, and the media itself \u2014 with no account and no login wall.",
++      "description": "Read a social post someone pasted — text, thread, and the media itself — with no account and no login wall.",
 +      "tier": "always",
 +      "owner": "volkdude85"
 +    },
 +    {
 +      "name": "terminal-email",
-+      "description": "Read, search, draft and send email from the shell over IMAP/SMTP \u2014 with the flag-order and folder-name traps that make commands appear to succeed silently.",
++      "description": "Read, search, draft and send email from the shell over IMAP/SMTP — with the flag-order and folder-name traps that make commands appear to succeed silently.",
 +      "tier": "always",
 +      "owner": "volkdude85"
 +    },
@@ -82,19 +82,19 @@ paths. Delete the identity, keep the measurement.
 +    },
 +    {
 +      "name": "linux-ops",
-+      "description": "Diagnose a Linux box that is out of space, full of stray processes, or failing units \u2014 measure first, attribute before acting.",
++      "description": "Diagnose a Linux box that is out of space, full of stray processes, or failing units — measure first, attribute before acting.",
 +      "tier": "always",
 +      "owner": "volkdude85"
 +    },
 +    {
 +      "name": "document-extraction",
-+      "description": "Get text and tables out of PDFs, scans and office documents \u2014 pick the extractor by what the file actually is, and verify the output against the page.",
++      "description": "Get text and tables out of PDFs, scans and office documents — pick the extractor by what the file actually is, and verify the output against the page.",
 +      "tier": "always",
 +      "owner": "volkdude85"
 +    },
 +    {
 +      "name": "verification-discipline",
-+      "description": "Prove the artifact works before saying it does \u2014 the false failures, the false successes, and what 'verified' is allowed to mean.",
++      "description": "Prove the artifact works before saying it does — the false failures, the false successes, and what 'verified' is allowed to mean.",
 +      "tier": "always",
 +      "owner": "volkdude85"
 +    },
@@ -105,14 +105,8 @@ paths. Delete the identity, keep the measurement.
 +      "owner": "volkdude85"
 +    },
 +    {
-+      "name": "linux-gaming-field-notes",
-+      "description": "Set up or repair a Linux gaming box: distro choice, the compatibility stack, the packages that earn their place, and where to look when a game will not start.",
-+      "tier": "always",
-+      "owner": "volkdude85"
-+    },
-+    {
 +      "name": "reverse-engineering",
-+      "description": "Decompile a binary with Ghidra headless and read the C \u2014 functions, call graph, where to look first.",
++      "description": "Decompile a binary with Ghidra headless and read the C — functions, call graph, where to look first.",
 +      "tier": "always",
 +      "owner": "volkdude85"
      }

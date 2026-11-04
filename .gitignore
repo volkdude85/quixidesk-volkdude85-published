@@ -29,3 +29,7 @@ voice.json
 # Python bytecode — it embeds the absolute path it was compiled from
 __pycache__/
 *.pyc
+
+# build output of packaging/debian/build-deb.sh
+packaging/debian/dist/
+packaging/debian/work/

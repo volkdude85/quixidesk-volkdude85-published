@@ -16,6 +16,35 @@ quixi --capabilities
 # "Install ydotool and start ydotoold for cursor and keyboard synthesis. … On Debian: `sudo apt install ydotool`."
 ```
 
+## Devuan, and the Lunduke Computer OS
+
+Devuan is Debian with the systemd parts taken out, and LCOS is built on Devuan. Both resolve to the
+Debian package names above and to `apt`, so nothing about the install changes — but the family is named
+separately in the report, because telling a Devuan user their machine is "Debian" reads like the app
+guessed. Detection is `ID=devuan`, or `ID=lcos`, or `ID_LIKE` containing `devuan`.
+
+Nothing in this app needs systemd: there is no unit in the package, and the daemon page reports on
+services instead of managing them.
+
+## BSD
+
+FreeBSD, OpenBSD and NetBSD are a **port, not a package** — this is the honest status:
+
+* the toolkit is available in ports (GTK3, WebKitGTK 4.1, librsvg, pkg-config), so the libraries the
+  binary links exist;
+* `tao` and `wry` — the window and webview layers this app is built on — do not list any BSD as a
+  supported target, so the first step is getting those to build, not getting this to build;
+* the platform layer in `crates/quixi-platform/src/linux.rs` is `cfg(target_os = "linux")`, and the
+  tools it drives (`ydotool`, `wl-clipboard`, `spectacle`, `grim`) have no BSD counterparts. Screenshot,
+  clipboard and input synthesis would each need their own implementation.
+
+What exists today is the reporting half, so a BSD build does not lie about what it can do: the family is
+detected from the target at compile time (a BSD has no `/etc/os-release` to read), the package manager
+is named — `pkg install`, `pkg_add`, `pkgin` — and every capability hint says there is no packaged
+equivalent yet rather than inventing a name.
+
+Not tested on hardware. Nothing here should be read as "BSD is supported".
+
 ## Linked libraries, by family
 
 | Arch | Debian / Ubuntu | Fedora | openSUSE | why |
