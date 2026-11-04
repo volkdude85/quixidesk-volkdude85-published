@@ -5,6 +5,7 @@
   <summary>volkdude85's QuixiCore — native Rust desktop workspace for AI</summary>
   <metadata_license>MIT</metadata_license>
   <project_license>MIT</project_license>
+  <url type="homepage">https://github.com/volkdude85/quixidesk-volkdude85-published</url>
   <description>
     <p>A desktop workspace that runs AI models locally or over the internet, keeps its memory in a folder of markdown you own, and works on your files.</p>
   </description>

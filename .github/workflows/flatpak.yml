@@ -157,6 +157,23 @@ jobs:
           gpg-sign: ${{ secrets.FLATPAK_GPG_KEY_ID }}
           run-tests: false
 
+      # The linter Flathub itself runs on every build: four checks (appstream, manifest, builddir,
+      # repo) from ghcr.io/flathub/flatpak-builder-lint. Our CI image is built FROM that same image,
+      # so this is the check and not an imitation of it.
+      #
+      # Non-blocking on purpose, today: our metainfo has one appstream warning
+      # (url-homepage-missing) and appstreamcli treats warnings as fatal. Turning it blocking now
+      # would just paint the build red for a metadata field. Fix the metainfo, then delete
+      # continue-on-error — the comment says so out loud so it does not become permanent.
+      - name: Lint the manifest and the metainfo
+        continue-on-error: true
+        run: |
+          set -e
+          docker run --rm -v "$PWD:/mnt" ghcr.io/flathub/flatpak-builder-lint:latest \
+            manifest /mnt/flatpak/org.quixidesk.QuixiDesk.yml || true
+          docker run --rm -v "$PWD:/mnt" ghcr.io/flathub/flatpak-builder-lint:latest \
+            appstream /mnt/flatpak/org.quixidesk.QuixiDesk.metainfo.xml || true
+
       - name: Keep the bundle as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
