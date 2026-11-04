@@ -4,9 +4,20 @@ name: flatpak
 # as an artifact, so "the Flatpak" means the newest green run on master and nothing else — it cannot drift
 # away from the source, because the source is what built it.
 #
-# Nothing is published: no release asset, no Pages repository, no store submission. Publishing would need
-# three things that do not exist yet — a signing key in repository secrets, a public host for the OSTree
-# repository, and a Flathub submission that has passed review.
+# This workflow publishes nothing. It builds the bundle and attaches it to the run as an artifact.
+#
+# The public install channel is separate and manual: `flatpak/build-flatpak.sh` builds a signed OSTree
+# repository under ~/flatpak-build/repo, and that directory is rsynced onto the `gh-pages` branch, which
+# GitHub Pages serves at
+#
+#   https://volkdude85.github.io/quixidesk-volkdude85-published/
+#
+# So the thing a person installs is NOT whatever CI last produced — it is whatever was pushed to
+# `gh-pages` by hand. If the two disagree, `gh-pages` is the one that is live, and the ref that matters is
+# `repo/refs/heads/app/org.quixidesk.QuixiDesk/x86_64/master`. Check it before telling anyone an install
+# line is current.
+#
+# Nothing goes to Flathub: that submission needs source builds and the org.quixidesk namespace is Eric's.
 on:
   push:
     branches: [master, publish]
