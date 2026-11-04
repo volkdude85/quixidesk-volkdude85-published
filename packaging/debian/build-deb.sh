@@ -88,8 +88,12 @@ for p in "${ORDER[@]}"; do
   [ -f "$f" ] || { echo "  MISSING $p" >&2; exit 1; }
   # Files the series CREATES are removed first: a second run in the same tree would otherwise apply
   # an add-on-top-of-itself and quietly double the file.
-  patch -Np1 -s -i "$f" || { echo "  FAILED $p" >&2; exit 1; }
+  patch -Np1 -s --no-backup-if-mismatch -i "$f" || { echo "  FAILED $p" >&2; exit 1; }
 done
+
+# `patch` leaves a .orig beside any file whose hunks apply inexactly. Those are not source and must not
+# end up in the package.
+find . -name '*.orig' -delete
 
 # --- 3. build ----------------------------------------------------------------
 # Personal name map, same rule as the PKGBUILD: never in this repo. The shipped file carries an empty

@@ -109,6 +109,20 @@ those have no slash either. 21 of them were shown as if this edition had written
 bundled directory, `user` for the data directory, `hermes` for everything mounted). The id is a name; the
 owner is a fact.
 
+## `.orig` files shipped inside the package
+
+**What it looks like:** `resources/ui/` contains `app.js.orig`, `app.css.orig` and
+`capability-workflows.js.orig` beside the real files. They are full copies of the pre-patch source and
+they ship.
+
+**What it is:** GNU `patch` defaults to `--backup-if-mismatch`. Any file whose hunks apply with fuzz gets
+a `.orig` backup, and the packaging step copies the whole `resources` directory, backups included. The
+build log is where it is visible: `Hunk #1 succeeded at 936 (offset -7 lines)` and eight more like it.
+
+**Fix:** `--no-backup-if-mismatch` on every `patch` invocation, plus a `find … -name '*.orig' -delete`
+before packaging as a belt-and-braces. Worth knowing that one of those backups carried content the
+package deliberately no longer ships, so this is not only tidiness.
+
 ## `makepkg` says a source file failed the validity check
 
 **What it looks like:** every patch passes, and the tarball — the source the whole build starts from —

@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=64
+pkgrel=65
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -344,21 +344,21 @@ prepare() {
 
   # 1) Linux platform layer: the ComputerUse surface upstream leaves as silent
   #    no-ops outside macOS, plus the KWin ScreenShot2 fast path.
-  patch -Np1 -i "${srcdir}/0001-linux-support.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0001-linux-support.patch"
 
   # 2) Local behaviour overrides - NOT for publication.
-  patch -Np1 -i "${srcdir}/0002-local-overrides.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0002-local-overrides.patch"
 
   # 3) Context condensation degrades to a mechanical handoff instead of killing the run
   #    when the summariser returns nothing usable.
-  patch -Np1 -i "${srcdir}/0003-condense-fallback.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0003-condense-fallback.patch"
 
   # 4) Skills become something the model can actually use: an index it can search and a
   #    LoadSkill tool, over the bundled tree and any ~/.hermes profile skill trees.
-  patch -Np1 -i "${srcdir}/0004-skills.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0004-skills.patch"
 
   # 5) The headless `quixi` driver - same engine, no window.
-  patch -Np1 -i "${srcdir}/0005-headless.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0005-headless.patch"
 
   # 6) Fixes found by cross-desktop testing, plus keyboard-shortcut discovery:
   #    - is_wayland() treated an EMPTY WAYLAND_DISPLAY as Wayland, silently disabling
@@ -367,289 +367,293 @@ prepare() {
   #      empty error on boxes using the distro ydotoold (/run/ydotoold.socket)
   #    - list_keybindings()/find_keybinding(): normalized shortcuts across KDE, GNOME and XFCE
   #    - input_path_check(): proves the input path with a zero-displacement injection
-  patch -Np1 -i "${srcdir}/0009-linux-fixes-keybindings.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0009-linux-fixes-keybindings.patch"
 
   # 7) Less process spawning in the keybinding readers:
   #    - GNOME: one `gsettings list-recursively` instead of 25 `gsettings get` calls (539ms -> 14ms)
   #    - XFCE:  in-process org.xfce.Xfconf.GetAllProperties over D-Bus, no xfconf-query process
-  patch -Np1 -i "${srcdir}/0010-rustify-keybindings.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0010-rustify-keybindings.patch"
 
   # 8) Test portability: the suites asserted the author's machine rather than the contract —
   #    a hardcoded "wayland" session, a "> 50 KB means the screenshot worked" size heuristic, and a
   #    simulated desktop that inherited the runner's session type. They pass on any machine now.
-  patch -Np1 -i "${srcdir}/0011-test-portability.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0011-test-portability.patch"
 
   # 9) Pin the KDE fall-through scenario to X11: `import` is an X11 tool, so asserting it is KDE's
   #    next backend after a failing spectacle only holds for an X11 session.
-  patch -Np1 -i "${srcdir}/0012-kde-scenario-pinning.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0012-kde-scenario-pinning.patch"
 
   # 6) MemPalace-style memory: wings/rooms/drawers on disk, ranked recall, and a scope gate
   #    keyed on whether the active provider is local or remote.
-  patch -Np1 -i "${srcdir}/0006-memory.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0006-memory.patch"
 
   # 7) Voice without the webview: TTS and STT over HTTP or a command, with a silence lead-in so
   #    the first word is not clipped on Bluetooth sinks.
-  patch -Np1 -i "${srcdir}/0007-voice.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0007-voice.patch"
 
   # 8) Local voice defaults: this machine's Kokoro voice and its local Whisper service, plus the
   #    quixi --say / --transcript commands.
-  patch -Np1 -i "${srcdir}/0008-voice-local.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0008-voice-local.patch"
 
   # Fetch AFTER the patches, so the dependency set being fetched is the one the build will actually
   # use. This is the difference between a cold machine building successfully and failing on `png`.
   # Artix Love — "I don't want to run it, but I want to love it."
   # The suite could not pass in a container because a test asserted that a mouse move makes
   # the pointer position known without first checking this host can move a mouse at all.
-  patch -Np1 -i "${srcdir}/0013-artix-love.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0013-artix-love.patch"
 
   # Hyprland and Omarchy. Hyprland publishes the cursor position, which is the one thing
   # the Wayland path could not answer; Omarchy is Hyprland with Quickshell on top.
-  patch -Np1 -i "${srcdir}/0014-hyprland-omarchy.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0014-hyprland-omarchy.patch"
 
   # Browser driving as a shipped skill: Brave over CDP, Firefox over BiDi, curl last. Without this
   # line the patch is downloaded and checksummed but never applied, so the skill silently does not
   # ship — which is exactly what happened here until the chain was inspected rather than assumed.
-  patch -Np1 -i "${srcdir}/0015-browser-driving-skill.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0015-browser-driving-skill.patch"
 
   # Two tests that were still asserting the host: "more than ten applications installed" (a
   # container ships none) and "the capture error names spectacle or grim" (a host with neither
   # names the backends it does have). Found by running the suite in an archlinux container.
-  patch -Np1 -i "${srcdir}/0016-test-portability-containers.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0016-test-portability-containers.patch"
 
   # The usage text advertised five of the fourteen commands; the memory and voice commands were
   # accepted but invisible. Grouped by what they cost, with the real arity for each.
-  patch -Np1 -i "${srcdir}/0017-cli-usage.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0017-cli-usage.patch"
 
   # matrix / amber / ice / custom themes, plus font family and text size. CSS and JS only:
   # upstream already had the variables and the data-theme switch, it only ever defined two looks.
-  patch -Np1 -i "${srcdir}/0018-themes-and-fonts.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0018-themes-and-fonts.patch"
 
   # Reverse-engineering skill: Ghidra headless driven by a wrapper that keeps the decompiled C and
   # drops the JVM/relocation noise. Ghidra is an optdepend, not a requirement.
-  patch -Np1 -i "${srcdir}/0019-reverse-engineering-skill.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0019-reverse-engineering-skill.patch"
 
   # Voice over the EIPC bridge: the UI called it over HTTP on a custom scheme, which WebKitGTK
   # blocks, so Dictate fell through to a macOS-only "use system dictation" dialog.
-  patch -Np1 -i "${srcdir}/0020-voice-over-ipc.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0020-voice-over-ipc.patch"
 
   # startEngineDictation referenced textarea/node from another scope: ReferenceError on every
   # Dictate click on Linux, swallowed by the event dispatcher.
-  patch -Np1 -i "${srcdir}/0021-dictation-referenceerror.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0021-dictation-referenceerror.patch"
 
   # Appearance as backend state; sliders where the native colour dialog committed on first touch.
-  patch -Np1 -i "${srcdir}/0022-appearance-is-a-setting.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0022-appearance-is-a-setting.patch"
 
   # Persona as a file the user owns, named in the top bar.
-  patch -Np1 -i "${srcdir}/0023-persona-file.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0023-persona-file.patch"
 
   # His palette, read off his Hermes window, and his two strings.
-  patch -Np1 -i "${srcdir}/0024-his-colours-and-his-words.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0024-his-colours-and-his-words.patch"
 
   # A custom colour must not override every theme chosen after it.
-  patch -Np1 -i "${srcdir}/0025-custom-colours-stay-in-custom.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0025-custom-colours-stay-in-custom.patch"
 
   # Retro: readable secondary text, visible borders, green heading.
-  patch -Np1 -i "${srcdir}/0026-retro-contrast.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0026-retro-contrast.patch"
 
   # Resizable sidebar, translucent panels, boxed surfaces.
-  patch -Np1 -i "${srcdir}/0027-resize-glass-boxes.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0027-resize-glass-boxes.patch"
 
   # His words: New instance, VolkDude's QuixiDesk, Cron jobs, and one tools search.
-  patch -Np1 -i "${srcdir}/0028-its-your-edition.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0028-its-your-edition.patch"
 
   # Cron jobs: say what they are, show the expression, explain an empty list.
-  patch -Np1 -i "${srcdir}/0029-cron-jobs-explained.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0029-cron-jobs-explained.patch"
 
   # Plural sidebar sections open; the composer says something human.
-  patch -Np1 -i "${srcdir}/0030-plural-sections-open.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0030-plural-sections-open.patch"
 
   # Sidebar tree: caret gutter, whole-row targets, populated Tools & skills.
-  patch -Np1 -i "${srcdir}/0031-sidebar-tree.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0031-sidebar-tree.patch"
 
   # An expansion must always resolve to a row.
-  patch -Np1 -i "${srcdir}/0032-branches-have-leaves.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0032-branches-have-leaves.patch"
 
   # Retro text tone: less white, greener, same contrast.
-  patch -Np1 -i "${srcdir}/0033-less-white.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0033-less-white.patch"
 
   # The cursor test asserts the move result, not the machine it runs on.
-  patch -Np1 -i "${srcdir}/0034-cursor-test-measures-the-move.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0034-cursor-test-measures-the-move.patch"
 
   # No macOS-only MCP servers, and no office-document skills nobody here uses.
-  patch -Np1 -i "${srcdir}/0035-no-mac-tooling.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0035-no-mac-tooling.patch"
 
   # Two skill libraries with two searches; About says whose edition this is.
-  patch -Np1 -i "${srcdir}/0036-two-libraries-and-about.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0036-two-libraries-and-about.patch"
 
   # Privacy & data: real paths, real counts, real files.
-  patch -Np1 -i "${srcdir}/0037-privacy-is-paths.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0037-privacy-is-paths.patch"
 
   # Panel opacity slider, and an optional drawn background.
-  patch -Np1 -i "${srcdir}/0038-transparency-and-background.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0038-transparency-and-background.patch"
 
   # Daemons page: live systemd + port checks, horned icon.
-  patch -Np1 -i "${srcdir}/0039-daemons.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0039-daemons.patch"
 
   # Sidebar rhythm: accent rail, active row, section labels.
-  patch -Np1 -i "${srcdir}/0040-sidebar-restyle.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0040-sidebar-restyle.patch"
 
   # External links resolve Brave first, honouring QUIXI_BROWSER.
-  patch -Np1 -i "${srcdir}/0041-links-open-in-brave.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0041-links-open-in-brave.patch"
 
   # Active-nav rail actually fires; Daemons joins the caret column.
-  patch -Np1 -i "${srcdir}/0042-rail-and-column.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0042-rail-and-column.patch"
 
   # window.__quixi_automation__: click/type/navigate without the system pointer.
-  patch -Np1 -i "${srcdir}/0043-automation-bridge.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0043-automation-bridge.patch"
 
   # Bundle the public Nora persona and seed it as a file the user owns.
-  patch -Np1 -i "${srcdir}/0044-shipped-persona.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0044-shipped-persona.patch"
 
   # Browser pane hands pages to Brave (--app window); no fake in-app rendering.
-  patch -Np1 -i "${srcdir}/0045-browser-is-brave.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0045-browser-is-brave.patch"
 
   # navigate() allow-list: the Daemons page is reachable.
-  patch -Np1 -i "${srcdir}/0046-router-knows-daemons.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0046-router-knows-daemons.patch"
 
   # Daemons row: the light and the label come from one decision.
-  patch -Np1 -i "${srcdir}/0047-dot-and-label-agree.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0047-dot-and-label-agree.patch"
   # A socket file is not a running daemon: probe by connecting, and gate the stale-socket case.
-  patch -Np1 -i "${srcdir}/0048-socket-liveness.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0048-socket-liveness.patch"
 
   # MCP is not macOS-only: sweep a leftover applescript adapter out of an existing config.
-  patch -Np1 -i "${srcdir}/0049-mcp-platform-adapters.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0049-mcp-platform-adapters.patch"
 
   # The context button only when an external server exists to browse.
-  patch -Np1 -i "${srcdir}/0050-context-button-earns-its-place.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0050-context-button-earns-its-place.patch"
 
   # With, shipped as a skill: the compiler's own language, taught to the agent.
-  patch -Np1 -i "${srcdir}/0051-with-skill.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0051-with-skill.patch"
 
   # The tool catalogue stops describing a Mac to a Linux agent.
-  patch -Np1 -i "${srcdir}/0052-tool-descriptions-know-the-platform.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0052-tool-descriptions-know-the-platform.patch"
 
   # Journal: one file per session, appended in place. Input at send, reply on completion.
-  patch -Np1 -i "${srcdir}/0053-journal.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0053-journal.patch"
 
   # The line under the greeting, said the way it actually gets said.
-  patch -Np1 -i "${srcdir}/0056-home-headline.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0056-home-headline.patch"
 
-  patch -Np1 -i "${srcdir}/0055-browser-choice.patch"
-  patch -Np1 -i "${srcdir}/0056-engine-tests-carry-their-own-weight.patch"
-  patch -Np1 -i "${srcdir}/0057-ollama-cloud-and-first-run.patch"
-  patch -Np1 -i "${srcdir}/0058-first-contact.patch"
-  patch -Np1 -i "${srcdir}/0059-newcomer-or-old-hand.patch"
-  patch -Np1 -i "${srcdir}/0060-model-order-and-a-reachable-button.patch"
-  patch -Np1 -i "${srcdir}/0061-memory-palace-setup.patch"
-  patch -Np1 -i "${srcdir}/0062-memory-palace-explained.patch"
-  patch -Np1 -i "${srcdir}/0063-encryption-choices.patch"
-  patch -Np1 -i "${srcdir}/0064-pick-your-model.patch"
-  patch -Np1 -i "${srcdir}/0065-visuals-audio-and-your-drives.patch"
-  patch -Np1 -i "${srcdir}/0066-welcome-and-a-memory-folder-that-survives.patch"
-  patch -Np1 -i "${srcdir}/0067-stt-tts-conversation.patch"
-  patch -Np1 -i "${srcdir}/0068-ask-later.patch"
-  patch -Np1 -i "${srcdir}/0069-lowercase.patch"
-  patch -Np1 -i "${srcdir}/0070-doors.patch"
-  patch -Np1 -i "${srcdir}/0071-aide.patch"
-  patch -Np1 -i "${srcdir}/0072-desktop-pickers-and-documents.patch"
-  patch -Np1 -i "${srcdir}/0073-cancel-is-not-a-choice.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0055-browser-choice.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0056-engine-tests-carry-their-own-weight.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0057-ollama-cloud-and-first-run.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0058-first-contact.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0059-newcomer-or-old-hand.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0060-model-order-and-a-reachable-button.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0061-memory-palace-setup.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0062-memory-palace-explained.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0063-encryption-choices.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0064-pick-your-model.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0065-visuals-audio-and-your-drives.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0066-welcome-and-a-memory-folder-that-survives.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0067-stt-tts-conversation.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0068-ask-later.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0069-lowercase.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0070-doors.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0071-aide.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0072-desktop-pickers-and-documents.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0073-cancel-is-not-a-choice.patch"
 
   # One dial that tells the truth: the window is opaque at 100%, the compositor does the blending
   # below it, onboarding only appears on an install with no history, and there is a task list.
-  patch -Np1 -i "${srcdir}/0074-opacity-voice-and-tasks.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0074-opacity-voice-and-tasks.patch"
 
   # A clean install knows it is clean: nothing pre-selected, the cloud fields actually hidden, the
   # task list in the conversation, and an onboarding gate that needs an explicit yes to skip.
-  patch -Np1 -i "${srcdir}/0075-provider-choice-and-the-task-widget.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0075-provider-choice-and-the-task-widget.patch"
 
   # Approvals that explain themselves and can act on history, a microphone and a speaker with
   # device lists, a reading column you can widen, and a dev door that clears credentials.
-  patch -Np1 -i "${srcdir}/0076-approvals-voice-and-a-real-reset.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0076-approvals-voice-and-a-real-reset.patch"
 
   # Device choice belongs in Settings, so the composer carries switches instead of two dropdowns.
-  patch -Np1 -i "${srcdir}/0077-mic-and-speaker-are-switches.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0077-mic-and-speaker-are-switches.patch"
 
   # The model chip answers its own question: a key can be added without leaving the composer.
-  patch -Np1 -i "${srcdir}/0078-a-key-where-the-question-is-asked.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0078-a-key-where-the-question-is-asked.patch"
 
   # Dictation opens the microphone instead of reading a transcript somebody else produced.
-  patch -Np1 -i "${srcdir}/0079-the-microphone-is-actually-opened.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0079-the-microphone-is-actually-opened.patch"
 
   # Dictation is press-to-start, press-to-stop, with a level meter while it is open.
-  patch -Np1 -i "${srcdir}/0080-dictation-is-a-toggle-with-a-level-meter.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0080-dictation-is-a-toggle-with-a-level-meter.patch"
 
   # The switch keeps its state across a repaint, and draws before it awaits.
-  patch -Np1 -i "${srcdir}/0081-dictation-state-survives-a-repaint.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0081-dictation-state-survives-a-repaint.patch"
 
   # Nothing said is left in an unclosed segment: flush on stop, and show the partial at once.
-  patch -Np1 -i "${srcdir}/0082-no-words-left-behind.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0082-no-words-left-behind.patch"
 
   # Ctrl+F searches, and conversation mode lives in the composer instead of being described twice.
-  patch -Np1 -i "${srcdir}/0083-ctrl-f-and-no-second-conversation-mode.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0083-ctrl-f-and-no-second-conversation-mode.patch"
 
   # Personas live in settings, and the persona text can be read there.
-  patch -Np1 -i "${srcdir}/0084-personas-are-a-settings-section.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0084-personas-are-a-settings-section.patch"
 
   # The greeting is "Sup" — the first word should set a register, not make a claim.
-  patch -Np1 -i "${srcdir}/0085-the-greeting-is-sup.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0085-the-greeting-is-sup.patch"
 
   # Sup by default; his own theme is the only place the other register appears.
-  patch -Np1 -i "${srcdir}/0086-sup-by-default-sup-bitches-in-his-own-theme.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0086-sup-by-default-sup-bitches-in-his-own-theme.patch"
 
   # The edition names itself in his handle's own case; the composer placeholder asks nothing.
-  patch -Np1 -i "${srcdir}/0087-volkdude85-edition-and-a-plain-placeholder.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0087-volkdude85-edition-and-a-plain-placeholder.patch"
 
   # The register follows the theme: earned by default, all on in his own.
-  patch -Np1 -i "${srcdir}/0088-the-register-is-earned.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0088-the-register-is-earned.patch"
 
   # A dev key box that configures in one paste, and a door that resets to zero.
-  patch -Np1 -i "${srcdir}/0089-a-dev-key-and-a-door-that-means-zero.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0089-a-dev-key-and-a-door-that-means-zero.patch"
 
   # Nora introduces herself on an empty install, and the persona says the same in her voice.
-  patch -Np1 -i "${srcdir}/0090-nora-introduces-herself.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0090-nora-introduces-herself.patch"
 
   # No macOS-shaped capability is advertised on Linux, and the prompt says so.
-  patch -Np1 -i "${srcdir}/0091-no-apple-shaped-capabilities-on-linux.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0091-no-apple-shaped-capabilities-on-linux.patch"
 
   # A new conversation works in Documents, so ordinary file questions are not "outside".
-  patch -Np1 -i "${srcdir}/0092-the-workspace-is-documents.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0092-the-workspace-is-documents.patch"
 
   # Reconcile the tree with the series: the last edits had never been cut into a patch.
 
   # Developer affordances exist only in a build that says it is a development build.
-  patch -Np1 -i "${srcdir}/0094-developer-affordances-are-a-build-flag.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0094-developer-affordances-are-a-build-flag.patch"
 
   # A shipped build selects nothing: no provider, no model, until the person chooses.
-  patch -Np1 -i "${srcdir}/0095-a-published-build-chooses-nothing.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0095-a-published-build-chooses-nothing.patch"
 
   # The rail groups by day and counts each day, like the sessions list in Hermes.
-  patch -Np1 -i "${srcdir}/0096-recents-grouped-by-day-like-hermes.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0096-recents-grouped-by-day-like-hermes.patch"
 
   # No diagnosis in a published build, and the project rules sit beside the work.
-  patch -Np1 -i "${srcdir}/0097-project-rules-beside-the-work.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0097-project-rules-beside-the-work.patch"
 
   # The daemon list belongs to the machine: it comes from <data_dir>/daemons.json.
-  patch -Np1 -i "${srcdir}/0098-the-daemon-list-belongs-to-the-machine.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0098-the-daemon-list-belongs-to-the-machine.patch"
 
   # The window opens no larger than the screen it lands on: a 1280x800 handheld (Steam Deck in desktop
   # mode) was getting a 1280x840 window with the composer below the bottom edge.
-  patch -Np1 -i "${srcdir}/0099-window-fits-the-screen.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0099-window-fits-the-screen.patch"
 
   # On a handheld panel — 1280x800 is a Steam Deck in either mode — ask the compositor to maximize:
   # Game Mode gives one application the whole display and will not decorate or enlarge it for you.
-  patch -Np1 -i "${srcdir}/0100-handheld-windows-open-maximized.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0100-handheld-windows-open-maximized.patch"
 
   # The rest of the library: the three skills written for this edition, and the eleven scrubbed
   # work skills from a working agent, with the manifest's owner values deciding each panel.
-  patch -Np1 -i "${srcdir}/0101-the-rest-of-the-library.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0101-the-rest-of-the-library.patch"
   # The tools page is the developer edition's tools page: skills first, grouped by `owner` into
   # three libraries with a catch-all, and names masked on the way to the screen — the reader
   # included, where a whole file used to arrive unredacted.
-  patch -Np1 -i "${srcdir}/0102-the-tools-page-is-the-developer-editions-tools-page.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0102-the-tools-page-is-the-developer-editions-tools-page.patch"
 
   # Personal name map. It is NOT in this repo: the shipped file carries an empty map, because a list of
   # the names to hide is a list of the people. A builder who has names points this at a file outside the
   # tree — one `[/pattern/gi, "replacement"],` per line — and the map is filled in here, before build().
+  # `patch` writes a .orig beside any file whose hunks apply inexactly, and those backups were being
+  # packaged — three of them shipped in every build, one carrying the name map. They are not source.
+  find "${srcdir}/QuixiDesk-${pkgver}" -name '*.orig' -delete
+
   if [ -n "${QUIXI_REDACT_NAMES:-}" ] && [ -f "${QUIXI_REDACT_NAMES}" ]; then
     _js="${srcdir}/QuixiDesk-${pkgver}/resources/ui/capability-workflows.js"
     awk -v m="${QUIXI_REDACT_NAMES}" '
@@ -661,12 +665,12 @@ prepare() {
     echo "   name map: empty (QUIXI_REDACT_NAMES not set)"
   fi
   # The page groups by `owner`; the engine has to report it, or every skill falls into the catch-all.
-  patch -Np1 -i "${srcdir}/0103-the-engine-says-which-panel.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0103-the-engine-says-which-panel.patch"
   # Every capability note carries the install command for the family underneath: pacman on Arch
   # and its children, apt on Debian's, dnf on Fedora, zypper on openSUSE, nothing on an unknown.
-  patch -Np1 -i "${srcdir}/0104-a-missing-package-comes-with-its-command.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0104-a-missing-package-comes-with-its-command.patch"
   # The tools filter wrote the DOM it watches, so typing one character re-fired it forever.
-  patch -Np1 -i "${srcdir}/0105-the-search-does-not-retrigger-itself.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0105-the-search-does-not-retrigger-itself.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
