@@ -1,0 +1,25 @@
+diff -urN a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-04 21:46:37.821495895 +0000
++++ b/resources/ui/app.js	2026-11-04 21:46:37.822053877 +0000
+@@ -773,8 +773,6 @@
+       setTimeout(() => document.getElementById("search-input")?.focus(), 0);
+   }
+   window.quixiNavigate = (page) => navigate(page);
+-  // First paint: the Daemons group in the sidebar is drawn from this, so fetch it once and redraw.
+-  loadDaemons().then(() => { try { render(); } catch {} });
+   addEventListener("popstate", () => {
+     const path = location.pathname.slice(1);
+     navigate(path, null, { replace: true });
+@@ -833,6 +831,12 @@
+         return items.length ? items : [["No cron jobs yet", () => navigate("schedules")]];
+       },
+       daemons: () => {
++        // Fetched on first open, never at boot: a startup dependency on this endpoint left the shell
++        // sitting on "Opening your workspace…" when it did not answer.
++        if (!state.daemonsTried) {
++          state.daemonsTried = true;
++          loadDaemons().then(() => { try { render(); } catch {} });
++        }
+         // Each leaf carries its own light: green when the service is answering, red when it is not.
+         const list = (state.daemons || []).slice(0, 8)
+           .map((d) => [d.name, () => navigate("daemons"), d.up ? "on" : "off"]);
