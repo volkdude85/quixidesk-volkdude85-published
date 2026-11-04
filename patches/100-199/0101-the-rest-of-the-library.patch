@@ -20,7 +20,6 @@ mailboxes, given names, a case number, a court, a jurisdiction, LAN addresses, w
 paths. Delete the identity, keep the measurement.
 
 ---
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills/manifest.json /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills/manifest.json
 --- a/resources/bundled-skills/manifest.json
 +++ b/resources/bundled-skills/manifest.json
 @@ -3,12 +3,92 @@
@@ -119,8 +118,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
      }
    ]
  }
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/document-extraction/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/document-extraction/SKILL.md
---- a/resources/bundled-skills-extracted/document-extraction/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/document-extraction/SKILL.md
 @@ -0,0 +1,128 @@
 +---
@@ -251,8 +249,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +  a value across pages — otherwise the footer's page number is what you find.
 +- **A document that is an image inside a PDF wrapper** (a scanned page saved as PDF) has a text layer of
 +  zero characters. That is the scan case, and no amount of "just extract the text" will work.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/image-gen-local/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/image-gen-local/SKILL.md
---- a/resources/bundled-skills-extracted/image-gen-local/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/image-gen-local/SKILL.md
 @@ -0,0 +1,117 @@
 +---
@@ -372,8 +369,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +- **First run after a restart is slow** — the model has to be loaded and compiled. Do not report that as
 +  the workflow's speed.
 +- **Do not drive a UI on someone's screen to do an API job.** If the server is reachable, use the API.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/linux-ops/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/linux-ops/SKILL.md
---- a/resources/bundled-skills-extracted/linux-ops/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/linux-ops/SKILL.md
 @@ -0,0 +1,154 @@
 +---
@@ -530,8 +526,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +  `/proc/<pid>/exe`, which has saved a wiped `~/.local/bin` more than once.
 +- **`pgrep -f '<pattern>'` matches the shell running it.** Use `pgrep -x` or read `/proc/<pid>/cmdline`
 +  when the pattern appears in your own command line.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/local-inference/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/local-inference/SKILL.md
---- a/resources/bundled-skills-extracted/local-inference/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/local-inference/SKILL.md
 @@ -0,0 +1,121 @@
 +---
@@ -655,8 +650,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +- Trusting a filename for the architecture; parse `general.architecture`.
 +- Forgetting that a second server process on the same GPU will not fail cleanly — it will take what it can
 +  get and silently degrade both.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/memory-hygiene/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/memory-hygiene/SKILL.md
---- a/resources/bundled-skills-extracted/memory-hygiene/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/memory-hygiene/SKILL.md
 @@ -0,0 +1,104 @@
 +---
@@ -763,8 +757,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +- **Duplicating a rule in three layers** so that updating one leaves two stale copies.
 +- **Summarising the summary.** After a few rounds of "what we discussed", the record drifts from the
 +  events. Go back to the source turn.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md
---- a/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/multi-machine-offload/SKILL.md
 @@ -0,0 +1,110 @@
 +---
@@ -877,8 +870,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +| sustained disk read | the box with the fastest local filesystem — never a FUSE mount |
 +| long-running CPU grind | any box, but one that will not be needed for anything else |
 +| interactive latency | the box the user is actually sitting at |
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/post-media-read/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/post-media-read/SKILL.md
---- a/resources/bundled-skills-extracted/post-media-read/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/post-media-read/SKILL.md
 @@ -0,0 +1,116 @@
 +---
@@ -997,8 +989,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +- The handle equals the handle in the URL.
 +- The text ends in punctuation, or you retrieved the long-form version.
 +- If you read an image, you can point at where in the image the claim came from.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/terminal-email/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/terminal-email/SKILL.md
---- a/resources/bundled-skills-extracted/terminal-email/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/terminal-email/SKILL.md
 @@ -0,0 +1,155 @@
 +---
@@ -1156,8 +1147,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +- **A successful SMTP exit is not a readable message.** Verify from the mailbox, once.
 +- **`--json` output is versioned too.** Parse defensively and print the raw value when a field is
 +  missing, rather than reporting a default.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/verification-discipline/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/verification-discipline/SKILL.md
---- a/resources/bundled-skills-extracted/verification-discipline/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/verification-discipline/SKILL.md
 @@ -0,0 +1,97 @@
 +---
@@ -1257,8 +1247,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +4. If the check is sound, change **one** parameter and re-test — never two.
 +5. If the failure repeats with the same shape, the instrument is wrong; change class of instrument, not
 +   the query, the seed, or the timing.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/voice-pipeline/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/voice-pipeline/SKILL.md
---- a/resources/bundled-skills-extracted/voice-pipeline/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/voice-pipeline/SKILL.md
 @@ -0,0 +1,123 @@
 +---
@@ -1384,8 +1373,7 @@ diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/Qu
 +3. Confirm the transcript contains the words you said — print the raw text before any normalisation.
 +4. Confirm the reply is spoken **and** that speaking over it stops it.
 +5. Repeat with the output device changed (headphones → speakers) — that is where routing bugs live.
-diff -Naur -x target /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB0/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/web-research/SKILL.md /home/volkdude/.hermes/profiles/nora/cache/scratch/pubB/QuixiDesk-3.6556.12/resources/bundled-skills-extracted/web-research/SKILL.md
---- a/resources/bundled-skills-extracted/web-research/SKILL.md
+--- /dev/null
 +++ b/resources/bundled-skills-extracted/web-research/SKILL.md
 @@ -0,0 +1,139 @@
 +---

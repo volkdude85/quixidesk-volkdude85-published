@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=60
+pkgrel=61
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -184,6 +184,7 @@ source=(
   "0101-the-rest-of-the-library.patch"
   "0102-the-tools-page-is-the-developer-editions-tools-page.patch"
   "0103-the-engine-says-which-panel.patch"
+  "0104-a-missing-package-comes-with-its-command.patch"
 )
 sha256sums=(
             'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -287,9 +288,10 @@ sha256sums=(
             '50a33935039746f67040089e83b399d15d81766293810214a2b94555561aa4d7'
             '5ff934c318117cb9ca2c4a311fff25d0c995432ede55054fd681ec9e14530f1f'
             '17c52b1bd1e5d5d83e9f071c24d52198be55e12d632136dd537521e3379c51fc'
-            '44cb3a6f8acc05f8f42470bac33c22b8034f2e9ba42b7204381f46c45a080d19'
+            'c485bb8542c5604e87a77f1e337c0a27f87ef9117e2fd0e678af6d0bf4480b19'
             'eb0ecf897413ff6231f3ad1a5a31d83c071650f88d68899fb8bb5f2231b34bdf'
             '1c3c23de8009dd3de03bb0a4fc665fbe412133d0d6e45a2a07eea3d9239756da'
+            'f441e4006c0ec0bb6dd567c7fa44af19c2a92ba1dc742ea03025e8878f74d2f1'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -644,6 +646,9 @@ prepare() {
   patch -Np1 -i "${srcdir}/0102-the-tools-page-is-the-developer-editions-tools-page.patch"
   # The page groups by `owner`; the engine has to report it, or every skill falls into the catch-all.
   patch -Np1 -i "${srcdir}/0103-the-engine-says-which-panel.patch"
+  # Every capability note carries the install command for the family underneath: pacman on Arch
+  # and its children, apt on Debian's, dnf on Fedora, zypper on openSUSE, nothing on an unknown.
+  patch -Np1 -i "${srcdir}/0104-a-missing-package-comes-with-its-command.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

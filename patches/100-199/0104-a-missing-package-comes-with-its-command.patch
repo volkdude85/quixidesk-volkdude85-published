@@ -1,0 +1,285 @@
+A missing package comes with the command that installs it
+==========================================================
+
+The capability report already says what this session cannot do — no capture, no clipboard, no input
+synthesis — and each note names the tool to install. On Arch that name is also the package and
+`pacman -S` is the command. Everywhere else the person reading it has to translate.
+
+So the notes now carry the command for the family underneath: `pacman -S --needed` on Arch and its
+children (Garuda, EndeavourOS, CachyOS, Manjaro, Artix, SteamOS), `apt install` on Debian and its
+children (Ubuntu, Mint, Pop, Kali), `dnf install` on Fedora, `zypper install` on openSUSE — and no
+command at all where the family is unknown, because inventing one is worse than omitting it.
+
+Detection reads `ID` first and `ID_LIKE` second, which is what makes a derivative resolve without a
+list of distro names to maintain. One table holds the package name in each family, keyed on the Arch
+name the PKGBUILD already declares.
+
+The tests are the point here: arch/garuda/endeavouros/steamos/artix, debian/ubuntu/mint/pop/kali,
+fedora, opensuse, and gentoo falling through to no hint rather than a wrong one.
+
+---
+--- /dev/null
++++ b/crates/quixi-platform/src/distro.rs
+@@ -0,0 +1,197 @@
++//! Which distribution family this is, and what its package manager calls the thing that is missing.
++//!
++//! The capability report tells a person what the app cannot do; without a package name it leaves them
++//! to translate. "Install ydotool" is an Arch instruction — on Debian the package is `ydotool` too,
++//! but the command is not, and on Fedora and openSUSE half the names differ. Every hint therefore
++//! carries a table row and a command for the family underneath.
++//!
++//! The detection reads `/etc/os-release` once and caches it. `ID_LIKE` is what makes this work on the
++//! derivatives: Garuda, EndeavourOS, CachyOS and Manjaro all say `arch`, Debian's children say
++//! `debian` (Ubuntu, Mint, Pop, Kali), and SteamOS says `arch` before it says anything else.
++
++use std::sync::OnceLock;
++
++#[derive(Clone, Copy, PartialEq, Eq, Debug)]
++pub enum Family {
++    Arch,
++    Debian,
++    Fedora,
++    Suse,
++    Unknown,
++}
++
++impl Family {
++    /// The command a person actually types, minus the package list.
++    pub fn command(self) -> Option<&'static str> {
++        match self {
++            Family::Arch => Some("sudo pacman -S --needed"),
++            Family::Debian => Some("sudo apt install"),
++            Family::Fedora => Some("sudo dnf install"),
++            Family::Suse => Some("sudo zypper install"),
++            Family::Unknown => None,
++        }
++    }
++
++    pub fn name(self) -> &'static str {
++        match self {
++            Family::Arch => "Arch",
++            Family::Debian => "Debian",
++            Family::Fedora => "Fedora",
++            Family::Suse => "openSUSE",
++            Family::Unknown => "unknown",
++        }
++    }
++}
++
++/// One row per capability the report can name, with the package in each family.
++///
++/// `arch` is the key: the hints are written from the Arch package name because that is what the
++/// PKGBUILD declares, and every other family is a lookup off it.
++struct Pkg {
++    arch: &'static str,
++    debian: &'static str,
++    fedora: &'static str,
++    suse: &'static str,
++}
++
++const TABLE: &[Pkg] = &[
++    Pkg { arch: "ydotool", debian: "ydotool", fedora: "ydotool", suse: "ydotool" },
++    Pkg { arch: "wl-clipboard", debian: "wl-clipboard", fedora: "wl-clipboard", suse: "wl-clipboard" },
++    Pkg { arch: "xclip", debian: "xclip", fedora: "xclip", suse: "xclip" },
++    Pkg { arch: "xsel", debian: "xsel", fedora: "xsel", suse: "xsel" },
++    Pkg { arch: "kdialog", debian: "kdialog", fedora: "kdialog", suse: "kdialog" },
++    Pkg { arch: "zenity", debian: "zenity", fedora: "zenity", suse: "zenity" },
++    Pkg { arch: "imagemagick", debian: "imagemagick", fedora: "ImageMagick", suse: "ImageMagick" },
++    Pkg { arch: "spectacle", debian: "spectacle", fedora: "spectacle", suse: "spectacle" },
++    Pkg { arch: "grim", debian: "grim", fedora: "grim", suse: "grim" },
++    Pkg { arch: "gnome-screenshot", debian: "gnome-screenshot", fedora: "gnome-screenshot", suse: "gnome-screenshot" },
++    Pkg { arch: "xfce4-screenshooter", debian: "xfce4-screenshooter", fedora: "xfce4-screenshooter", suse: "xfce4-screenshooter" },
++    Pkg { arch: "kscreen", debian: "kscreen", fedora: "kscreen", suse: "kscreen" },
++    Pkg { arch: "xorg-xrandr", debian: "x11-xserver-utils", fedora: "xrandr", suse: "xrandr" },
++    Pkg { arch: "wlr-randr", debian: "wlr-randr", fedora: "wlr-randr", suse: "wlr-randr" },
++    Pkg { arch: "xdotool", debian: "xdotool", fedora: "xdotool", suse: "xdotool" },
++    Pkg { arch: "git", debian: "git", fedora: "git", suse: "git" },
++    Pkg { arch: "ghidra", debian: "ghidra", fedora: "ghidra", suse: "ghidra" },
++];
++
++fn parse_os_release(text: &str) -> Family {
++    // ID is authoritative; ID_LIKE is the fallback that catches every derivative.
++    let field = |key: &str| -> Option<String> {
++        text.lines()
++            .find_map(|line| line.strip_prefix(&format!("{key}=")))
++            .map(|v| v.trim().trim_matches('"').to_lowercase())
++    };
++    let classify = |s: &str| -> Option<Family> {
++        if s.contains("arch") || s == "artix" || s == "steamos" {
++            Some(Family::Arch)
++        } else if s.contains("debian") || s.contains("ubuntu") {
++            Some(Family::Debian)
++        } else if s.contains("fedora") || s.contains("rhel") || s.contains("centos") {
++            Some(Family::Fedora)
++        } else if s.contains("suse") {
++            Some(Family::Suse)
++        } else {
++            None
++        }
++    };
++    if let Some(id) = field("ID") {
++        if let Some(f) = classify(&id) {
++            return f;
++        }
++    }
++    if let Some(like) = field("ID_LIKE") {
++        if let Some(f) = classify(&like) {
++            return f;
++        }
++    }
++    Family::Unknown
++}
++
++pub fn family() -> Family {
++    static CACHE: OnceLock<Family> = OnceLock::new();
++    *CACHE.get_or_init(|| {
++        std::fs::read_to_string("/etc/os-release")
++            .map(|t| parse_os_release(&t))
++            .unwrap_or(Family::Unknown)
++    })
++}
++
++/// The sentence fragment that turns a package into an instruction on this machine.
++///
++/// Returns an empty string on a family we cannot name a package manager for, so the caller's hint
++/// still reads correctly without inventing `sudo apt install` on a Gentoo box.
++pub fn hint(arch_pkg: &str) -> String {
++    let fam = family();
++    let Some(command) = fam.command() else { return String::new() };
++    let name = TABLE
++        .iter()
++        .find(|row| row.arch == arch_pkg)
++        .map(|row| match fam {
++            Family::Arch => row.arch,
++            Family::Debian => row.debian,
++            Family::Fedora => row.fedora,
++            Family::Suse => row.suse,
++            Family::Unknown => row.arch,
++        })
++        .unwrap_or(arch_pkg);
++    format!(" On {fam}: `{command} {name}`.", fam = fam.name())
++}
++
++/// The same hint for several packages at once — `apt install a b` is one command, not two.
++pub fn hints(arch_pkgs: &[&str]) -> String {
++    let fam = family();
++    let Some(command) = fam.command() else { return String::new() };
++    let names: Vec<&str> = arch_pkgs
++        .iter()
++        .map(|p| {
++            TABLE
++                .iter()
++                .find(|row| row.arch == *p)
++                .map(|row| match fam {
++                    Family::Arch => row.arch,
++                    Family::Debian => row.debian,
++                    Family::Fedora => row.fedora,
++                    Family::Suse => row.suse,
++                    Family::Unknown => row.arch,
++                })
++                .unwrap_or(p)
++        })
++        .collect();
++    format!(" On {}: `{} {}`.", fam.name(), command, names.join(" "))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn arch_and_its_children() {
++        assert_eq!(parse_os_release("ID=arch\n"), Family::Arch);
++        assert_eq!(parse_os_release("ID=garuda\nID_LIKE=arch\n"), Family::Arch);
++        assert_eq!(parse_os_release("ID=endeavouros\nID_LIKE=arch\n"), Family::Arch);
++        assert_eq!(parse_os_release("ID=steamos\nID_LIKE=arch\n"), Family::Arch);
++        assert_eq!(parse_os_release("ID=artix\n"), Family::Arch);
++    }
++
++    #[test]
++    fn debian_and_its_children() {
++        assert_eq!(parse_os_release("ID=debian\n"), Family::Debian);
++        assert_eq!(parse_os_release("ID=ubuntu\nID_LIKE=debian\n"), Family::Debian);
++        assert_eq!(parse_os_release("ID=linuxmint\nID_LIKE=\"ubuntu debian\"\n"), Family::Debian);
++        assert_eq!(parse_os_release("ID=pop\nID_LIKE=\"ubuntu debian\"\n"), Family::Debian);
++    }
++
++    #[test]
++    fn fedora_suse_and_the_unknown() {
++        assert_eq!(parse_os_release("ID=fedora\n"), Family::Fedora);
++        assert_eq!(parse_os_release("ID=opensuse-tumbleweed\nID_LIKE=\"opensuse suse\"\n"), Family::Suse);
++        assert_eq!(parse_os_release("ID=gentoo\n"), Family::Unknown);
++        assert_eq!(parse_os_release(""), Family::Unknown);
++    }
++
++    #[test]
++    fn id_wins_over_id_like() {
++        // A distro that is Debian-based but calls itself something else still resolves on ID first.
++        assert_eq!(parse_os_release("ID=kali\nID_LIKE=debian\n"), Family::Debian);
++    }
++}
+--- a/crates/quixi-platform/src/lib.rs
++++ b/crates/quixi-platform/src/lib.rs
+@@ -1,6 +1,9 @@
+ #[cfg(target_os = "linux")]
+ pub mod linux;
+ 
++/// Which distribution this is, and what its package manager calls a missing package.
++pub mod distro;
++
+ use anyhow::{bail, Context, Result};
+ use base64::Engine;
+ use serde::{Deserialize, Serialize};
+--- a/crates/quixi-platform/src/linux.rs
++++ b/crates/quixi-platform/src/linux.rs
+@@ -264,9 +264,11 @@
+     if !screenshot {
+         notes.push(
+             if session_has_display {
+-                "No screen capture path found. This session has no KWin ScreenShot2 and no \
+-                 spectacle/grim/gnome-screenshot/import."
+-                    .to_string()
++                format!(
++                    "No screen capture path found. This session has no KWin ScreenShot2 and no \
++                     spectacle/grim/gnome-screenshot/import.{}",
++                    crate::distro::hints(&["imagemagick", "grim", "gnome-screenshot"])
++                )
+             } else {
+                 "No display session, so screen capture is unavailable regardless of which \
+                  tools are installed."
+@@ -279,23 +281,29 @@
+ 
+     let clipboard = have("wl-copy") && have("wl-paste") || have("xclip") || have("xsel");
+     if !clipboard {
+-        notes.push("Install wl-clipboard for clipboard read/write.".to_string());
++        notes.push(format!(
++            "Install wl-clipboard for clipboard read/write.{}",
++            crate::distro::hints(&["wl-clipboard", "xclip", "xsel"])
++        ));
+     }
+ 
+     // The daemon is what accepts events; a bare binary without a socket cannot type.
+     let input = ydotool_ready();
+     if !input {
+-        notes.push(
++        notes.push(format!(
+             "Install ydotool and start ydotoold for cursor and keyboard synthesis. \
+              Without it, type_text / press_key / mouse_* are unavailable on Wayland — \
+-             xdotool only reaches XWayland clients."
+-                .to_string(),
+-        );
++             xdotool only reaches XWayland clients.{}",
++            crate::distro::hints(&["ydotool"])
++        ));
+     }
+ 
+     let pickers = have("kdialog") || have("zenity");
+     if !pickers {
+-        notes.push("Install kdialog or zenity for native file and folder pickers.".to_string());
++        notes.push(format!(
++            "Install kdialog or zenity for native file and folder pickers.{}",
++            crate::distro::hints(&["kdialog", "zenity"])
++        ));
+     }
+ 
+     let displays = have("kscreen-doctor")

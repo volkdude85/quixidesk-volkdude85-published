@@ -1,0 +1,174 @@
+#!/bin/bash
+# Build a .deb from the same tarball and the same patch series the PKGBUILD uses.
+#
+#   ./build-deb.sh                 build into ./dist
+#   ./build-deb.sh --deps          print the apt command and stop
+#   PKGVER=3.6556.12 ./build-deb.sh
+#
+# Run it as a normal user on Debian/Ubuntu (12/bookworm and 24.04 are the tested pair). It does not
+# need root: it fetches into ./work, builds there, and writes the package into ./dist.
+#
+# Why a script and not debian/ with debhelper: this tree is a PATCH SERIES against an upstream
+# tarball, not a source tree. debhelper expects the patches to live in debian/patches and be applied by
+# quilt at build time; the series here is 100+ files that are already the package's own history, and a
+# second copy of them inside debian/ would be a fork of itself. So this does what the PKGBUILD's
+# prepare() does, in the same order, and then installs the same layout.
+set -euo pipefail
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+REPO=$(cd "$HERE/../.." && pwd)
+PKGVER=${PKGVER:-$(sed -n 's/^pkgver=//p' "$REPO/PKGBUILD" | tr -d '"' | head -1)}
+PKGNAME=quixidesk
+WORK=${WORK:-$HERE/work}
+DIST=${DIST:-$HERE/dist}
+TARBALL_URL=${TARBALL_URL:-https://github.com/QuixiAI/QuixiDesk/archive/refs/tags/v${PKGVER}.tar.gz}
+
+# Runtime dependencies, in Debian's vocabulary. Every one of these is a row in DISTROS.md.
+RUNTIME_DEPS="libc6, libgcc-s1, libgtk-3-0, libwebkit2gtk-4.1-0, libglib2.0-0, libpango-1.0-0, \
+libcairo2, libgdk-pixbuf-2.0-0, libsoup-3.0-0, libdbus-1-3, libpulse0, hicolor-icon-theme, bash"
+
+RECOMMENDS="ydotool, wl-clipboard, zenity, imagemagick, xdotool, git"
+
+BUILD_DEPS="build-essential cargo rustc pkg-config librsvg2-bin libgtk-3-dev libwebkit2gtk-4.1-dev \
+libsoup-3.0-dev libssl-dev libpulse-dev libdbus-1-dev"
+
+if [ "${1:-}" = "--deps" ]; then
+  echo "sudo apt install $BUILD_DEPS"
+  exit 0
+fi
+
+command -v dpkg-deb >/dev/null || { echo "dpkg-deb is missing — this must run on Debian or Ubuntu." >&2; exit 1; }
+command -v cargo    >/dev/null || { echo "cargo is missing. Try: $0 --deps" >&2; exit 1; }
+
+mkdir -p "$WORK" "$DIST"
+
+# --- 1. the upstream tarball -------------------------------------------------
+SRC="$WORK/QuixiDesk-$PKGVER"
+if [ ! -d "$SRC" ]; then
+  echo "== fetching v$PKGVER"
+  curl -fsSL "$TARBALL_URL" -o "$WORK/QuixiDesk-$PKGVER.tar.gz"
+  tar xf "$WORK/QuixiDesk-$PKGVER.tar.gz" -C "$WORK"
+fi
+
+# --- 2. the patch series, in the order prepare() applies it ------------------
+cd "$SRC"
+mapfile -t ORDER < <(sed -n '/^source=(/,/^)/p' "$REPO/PKGBUILD" | grep -oE '[0-9]{4}-[A-Za-z0-9.-]+\.patch')
+echo "== applying ${#ORDER[@]} patches"
+for p in "${ORDER[@]}"; do
+  f="$REPO/$p"
+  [ -f "$f" ] || f=$(find "$REPO/patches" -name "$p" | head -1)
+  [ -f "$f" ] || { echo "  MISSING $p" >&2; exit 1; }
+  # Files the series CREATES are removed first: a second run in the same tree would otherwise apply
+  # an add-on-top-of-itself and quietly double the file.
+  patch -Np1 -s -i "$f" || { echo "  FAILED $p" >&2; exit 1; }
+done
+
+# --- 3. build ----------------------------------------------------------------
+echo "== cargo build --release"
+export CARGO_NET_OFFLINE=false
+cargo build --release --locked -p quixi-app -p quixi-engine
+
+BINS=(QuixiDesk quixi quixi-chrome-native-host quixi-disclaimer quixi-guest-daemon
+      quixi-mcp-builtin quixi-mcp-worker quixi-ssh-askpass)
+for b in "${BINS[@]}"; do
+  [ -x "target/release/$b" ] || { echo "missing target/release/$b" >&2; exit 1; }
+done
+
+# --- 4. package root, same layout the PKGBUILD installs -----------------------
+ROOT="$WORK/root-${PKGNAME}_${PKGVER}_amd64"
+rm -rf "$ROOT"
+LIBDIR="$ROOT/usr/lib/quixidesk"
+install -d "$LIBDIR" "$ROOT/usr/bin" "$ROOT/DEBIAN" \
+           "$ROOT/usr/share/applications" "$ROOT/usr/share/doc/$PKGNAME" \
+           "$ROOT/usr/share/licenses/$PKGNAME"
+
+for b in "${BINS[@]}"; do install -Dm755 "target/release/$b" "$LIBDIR/$b"; done
+cp -a resources "$LIBDIR/resources"
+install -Dm644 LICENSE "$ROOT/usr/share/licenses/$PKGNAME/LICENSE"
+
+cat > "$ROOT/usr/bin/$PKGNAME" <<'LAUNCH'
+#!/bin/sh
+_libdir=/usr/lib/quixidesk
+export QUIXI_RESOURCES_DIR="${QUIXI_RESOURCES_DIR:-${_libdir}/resources}"
+export QUIXI_MCP_WORKER="${QUIXI_MCP_WORKER:-${_libdir}/quixi-mcp-worker}"
+case ":${PATH}:" in
+  *":${_libdir}:"*) ;;
+  *) PATH="${_libdir}:${PATH}"; export PATH ;;
+esac
+exec "${_libdir}/QuixiDesk" "$@"
+LAUNCH
+chmod 755 "$ROOT/usr/bin/$PKGNAME"
+ln -s "../lib/quixidesk/quixi" "$ROOT/usr/bin/quixi"
+
+cat > "$ROOT/usr/share/applications/$PKGNAME.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=QuixiDesk
+GenericName=AI Desktop Workspace
+Comment=Native desktop workspace for AI with cloud and local providers
+Exec=quixidesk %U
+Icon=quixidesk
+Terminal=false
+Categories=Development;Utility;
+Keywords=AI;LLM;Chat;Assistant;Agent;MCP;Ollama;llama.cpp;
+StartupNotify=true
+StartupWMClass=QuixiDesk
+DESKTOP
+
+install -Dm644 resources/quixi-logo.svg "$ROOT/usr/share/icons/hicolor/scalable/apps/$PKGNAME.svg"
+if command -v rsvg-convert >/dev/null; then
+  for s in 16 24 32 48 64 128 256 512; do
+    install -d "$ROOT/usr/share/icons/hicolor/${s}x${s}/apps"
+    rsvg-convert -w "$s" -h "$s" resources/quixi-logo.svg \
+      -o "$ROOT/usr/share/icons/hicolor/${s}x${s}/apps/$PKGNAME.png"
+  done
+else
+  echo "  rsvg-convert missing: shipping the SVG icon only (apt install librsvg2-bin)" >&2
+fi
+
+install -Dm644 README.md "$ROOT/usr/share/doc/$PKGNAME/README.md"
+[ -f ARCHITECTURE.md ] && install -Dm644 ARCHITECTURE.md "$ROOT/usr/share/doc/$PKGNAME/ARCHITECTURE.md"
+[ -f "$REPO/DISTROS.md" ] && install -Dm644 "$REPO/DISTROS.md" "$ROOT/usr/share/doc/$PKGNAME/DISTROS.md"
+
+SIZE=$(du -sk --exclude=DEBIAN "$ROOT" | cut -f1)
+cat > "$ROOT/DEBIAN/control" <<EOF
+Package: $PKGNAME
+Version: $PKGVER
+Section: devel
+Priority: optional
+Architecture: amd64
+Maintainer: volkdude85 <volkdude85@users.noreply.github.com>
+Installed-Size: $SIZE
+Depends: $RUNTIME_DEPS
+Recommends: $RECOMMENDS
+Homepage: https://github.com/volkdude85/quixidesk-volkdude85-published
+Description: native desktop workspace for AI, cloud and local providers
+ A desktop workspace built on a real browser engine, with a file-backed memory
+ store you own, local and cloud providers, MCP connections and a skill library.
+ .
+ This build carries the Linux platform layer: screenshot, clipboard, input
+ synthesis, display enumeration and window control across KDE, GNOME, XFCE,
+ Sway, Hyprland and X11 sessions, with the same source and the same patches as
+ the Arch package.
+EOF
+
+cat > "$ROOT/DEBIAN/postinst" <<'POSTINST'
+#!/bin/sh
+set -e
+if command -v update-desktop-database >/dev/null; then update-desktop-database -q /usr/share/applications || true; fi
+if command -v gtk-update-icon-cache >/dev/null; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true; fi
+exit 0
+POSTINST
+cat > "$ROOT/DEBIAN/postrm" <<'POSTRM'
+#!/bin/sh
+set -e
+if command -v update-desktop-database >/dev/null; then update-desktop-database -q /usr/share/applications || true; fi
+if command -v gtk-update-icon-cache >/dev/null; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true; fi
+exit 0
+POSTRM
+chmod 755 "$ROOT/DEBIAN/postinst" "$ROOT/DEBIAN/postrm"
+
+echo "== dpkg-deb"
+dpkg-deb --build --root-owner-group -Zxz "$ROOT" "$DIST/${PKGNAME}_${PKGVER}_amd64.deb"
+dpkg-deb --info "$DIST/${PKGNAME}_${PKGVER}_amd64.deb" | sed -n '1,12p'
+echo "== wrote $DIST/${PKGNAME}_${PKGVER}_amd64.deb"
