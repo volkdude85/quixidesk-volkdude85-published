@@ -23,7 +23,8 @@
 | **every wall hit making it ship, and the fix for each** | [`DECK-PROBLEM-LOG.md`](DECK-PROBLEM-LOG.md) |
 | **setting it up in pictures, for anyone who would rather look than read** | [`docs/SETUP-VISUAL.md`](docs/SETUP-VISUAL.md) |
 > | what is left wide open, and why | [`WAIVER.md`](WAIVER.md) — **read this before installing** |
-> | how it got built, in order | [`CHANGELOG.md`](CHANGELOG.md) |
+| **how it got built, in order** | [`CHANGELOG.md`](CHANGELOG.md) |
+| **what the first run says, and why it is worded that way** | [`ONBOARDING.md`](ONBOARDING.md) |
 > | Artix / OpenRC (non-systemd) | [`ARTIX.md`](ARTIX.md) |
 
 An Arch Linux package for [QuixiDesk](https://github.com/QuixiAI/QuixiDesk) that makes it actually work
@@ -33,6 +34,24 @@ QuixiDesk is Eric Hartford's MIT-licensed Rust/GTK desktop AI workspace. Upstrea
 the `ComputerUse` platform layer on Linux is a set of silent no-ops, so the app runs but cannot see the
 screen, type, click, pick files, or enumerate displays. This package adds that layer and a few things
 that were hard-coded or missing.
+
+### What it is underneath the packaging
+
+This edition ships a persona called **Nora**, and the first-run screen carries an **About Nora** panel
+that answers the obvious question — *why would I want an assistant that was built for a disabled
+person?* — by naming what it is rather than implying it: not a chatbot answering to a company, but an
+assistance device, built first for one person with a disability and only afterwards made installable.
+
+The legal category is stated, because it is the reason the door opens: ADA **Title II** for public
+entities (a courthouse, a clerk's window, a school office), **Title III** for places of public
+accommodation (a doctor's office, a pharmacy, a lawyer's waiting room), **Section 504** of the
+Rehabilitation Act for a federal court under Article III, and **28 CFR 35.160** on auxiliary aids and
+services — the entity furnishes the aid and gives primary consideration to the person who will use it.
+That is what makes somebody's own software an accommodation rather than a workaround.
+
+Nothing asks for a diagnosis and nothing checks. The copy, and the reasoning behind each sentence
+including why it says "assistance device" and not "medical device":
+[`ONBOARDING.md`](ONBOARDING.md#2-the-about-block-and-why-it-is-worded-the-way-it-is).
 
 ## What this adds
 

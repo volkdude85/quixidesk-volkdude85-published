@@ -22,9 +22,46 @@ Why it leads with that: the persona is the most opinionated thing this edition i
 who is handed a voice without being told it is a file will treat it as the product rather than as a
 setting. Naming it first turns a surprise into a choice.
 
+## 2. The About block, and why it is worded the way it is
+
+Under the intro there is a panel titled **About Nora**. Two thirds of the way down it has a heading
+that answers a question nobody asked out loud: **"But I'm not disabled. Why would I want this?"**
+
+Three things in that answer are deliberate, and each one was argued rather than assumed.
+
+**It does not ask, and it does not check.** Whether someone is disabled, and how, is theirs to say or
+to keep. Under the ADA and HIPAA nobody has to hand that over as the price of using software, so the
+panel says exactly that and moves on. There is no disability field anywhere in this app, and no
+diagnosis is stored, inferred or asked for at any point.
+
+**It names the legal category instead of implying it.** The claim is not "we are nice to disabled
+people". It is that a person's own aid is an *auxiliary aid and service*, and that the obligation to
+accommodate it sits on the room, not on the person:
+
+- **Title II** — public entities: state and local government, a courthouse, a clerk's window, a school office.
+- **Title III** — places of public accommodation: a doctor's office, a pharmacy, a hospital, a lawyer's waiting room.
+- **Article III** — a federal court answers to the same rule through **Section 504 of the Rehabilitation Act** (29 U.S.C. § 794), which reaches every program taking federal money, the judiciary included.
+
+**28 CFR 35.160** is the hook that makes it concrete: the entity must furnish appropriate auxiliary aids
+and services, and must give primary consideration to the person who will use them. That is the sentence
+that turns "bring your own software" into the accommodation rather than a workaround, and it is why the
+panel ends with courtrooms, doctors' offices and intake desks instead of a disclaimer.
+
+**It says "assistance device", not "medical device".** "Medical device" is an FDA term with a
+regulatory meaning attached, and using it here would hand a hostile reader an easy way to dismiss the
+whole claim. The ADA's own vocabulary — assistive technology, auxiliary aid and service — is the one
+that actually moves a room, so that is the one on the screen.
+
+The text lives in `resources/ui/app.js`, inside the `first-run-about` panel, and arrives through patch
+[`0070-doors`](patches/000-099/070-079/0070-doors.patch) — the header of that patch carries the same
+reasoning for anyone reading the code instead of the app. It is **this edition's** copy: `quixidesk-arch`
+does not carry it, because Eric's build should look like something upstream would plausibly accept.
+
+![The About Nora panel on first run, at the "But I'm not disabled" heading](screenshots/06-the-about-panel.png)
+
 ---
 
-## 2. What a memory palace actually is
+## 3. What a memory palace actually is
 
 Plain version, no mysticism:
 
@@ -49,7 +86,7 @@ your own permissions.
 
 ---
 
-## 3. Encryption — pick one, or pick none
+## 4. Encryption — pick one, or pick none
 
 The palace is plain text. If the machine is stolen or someone else has an account on it, plain text
 means they can read it. Three honest options:
@@ -67,7 +104,7 @@ password manager or a hardware token for secrets, use that and skip the rest.
 
 ---
 
-## 4. How memory is allowed to be kept — the actual choice
+## 5. How memory is allowed to be kept — the actual choice
 
 This is the decision that matters, because it is the one that is expensive to reverse.
 
@@ -124,24 +161,38 @@ The default offered is A; choosing B or C is one click and is not argued with ag
 
 ---
 
-## 5. What gets written on first run
+## 6. What gets written on first run
 
 1. `~/.quixi/persona.md` — Nora, seeded from the edition's own file, editable, deletable.
 2. `~/.mempalace/` — created empty, in the layout above, with the mode the user chose.
 3. `~/.quixi/voice.json` — voice off. It stays off until the user turns it on; a microphone that
    opens itself is a bug, and this edition has already had that argument once.
-4. A one-line receipt in `~/.quixi/onboarding.json`: which memory mode, which encryption answer,
-   and the date. So the next run knows what was chosen instead of guessing.
+4. The answers themselves, as app preferences rather than a separate receipt file: `memoryPalacePath`,
+   `memoryMode`, `memoryEncryption`, `externalBrowser`. The next run reads those instead of guessing.
+   This document originally specified a one-line `~/.quixi/onboarding.json`; the app stores the same
+   facts in the preference store it already had, so there is one place to look and no second truth.
 
 Nothing else is created, and nothing is created before the choice is made.
 
 ---
 
-## 6. Not built yet
+## 7. What in this document has shipped, and what is still design
 
-This document is the design of record. The first-run screen itself — the greeting, the three memory
-options and the encryption question — is a patch that still has to be written against
-`crates/quixi-app`, and `chattr +a` has to be applied with the user's confirmation because it changes
-permissions on a directory the app then cannot fully manage.
+Verified against the running app, not against the plan:
 
-Until that ships, the same sequence is a shell script and a paragraph in the README.
+- the first-run flow itself — the intro, **Skip setup**, the provider / key / model / browser / memory /
+  encryption table, and **← Back to the start** from every step (`0070-doors`)
+- the **About Nora** panel, including the ADA paragraphs in section 2 above
+- the encryption choice (none / LUKS / `age`-GPG) and the memory location, written as app preferences
+- the persona file and the greeting it ships with (`0044-shipped-persona`, `0087`, `0090`)
+
+Still design, and said so on purpose:
+
+- `chattr +a` on the memory directory. It changes permissions on a directory the app then cannot fully
+  manage, so it needs the user's explicit confirmation and is applied by no patch.
+- the three-way memory-mode picker as its own step in the first run. The preference key exists and
+  Settings writes it; onboarding asks for the path and the encryption, not the mode.
+
+Keeping this list honest matters more than keeping it short. A design document that still claims to be
+unbuilt gets read as though it described the binary, and then somebody files a bug against a feature
+that was never in it.

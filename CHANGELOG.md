@@ -24,6 +24,11 @@ difference actually is instead of implying it.
 - Courtrooms, doctors' offices, intake desks: the door opens because the aid is already theirs. That is
   why it is built to the standard assistive software is held to, not the standard a chat window is held
   to.
+- Written down rather than left in the patch: `ONBOARDING.md` gains a section on the About block that
+  says why each sentence is worded the way it is — why the ADA titles are named instead of implied, why
+  it says "assistance device" and not "medical device", and what the first run deliberately does not
+  ask. `README.md` and `EDITIONS.md` point at it, and the panel itself is in
+  `docs/screenshots/06-the-about-panel.png`.
 
 ## 3.6556.12-32
 

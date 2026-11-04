@@ -13,6 +13,7 @@ not the same product.
 | **credential storage** | local key file, keyring opt-in | same |
 | **limits** | raised, see the waiver | raised the same way |
 | **attitude** | restrained; nothing added that upstream would not plausibly accept | unhinged; additions chosen because they do something interesting, not because they are tidy |
+| **purpose statement** | none — upstream default copy | the **About Nora** panel says what the edition is for, including the ADA framing that lets a person bring their own aid into a courtroom or a doctor's office ([why it is worded that way](ONBOARDING.md#2-the-about-block-and-why-it-is-worded-the-way-it-is)) |
 | **upstream cleanliness** | patches against the release tarball, upstream tree untouched | identical — neither edition is a fork |
 
 ## Which one to pick
