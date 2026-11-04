@@ -1,0 +1,21 @@
+diff -urN a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-04 21:30:57.140593598 +0000
++++ b/resources/ui/app.js	2026-11-04 21:30:57.141421786 +0000
+@@ -4333,7 +4333,7 @@
+       const dlg = dialog("Have Nora write it",
+         el("p", {}, "Ask for the behaviour, not the plumbing. She has the machine, so she writes the unit, sets it up as a systemd user service, starts it, and reports the port it answers on."),
+         el("pre", { class: "skill-file" }, "Write me a daemon that watches ~/inbox for new .md files and appends each filename to ~/inbox/index.txt. Run it as a systemd user service, start it, and tell me how to confirm it is alive."),
+-        el("p", { class: "muted" }, "Rule of thumb: a daemon is always running and reacts; a cron job wakes up, does one thing, and exits. Say \"every hour\" and you get a timer; say \"whenever this happens\" and you get a daemon."),
++        el("p", { class: "muted" }, "Rule of thumb: a daemon is always running and reacts; a cron job wakes up, does one thing, and exits. Say \"every hour\" and you get a cron job; say \"whenever this happens\" and you get a daemon."),
+         button("Close", () => dlg.close(), "primary"));
+     };
+     const showUnit = () => {
+@@ -4346,7 +4346,7 @@
+     };
+     return el("section", { class: "card first-daemon" },
+       el("h3", {}, "Your first Quixi daemon"),
+-      el("p", {}, "A daemon is a process that keeps running and does something on its own — it listens, polls, or watches. A cron job is the other shape: it wakes on a schedule, does one thing, and exits. The difference is lifetime, not importance. Say \"whenever this happens\" and you want a daemon; say \"every hour at ten past\" and you want a timer."),
++      el("p", {}, "A daemon is a process that keeps running and does something on its own — it listens, polls, or watches. A cron job is the other shape: it wakes on a schedule, does one thing, and exits. The difference is lifetime, not importance. Say \"whenever this happens\" and you want a daemon; say \"every hour at ten past\" and you want a cron job."),
+       el("p", { class: "muted" }, "Nothing on this page is required to run QuixiDesk. It reports what is answering, and it can start, stop or remove the services it recognises — it does not invent one to look busy."),
+       el("div", { class: "card-actions" },
+         button("Have Nora write one", showNora, "primary"),
