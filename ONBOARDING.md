@@ -57,7 +57,7 @@ The text lives in `resources/ui/app.js`, inside the `first-run-about` panel, and
 reasoning for anyone reading the code instead of the app. It is **this edition's** copy: `quixidesk-arch`
 does not carry it, because Eric's build should look like something upstream would plausibly accept.
 
-![The About Nora panel on first run, at the "But I'm not disabled" heading](screenshots/06-the-about-panel.png)
+![The About Nora panel on first run, at the "But I'm not disabled" heading](docs/screenshots/06-the-about-panel.png)
 
 ---
 
