@@ -41,6 +41,19 @@
   </content_rating>
   <icon type="stock">io.github.volkdude85.quixidesk</icon>
   <launchable type="desktop-id">io.github.volkdude85.quixidesk.desktop</launchable>
+  <!-- Captured from the built Flatpak on a private X display with a fresh profile, so the window
+       is the application and nothing else: no desktop, no taskbar, no session, no paths. The URLs
+       are the published site, which is also where the install line lives. -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://volkdude85.github.io/quixidesk-volkdude85-published/screenshots/01-first-run.png</image>
+      <caption>A first run asks two questions: where the models run, and where your memory lives.</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://volkdude85.github.io/quixidesk-volkdude85-published/screenshots/02-workspace.png</image>
+      <caption>The workspace: projects, artifacts, cron jobs, daemons and skills in one place.</caption>
+    </screenshot>
+  </screenshots>
   <categories>
     <category>Utility</category>
   </categories>
