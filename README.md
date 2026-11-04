@@ -35,6 +35,16 @@ the `ComputerUse` platform layer on Linux is a set of silent no-ops, so the app 
 screen, type, click, pick files, or enumerate displays. This package adds that layer and a few things
 that were hard-coded or missing.
 
+### Who writes this
+
+Me, with an AI doing the actual typing, and I'd rather say that up front than have it come out sideways
+later. I'm dyslexic. I'm a decent technician and I was never an engineer, so I decide what the software
+has to do, read what comes back, and run it on real hardware until it stops lying to me. The agent types
+the patch; the judgement and the testing are mine. Every patch in this series came out of that loop —
+ninety-odd of them — and I'll stand behind all of them. This is my edition. My name's on it, and when a
+runtime goes end of life, I'm the one who moves it. If that's a problem for you, I'd rather hear it now
+than after you've decided.
+
 ### What it is underneath the packaging
 
 This edition ships a persona called **Nora**, and the first-run screen carries an **About Nora** panel
@@ -156,6 +166,29 @@ flatpak install --user --from https://volkdude85.github.io/quixidesk-volkdude85-
 
 That URL is a signed OSTree repository — the key travels in the `.flatpakref`, so `flatpak update`
 keeps working afterwards and every commit it installs is verified.
+
+#### On a machine that has never had Flatpak
+
+The command above cannot install the thing it needs to exist. That is the only prerequisite:
+
+```sh
+sudo pacman -S --needed flatpak     # Arch, EndeavourOS, SteamOS
+sudo apt install flatpak            # Debian, Ubuntu
+sudo dnf install flatpak            # Fedora
+```
+
+Then the install line again. **The first install is about 1.4 GB**, because it pulls the
+`org.gnome.Platform` 51 runtime alongside the app itself. Flatpak prints nothing while it downloads, so
+a slow connection makes that look like a hang — it is not one; `flatpak ps` shows the transfer if you
+want to watch it.
+
+```sh
+flatpak list --app --columns=application,version,origin | grep quixi   # did it land
+flatpak run io.github.volkdude85.quixidesk                              # start it
+```
+
+If the disk is full, `pacman` refuses before any of this with a free-space error; on a nearly full root,
+`sudo paccache -rk1` typically returns several gigabytes of package cache first.
 
 ### The window fits the deck
 

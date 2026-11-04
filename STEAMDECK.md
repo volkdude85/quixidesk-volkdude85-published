@@ -84,6 +84,20 @@ things this app does that a normal app does not — injecting input through `ydo
 screen through the compositor — depend on what the sandbox permits and on what the host ships. Expect
 to grant permissions, and expect the input path to be the one that needs them.
 
+Flatpak itself ships with SteamOS, so this is the whole install. Run it in **Desktop Mode → Konsole**,
+because Game Mode has no terminal:
+
+```sh
+flatpak install --user --from https://volkdude85.github.io/quixidesk-volkdude85-published/io.github.volkdude85.quixidesk.flatpakref
+flatpak run io.github.volkdude85.quixidesk
+```
+
+The first install is **about 1.4 GB** — the app is 12 MB and the GNOME 51 runtime is the rest. It
+prints nothing while it downloads, which on Deck Wi-Fi looks like a stall and is not one. To get it
+into Game Mode afterwards, add it as a non-Steam game with the command `flatpak run
+io.github.volkdude85.quixidesk`; `steam/` in this repository carries the artwork so the tile is not a
+grey rectangle.
+
 ### Route C — make the root writable (not recommended)
 
 The direct route. Repeat after every OS update.
