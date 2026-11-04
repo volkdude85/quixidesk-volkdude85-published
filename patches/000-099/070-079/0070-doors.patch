@@ -19,14 +19,20 @@ it cannot see.
 
 Also in this patch, under the Nora description: **"But I'm not disabled. Why would I want this?"** —
 that whether you are disabled, and how, is your own business; that under the ADA and HIPAA you are not
-obliged to hand it over to a stranger as the price of using software; that what this is underneath the
-friendliness is an accessibility tool, built to the standard assistive software is held to, which is
-what lets it go places an ordinary assistant cannot; and that if you have no use for that you still get
-a plain, private assistant that runs on your own machine.
-
+obliged to hand it over to a stranger as the price of using software; that where a corporation's
+assistant is a chatbot answering to the corporation, this was built the other way round, beginning as
+an assistance device for one person with a disability; that the difference is a category in law rather
+than a phrase in a brochure — Title II binds public entities (a courthouse, a clerk's window, a school
+office), Title III binds places of public accommodation (a doctor's office, a pharmacy, a lawyer's
+waiting room), a federal court under Article III answers to the same rule through Section 504 of the
+Rehabilitation Act, and 28 CFR 35.160 requires the entity to furnish appropriate auxiliary aids and
+services and to give primary consideration to the person who will use them, which makes a person's own
+software the accommodation and the refusal the barrier; that it is built to the standard assistive
+software is held to, which is what lets it go places an ordinary assistant does not; and that if you
+have no use for that you still get a plain, private assistant that runs on your own machine.
 diff -Naur a/resources/ui/app.css b/resources/ui/app.css
---- a70/resources/ui/app.css	2026-11-02 15:32:33.395168992 -0800
-+++ b70/resources/ui/app.css	2026-11-02 15:32:33.411465542 -0800
+--- a70/resources/ui/app.css	2026-11-03 17:15:14.502253121 -0800
++++ b70/resources/ui/app.css	2026-11-03 17:15:16.204196831 -0800
 @@ -2698,3 +2698,23 @@
    color: var(--muted); margin: 12px 0 6px; font-weight: 600; }
  .first-run-about h2:first-child { margin-top: 0; }
@@ -52,8 +58,8 @@ diff -Naur a/resources/ui/app.css b/resources/ui/app.css
 +/* The standalone table reuses the wizard's table styling; it just needs room. */
 +.first-run-table table { width: 100%; }
 diff -Naur a/resources/ui/app.js b/resources/ui/app.js
---- a70/resources/ui/app.js	2026-11-02 15:32:33.399517883 -0800
-+++ b70/resources/ui/app.js	2026-11-02 15:32:33.410469446 -0800
+--- a70/resources/ui/app.js	2026-11-03 17:15:14.515283267 -0800
++++ b70/resources/ui/app.js	2026-11-03 17:15:43.484525956 -0800
 @@ -610,6 +610,8 @@
        "daemons",
        "tools",
@@ -213,7 +219,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
  // ---- first run: local or cloud, and nothing assumed -------------------------------------------
  // The app used to land on OpenRouter with a model you do not have a key for. That is a dead end
  // dressed as a default. The first question is the only one that matters — where do the models run —
-@@ -1258,6 +1403,22 @@
+@@ -1258,6 +1403,32 @@
          { class: "muted" },
          "That is all this screen will say about it. If you want to know more, ask Nora later — she will tell you what she is allowed to, and no more than that.",
        ),
@@ -226,7 +232,17 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
 +      el(
 +        "p",
 +        {},
-+        "What this is, underneath the friendliness, is an accessibility tool. Assistive software is built to a different standard: it assumes the person in front of it may be working harder than they look, so it keeps the record, it does not lose the thread, and it does not make anyone explain themselves twice. That is why it can go places an ordinary assistant cannot — it is the thing you reach for when the ordinary one assumes a user whose words arrive whole.",
++        "A corporation's assistant is a chatbot answering to the corporation: agreeable, rented by the month, and careful never to be useful in a way that costs the company anything. This was built in the opposite direction. It began as an assistance device for one person with a disability — someone who needed the record kept and the thread held — and it became something anyone can install only afterwards.",
++      ),
++      el(
++        "p",
++        {},
++        "That is a category in law, not a phrase in a brochure. Under the ADA — 42 U.S.C. § 12101 onward — a disabled person's own aid is not a favour the room grants; it is something the room has to allow. Title II binds public entities: state and local government, a courthouse, a clerk's window, a school office. Title III binds places of public accommodation: a doctor's office, a pharmacy, a hospital, a lawyer's waiting room. A federal court under Article III answers to the same rule through Section 504 of the Rehabilitation Act. And 28 CFR 35.160 is explicit about how the aid gets chosen — the entity must furnish appropriate auxiliary aids and services, and must give primary consideration to the person who will use them. So when somebody brings their own software rather than asking the room for an interpreter, that is the accommodation, not a workaround. Refusing it is the barrier. Courtrooms, doctors' offices, intake desks: the door opens because the aid is already theirs.",
++      ),
++      el(
++        "p",
++        {},
++        "Which is why this is built to the standard assistive software is held to, not the standard a chat window is held to. It assumes the person in front of it may be working harder than they look, so it keeps the record, it does not lose the thread, and it does not make anyone explain themselves twice.",
 +      ),
 +      el(
 +        "p",
@@ -236,7 +252,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
      );
  
      const aboutBtn = button(
-@@ -1284,6 +1445,17 @@
+@@ -1284,6 +1455,17 @@
          button("Let's set it up", () => { step = "choose"; paint(); }, "primary"),
          aboutBtn,
        ),
@@ -254,7 +270,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
        about,
        el(
          "p",
-@@ -1323,111 +1495,6 @@
+@@ -1323,111 +1505,6 @@
      );
    }
  
@@ -366,7 +382,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
  
  
    // What a memory palace is, where it goes, and what protects it. Asked here rather than buried in
-@@ -1565,16 +1632,42 @@
+@@ -1565,16 +1642,42 @@
      );
    }
  
@@ -412,7 +428,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
      }
      root.replaceChildren(
        el("h1", {}, "Where should the models run?"),
-@@ -1667,6 +1760,7 @@
+@@ -1667,6 +1770,7 @@
          "If you are not sure: choose local. It answers without an account, and a cloud provider can be added at any time from the provider list.",
        ),
      );
@@ -420,7 +436,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
    }
  
    paint();
-@@ -1678,6 +1772,7 @@
+@@ -1678,6 +1782,7 @@
      const handlers = {
        new: chatPage,
        onboarding: firstRunPage,
@@ -428,7 +444,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
        chat: chatPage,
        search: workspaceUI.searchPage,
        projects: workspaceUI.projectsPage,
-@@ -1689,8 +1784,13 @@
+@@ -1689,8 +1794,13 @@
        settings: settingsPage,
        persona: personaPage,
      };
@@ -444,7 +460,7 @@ diff -Naur a/resources/ui/app.js b/resources/ui/app.js
      if (unanswered && (state.page === "new" || state.page === "chat")) {
        firstRunPage(host);
      } else {
-@@ -1797,6 +1897,14 @@
+@@ -1797,6 +1907,14 @@
            ),
            el("h1", { class: "hero-heading" }, "Sup bitch?"),
            el(

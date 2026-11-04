@@ -6,6 +6,25 @@ What each release changes, and which patch does it. No narrative — the commits
 > and the prose header on each patch carry them; this file resumes at 31 rather than inventing a
 > retrospective.
 
+## 3.6556.12-66
+
+**`0070-doors`** — the answer under "But I'm not disabled. Why would I want this?" now says what the
+difference actually is instead of implying it.
+
+- A corporation's assistant is a chatbot answering to the corporation. This was built the other way
+  round: it began as an assistance device for one person with a disability, and became installable
+  afterwards.
+- The distinction is a category in law, not a phrase in a brochure. **Title II** binds public entities —
+  a courthouse, a clerk's window, a school office. **Title III** binds places of public accommodation —
+  a doctor's office, a pharmacy, a lawyer's waiting room. A federal court under **Article III** answers
+  to the same rule through **Section 504 of the Rehabilitation Act**. And **28 CFR 35.160** requires the
+  entity to furnish appropriate auxiliary aids and services and to give primary consideration to the
+  person who will use them, which makes a person's own software the accommodation and the refusal the
+  barrier.
+- Courtrooms, doctors' offices, intake desks: the door opens because the aid is already theirs. That is
+  why it is built to the standard assistive software is held to, not the standard a chat window is held
+  to.
+
 ## 3.6556.12-32
 
 - **The composer button that could only open an empty dialog** (`0050`) — "Add MCP context" browsed
