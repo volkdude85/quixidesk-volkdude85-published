@@ -1,0 +1,74 @@
+diff -urN a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-04 21:12:37.791932689 +0000
++++ b/resources/ui/app.css	2026-11-04 21:12:37.792060763 +0000
+@@ -3357,3 +3357,8 @@
+   font-size: 11px;
+   letter-spacing: .04em;
+ }
++
++/* The teaching card at the top of the daemons page: readable prose, not a callout. */
++.first-daemon { margin: 14px 0 20px; }
++.first-daemon h3 { margin: 0 0 8px; }
++.first-daemon p { max-width: 78ch; }
+diff -urN a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-04 21:12:37.791233086 +0000
++++ b/resources/ui/app.js	2026-11-04 21:12:37.791676701 +0000
+@@ -1763,17 +1763,7 @@
+       el(
+         "p",
+         {},
+-        "A corporation's assistant is a chatbot answering to the corporation: agreeable, rented by the month, and careful never to be useful in a way that costs the company anything. This was built in the opposite direction. It began as an assistance device for one person with a disability — someone who needed the record kept and the thread held — and it became something anyone can install only afterwards.",
+-      ),
+-      el(
+-        "p",
+-        {},
+-        "That is a category in law, not a phrase in a brochure. Under the ADA — 42 U.S.C. § 12101 onward — a disabled person's own aid is not a favour the room grants; it is something the room has to allow. Title II binds public entities: state and local government, a courthouse, a clerk's window, a school office. Title III binds places of public accommodation: a doctor's office, a pharmacy, a hospital, a lawyer's waiting room. A federal court under Article III answers to the same rule through Section 504 of the Rehabilitation Act. And 28 CFR 35.160 is explicit about how the aid gets chosen — the entity must furnish appropriate auxiliary aids and services, and must give primary consideration to the person who will use them. So when somebody brings their own software rather than asking the room for an interpreter, that is the accommodation, not a workaround. Refusing it is the barrier. Courtrooms, doctors' offices, intake desks: the door opens because the aid is already theirs.",
+-      ),
+-      el(
+-        "p",
+-        {},
+-        "Which is why this is built to the standard assistive software is held to, not the standard a chat window is held to. It assumes the person in front of it may be working harder than they look, so it keeps the record, it does not lose the thread, and it does not make anyone explain themselves twice.",
++        "What this is, underneath the friendliness, is an accessibility tool. Assistive software is built to a different standard: it assumes the person in front of it may be working harder than they look, so it keeps the record, it does not lose the thread, and it does not make anyone explain themselves twice. That is why it can go places an ordinary assistant cannot — it is the thing you reach for when the ordinary one assumes a user whose words arrive whole.",
+       ),
+       el(
+         "p",
+@@ -4336,11 +4326,39 @@
+     draw(first && first.tasks);
+   }
+ 
++  // The empty daemons page taught nothing. This is the teaching block: what a daemon is next to a
++  // cron job, written for an adult who has never needed to know, and two ways to get their first one.
++  function firstDaemonCard() {
++    const showNora = () => {
++      const dlg = dialog("Have Nora write it",
++        el("p", {}, "Ask for the behaviour, not the plumbing. She has the machine, so she writes the unit, sets it up as a systemd user service, starts it, and reports the port it answers on."),
++        el("pre", { class: "skill-file" }, "Write me a daemon that watches ~/inbox for new .md files and appends each filename to ~/inbox/index.txt. Run it as a systemd user service, start it, and tell me how to confirm it is alive."),
++        el("p", { class: "muted" }, "Rule of thumb: a daemon is always running and reacts; a cron job wakes up, does one thing, and exits. Say \"every hour\" and you get a timer; say \"whenever this happens\" and you get a daemon."),
++        button("Close", () => dlg.close(), "primary"));
++    };
++    const showUnit = () => {
++      const dlg = dialog("Write it by hand",
++        el("p", {}, "A daemon is a unit file with no schedule. Drop it in ~/.config/systemd/user/, then enable it — that is the whole ceremony."),
++        el("pre", { class: "skill-file" }, "# ~/.config/systemd/user/my-watcher.service\n[Unit]\nDescription=What it does, in one line\n\n[Service]\nExecStart=%h/bin/my-watcher\nRestart=always\nRestartSec=2\n\n[Install]\nWantedBy=default.target"),
++        el("pre", { class: "skill-file" }, "systemctl --user daemon-reload\nsystemctl --user enable --now my-watcher.service\nsystemctl --user status my-watcher.service"),
++        el("p", { class: "muted" }, "Restart=always is what makes it a daemon rather than a program you have to remember to run. A cron job gets an OnCalendar line instead, and no Restart."),
++        button("Close", () => dlg.close(), "primary"));
++    };
++    return el("section", { class: "card first-daemon" },
++      el("h3", {}, "Your first Quixi daemon"),
++      el("p", {}, "A daemon is a process that keeps running and does something on its own — it listens, polls, or watches. A cron job is the other shape: it wakes on a schedule, does one thing, and exits. The difference is lifetime, not importance. Say \"whenever this happens\" and you want a daemon; say \"every hour at ten past\" and you want a timer."),
++      el("p", { class: "muted" }, "Nothing on this page is required to run QuixiDesk. It reports what is answering, and it can start, stop or remove the services it recognises — it does not invent one to look busy."),
++      el("div", { class: "card-actions" },
++        button("Have Nora write one", showNora, "primary"),
++        button("Unit file template", showUnit, "quiet")));
++  }
++
+   async function daemonsPage(host) {
+     const body = el("div", { class: "daemon-list" }, el("p", { class: "muted" }, "Asking systemd and the loopback ports…"));
+     host.replaceChildren(
+       header("Daemons", "Background services this app leans on. Nothing here is required to start the app.", button("Check again", () => renderPage(), "quiet")),
+       el("p", { class: "muted" }, "A daemon answers on a port or it does not. The state below is a live check, not a setting that says a service exists."),
++      firstDaemonCard(),
+       body,
+     );
+     let data = null;

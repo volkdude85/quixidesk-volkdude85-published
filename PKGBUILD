@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=72
+pkgrel=73
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -191,6 +191,7 @@ source=(
   "0108-credit-hermes-to-nous-research.patch"
   "0109-navigate-tools-by-letter.patch"
   "0110-mount-the-letter-strip.patch"
+  "0111-your-first-quixi-daemon.patch"
 )
 sha256sums=(
             'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -304,6 +305,7 @@ sha256sums=(
             '3b5c0b633e893fd739f7c09effda05caaba4b8b0773ab1f98d6b75ef9c0482ce'
             'e3469f0c4df809a1d0029381356d9e04422c9f5bc22d5fc6de39443f5bd7fd6a'
             '93b708cc93ef2750dd72b6d86b1dcf5db94bf4f8c3ffc783f4b6647e0bcb99f8'
+            'a5e1b0e1164d36144eb63c6a4178e514657eef3f836eba8016ff6f5d1a7b7d3c'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -692,6 +694,7 @@ prepare() {
   # Browse the tools by letter, the way a ROM site does it.
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0109-navigate-tools-by-letter.patch"
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0110-mount-the-letter-strip.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0111-your-first-quixi-daemon.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
