@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=71
+pkgrel=72
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -733,6 +733,19 @@ check() {
   cargo test --release --locked -p quixi-platform --lib
 }
 
+# The build path survives rustc's --remap-path-prefix through env!("CARGO_MANIFEST_DIR"), cc-crate
+# invocations and build scripts that bake absolute paths into C — this is the "Package contains
+# reference to $srcdir" warning, and it ships the builder's home directory to everyone who downloads
+# the package. Rewrite the literal here, padded to the SAME length so no offset in the binary moves.
+_redact_build_path() {
+  command -v perl >/dev/null 2>&1 || { printf '%s\n' "perl missing: cannot redact build paths" >&2; return 1; }
+  local f
+  for f in "$pkgdir${_libdir}"/*; do
+    [ -f "$f" ] || continue
+    HOME="$HOME" perl -0777 -pi -e 'BEGIN{$o=$ENV{HOME}; $n="/build/"."v"x(length($o)-7);} s/\Q$o\E/$n/g;' "$f"
+  done
+}
+
 package() {
   # Ship the OpenRC service. NOT under /usr/share/doc: many images — including the Artix base
   # image — carry `NoExtract = usr/share/doc/*` in pacman.conf, so pacman records the file in its
@@ -839,4 +852,7 @@ EOF
   # package so it is readable without the source tree.
   install -Dm644 crates/quixi-platform/NOTES-linux.md \
     "${pkgdir}/usr/share/doc/${pkgname}/NOTES-linux.md"
+
+  # Nothing inside the shipped binaries should name the machine that built them.
+  _redact_build_path
 }
