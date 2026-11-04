@@ -40,6 +40,30 @@ fi
 command -v dpkg-deb >/dev/null || { echo "dpkg-deb is missing — this must run on Debian or Ubuntu." >&2; exit 1; }
 command -v cargo    >/dev/null || { echo "cargo is missing. Try: $0 --deps" >&2; exit 1; }
 
+# The lock file is format v4, which needs cargo 1.78 or newer. Debian 12 ships 1.65, so its packaged
+# cargo fails with "lock file version `4` was found, but this version of Cargo does not understand
+# this lock file" — which reads like a broken tree rather than an old toolchain. Say so instead.
+CARGO_VER=$(cargo --version | awk '{print $2}')
+CARGO_MAJ=${CARGO_VER%%.*}
+CARGO_MIN=$(echo "$CARGO_VER" | cut -d. -f2)
+if [ "${CARGO_MAJ:-0}" -lt 1 ] || { [ "${CARGO_MAJ:-0}" -eq 1 ] && [ "${CARGO_MIN:-0}" -lt 78 ]; }; then
+  cat >&2 <<EOF
+cargo $CARGO_VER is too old: this tree's Cargo.lock is format v4 and needs cargo 1.78+.
+Two ways forward on this distribution:
+
+  rustup (works on any Debian/Ubuntu release):
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+    . "\$HOME/.cargo/env"
+
+  Debian 12 "bookworm" only: the newer toolchain from backports
+    echo 'deb http://deb.debian.org/debian bookworm-backports main' | sudo tee /etc/apt/sources.list.d/backports.list
+    sudo apt update && sudo apt install -t bookworm-backports cargo rustc
+
+Debian 13 "trixie" and Ubuntu 24.04 ship a new enough cargo already.
+EOF
+  exit 1
+fi
+
 mkdir -p "$WORK" "$DIST"
 
 # --- 1. the upstream tarball -------------------------------------------------
@@ -51,8 +75,12 @@ if [ ! -d "$SRC" ]; then
 fi
 
 # --- 2. the patch series, in the order prepare() applies it ------------------
+# NOT the `source=()` order: that array is grouped by area, and prepare() deliberately applies a few
+# of them out of that order (0026 before 0027, for one). Taking the source list here applies 0053 on
+# top of the wrong tree and it rejects a hunk in quixi-engine/src/lib.rs.
 cd "$SRC"
-mapfile -t ORDER < <(sed -n '/^source=(/,/^)/p' "$REPO/PKGBUILD" | grep -oE '[0-9]{4}-[A-Za-z0-9.-]+\.patch')
+mapfile -t ORDER < <(sed -n '/^prepare()/,/^}/p' "$REPO/PKGBUILD" \
+  | grep -oE '\$\{srcdir\}/[0-9]{4}-[A-Za-z0-9.-]+\.patch' | sed 's|.*/||' | awk '!seen[$0]++')
 echo "== applying ${#ORDER[@]} patches"
 for p in "${ORDER[@]}"; do
   f="$REPO/$p"
