@@ -151,7 +151,7 @@ anyway, because that is the one that does not care what you are running.
 The same install, by hand:
 
 ```sh
-flatpak install --user --from https://volkdude85.github.io/quixidesk-volkdude85-published/org.quixidesk.QuixiDesk.flatpakref
+flatpak install --user --from https://volkdude85.github.io/quixidesk-volkdude85-published/io.github.volkdude85.quixidesk.flatpakref
 ```
 
 That URL is a signed OSTree repository — the key travels in the `.flatpakref`, so `flatpak update`

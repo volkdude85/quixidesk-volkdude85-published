@@ -1,4 +1,4 @@
-app-id: org.quixidesk.QuixiDesk
+app-id: io.github.volkdude85.quixidesk
 runtime: org.gnome.Platform
 runtime-version: "51"
 sdk: org.gnome.Sdk
@@ -29,11 +29,11 @@ modules:
       # Built outside the sandbox and handed in; see the note above about the Rust extension.
       - install -Dm755 prebuilt/QuixiDesk /app/bin/QuixiDesk
       - install -Dm755 flatpak/quixidesk-flatpak /app/bin/quixidesk-flatpak
-      - install -Dm644 flatpak/org.quixidesk.QuixiDesk.desktop /app/share/applications/org.quixidesk.QuixiDesk.desktop
-      - install -Dm644 flatpak/org.quixidesk.QuixiDesk.metainfo.xml /app/share/metainfo/org.quixidesk.QuixiDesk.metainfo.xml
+      - install -Dm644 flatpak/io.github.volkdude85.quixidesk.desktop /app/share/applications/io.github.volkdude85.quixidesk.desktop
+      - install -Dm644 flatpak/io.github.volkdude85.quixidesk.metainfo.xml /app/share/metainfo/io.github.volkdude85.quixidesk.metainfo.xml
       # appstream refuses a component whose icon it cannot find, so the mark is installed under the name
       # the metainfo will advertise.
-      - install -Dm644 resources/quixi-mark.svg /app/share/icons/hicolor/scalable/apps/org.quixidesk.QuixiDesk.svg
+      - install -Dm644 resources/quixi-mark.svg /app/share/icons/hicolor/scalable/apps/io.github.volkdude85.quixidesk.svg
       - mkdir -p /app/share/quixidesk && cp -a resources /app/share/quixidesk/resources
     # The application tree is not in this repository — the patch series is. Both builders produce the tree
     # under the same name (flatpak-src/ for CI, a staged archive for build-flatpak.sh), so the manifest never

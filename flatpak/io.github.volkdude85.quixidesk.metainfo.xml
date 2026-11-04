@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>org.quixidesk.QuixiDesk</id>
+  <id>io.github.volkdude85.quixidesk</id>
   <name>volkdude85's QuixiCore</name>
   <!-- The summary starts with a capitalised word, not the handle: appstream wants a capitalised
        first word, and the handle is lowercase everywhere, so the handle comes out of the summary
@@ -39,8 +39,8 @@
     <content_attribute id="money-purchasing">none</content_attribute>
     <content_attribute id="money-gambling">none</content_attribute>
   </content_rating>
-  <icon type="stock">org.quixidesk.QuixiDesk</icon>
-  <launchable type="desktop-id">org.quixidesk.QuixiDesk.desktop</launchable>
+  <icon type="stock">io.github.volkdude85.quixidesk</icon>
+  <launchable type="desktop-id">io.github.volkdude85.quixidesk.desktop</launchable>
   <categories>
     <category>Utility</category>
   </categories>

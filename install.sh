@@ -18,8 +18,8 @@
 
 set -eu
 
-APP_ID=org.quixidesk.QuixiDesk
-REF_URL="https://volkdude85.github.io/quixidesk-volkdude85-published/org.quixidesk.QuixiDesk.flatpakref"
+APP_ID=io.github.volkdude85.quixidesk
+REF_URL="https://volkdude85.github.io/quixidesk-volkdude85-published/io.github.volkdude85.quixidesk.flatpakref"
 CONTAINER_SCRIPT="https://raw.githubusercontent.com/volkdude85/quixidesk-volkdude85-published/master/scripts/steamdeck-distrobox.sh"
 RAW_BASE="https://raw.githubusercontent.com/volkdude85/quixidesk-volkdude85-published/master"
 SHORTCUT_SCRIPT="$RAW_BASE/scripts/deck-steam-shortcut.py"
@@ -128,7 +128,7 @@ Now the part that is not a command: getting it into Game Mode.
      Flatpak applications live in ~/.local/share/flatpak/exports/share/applications, and
      Steam reads that directory — on most images the entry is simply in the list.
   3. If it is not in the list, choose "Browse" and pick /usr/bin/flatpak, then set the
-     shortcut's Launch Options to:   run org.quixidesk.QuixiDesk
+     shortcut's Launch Options to:   run io.github.volkdude85.quixidesk
   4. In Game Mode, the shortcut launches the app; the on-screen keyboard (STEAM + X) is the
      keyboard, and the trackpads drive the pointer.
 

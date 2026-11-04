@@ -167,7 +167,7 @@ signing: set `VERIFY_FILE` and `VERIFY_TEXT` and a stale commit aborts the publi
 
 ## `rsync --delete` against a generated directory deletes what the generator does not know about
 
-**What it looks like:** after refreshing a published flatpak repo, `org.quixidesk.QuixiDesk.flatpakref`
+**What it looks like:** after refreshing a published flatpak repo, `io.github.volkdude85.quixidesk.flatpakref`
 and `.flatpakrepo` return 404 and the install line is dead.
 
 **What it is:** those two files are not written by `flatpak build-update-repo` and they were never in the
@@ -182,7 +182,7 @@ rsync -a --delete --exclude .git --exclude .nojekyll --exclude index.html \
       --exclude '*.flatpakref' --exclude '*.flatpakrepo' repo/ pages/
 ```
 
-Recovery is `git checkout <previous-commit> -- org.quixidesk.QuixiDesk.flatpakref …` on the branch.
+Recovery is `git checkout <previous-commit> -- io.github.volkdude85.quixidesk.flatpakref …` on the branch.
 
 ## `makepkg` says a source file failed the validity check
 

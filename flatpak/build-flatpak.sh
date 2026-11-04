@@ -96,7 +96,7 @@ tar czf "$STAGE/quixidesk-src.tar.gz" --warning=no-file-changed \
   -C "$SRCCOPY" "QuixiDesk-${PKGVER}" || [ $? -eq 1 ]
 
 # The manifest is staged beside the archive with an archive source instead of a dir source.
-python3 - "$REPO/flatpak/org.quixidesk.QuixiDesk.yml" "$STAGE/manifest.yml" <<'PY'
+python3 - "$REPO/flatpak/io.github.volkdude85.quixidesk.yml" "$STAGE/manifest.yml" <<'PY'
 import re, sys
 src, dst = sys.argv[1], sys.argv[2]
 text = open(src).read()
@@ -120,7 +120,7 @@ flatpak-builder --user --disable-cache --state-dir="$STATE" --force-clean --repo
 # Check the export before it is ever signed or published: the file that was just built has to be the
 # file in the commit, or nothing downstream of this line means anything.
 if [ -n "${VERIFY_FILE:-}" ] && [ -n "${VERIFY_TEXT:-}" ]; then
-  COMMIT=$(cat "$REPO_DIR/refs/heads/app/org.quixidesk.QuixiDesk/x86_64/master")
+  COMMIT=$(cat "$REPO_DIR/refs/heads/app/io.github.volkdude85.quixidesk/x86_64/master")
   CHK="$WORK/verify-out"; rm -rf "$CHK"
   ostree checkout --repo="$REPO_DIR" --user-mode "$COMMIT" "$CHK" >/dev/null 2>&1 || true
   if [ -n "$(grep -rl -- "$VERIFY_TEXT" "$CHK" 2>/dev/null | grep -- "$VERIFY_FILE" | head -1)" ]; then
@@ -131,7 +131,7 @@ if [ -n "${VERIFY_FILE:-}" ] && [ -n "${VERIFY_TEXT:-}" ]; then
   fi
 fi
 BUNDLE="$WORK/QuixiDesk.flatpak"
-flatpak build-bundle "$REPO_DIR" "$BUNDLE" org.quixidesk.QuixiDesk
+flatpak build-bundle "$REPO_DIR" "$BUNDLE" io.github.volkdude85.quixidesk
 ls -la "$BUNDLE"
 
 sign_repo
@@ -180,11 +180,11 @@ flatpak-builder --user --disable-cache \
   --state-dir="$STATE" \
   --force-clean \
   --repo="$REPO_DIR" \
-  "$BUILD" "$TREE/flatpak/org.quixidesk.QuixiDesk.yml"
+  "$BUILD" "$TREE/flatpak/io.github.volkdude85.quixidesk.yml"
 
 BUNDLE="$WORK/QuixiDesk.flatpak"
 echo "== exporting $BUNDLE"
-flatpak build-bundle "$REPO_DIR" "$BUNDLE" org.quixidesk.QuixiDesk
+flatpak build-bundle "$REPO_DIR" "$BUNDLE" io.github.volkdude85.quixidesk
 ls -la "$BUNDLE"
 
 sign_repo

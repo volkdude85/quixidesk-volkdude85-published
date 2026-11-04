@@ -14,7 +14,7 @@ name: flatpak
 #
 # So the thing a person installs is NOT whatever CI last produced — it is whatever was pushed to
 # `gh-pages` by hand. If the two disagree, `gh-pages` is the one that is live, and the ref that matters is
-# `repo/refs/heads/app/org.quixidesk.QuixiDesk/x86_64/master`. Check it before telling anyone an install
+# `repo/refs/heads/app/io.github.volkdude85.quixidesk/x86_64/master`. Check it before telling anyone an install
 # line is current.
 #
 # Nothing goes to Flathub: that submission needs source builds and the org.quixidesk namespace is Eric's.
@@ -76,7 +76,7 @@ jobs:
           # error, none of them visible without opening the log.
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           RUNTIME=$(sed -n 's/^runtime-version:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' \
-            flatpak/org.quixidesk.QuixiDesk.yml)
+            flatpak/io.github.volkdude85.quixidesk.yml)
           [ -n "$RUNTIME" ] || { echo "could not read runtime-version from the manifest" >&2; exit 1; }
           echo "runtime branch: $RUNTIME"
           sudo flatpak install -y --noninteractive --system flathub \
@@ -138,7 +138,7 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: quixidesk.flatpak
-          manifest-path: flatpak/org.quixidesk.QuixiDesk.yml
+          manifest-path: flatpak/io.github.volkdude85.quixidesk.yml
           # The action's own cache is OFF, and that is a correctness choice, not a speed one.
           #
           # (a) A cache key that contains the commit can never be restored — the action's maintainers
@@ -170,9 +170,9 @@ jobs:
         run: |
           set -e
           docker run --rm -v "$PWD:/mnt" ghcr.io/flathub/flatpak-builder-lint:latest \
-            manifest /mnt/flatpak/org.quixidesk.QuixiDesk.yml || true
+            manifest /mnt/flatpak/io.github.volkdude85.quixidesk.yml || true
           docker run --rm -v "$PWD:/mnt" ghcr.io/flathub/flatpak-builder-lint:latest \
-            appstream /mnt/flatpak/org.quixidesk.QuixiDesk.metainfo.xml || true
+            appstream /mnt/flatpak/io.github.volkdude85.quixidesk.metainfo.xml || true
 
       - name: Keep the bundle as a workflow artifact
         uses: actions/upload-artifact@v4

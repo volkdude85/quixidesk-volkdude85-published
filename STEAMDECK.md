@@ -75,7 +75,7 @@ The script also writes a `.desktop` entry, so it shows up in the application men
 
 ### Route B — the Flatpak
 
-This edition ships one: `flatpak/org.quixidesk.QuixiDesk.yml`, built by `.github/workflows/flatpak.yml`.
+This edition ships one: `flatpak/io.github.volkdude85.quixidesk.yml`, built by `.github/workflows/flatpak.yml`.
 Flatpak is the sanctioned way to put software on a Deck, and it is the only route that survives an OS
 update with nothing to maintain.
 

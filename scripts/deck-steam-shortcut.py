@@ -36,7 +36,7 @@ import zlib
 from pathlib import Path
 
 APP_NAME = "QuixiCore"
-APP_ID = "org.quixidesk.QuixiDesk"
+APP_ID = "io.github.volkdude85.quixidesk"
 EXE = "/usr/bin/flatpak"
 LAUNCH_OPTIONS = f"run {APP_ID}"
 START_DIR = "/usr/"
