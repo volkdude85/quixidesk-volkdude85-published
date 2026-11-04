@@ -1,0 +1,92 @@
+diff -urN a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-04 21:40:11.941153702 +0000
++++ b/resources/ui/app.css	2026-11-04 21:40:11.941288238 +0000
+@@ -3372,3 +3372,9 @@
+ .daemon-box > summary { cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+ .daemon-box > summary::-webkit-details-marker { display: none; }
+ .daemon-box[open] > summary { margin-bottom: 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
++
++/* The lamp in the sidebar's Daemons group: small, unlabelled, green when answering. */
++.daemon-dot.child { width: 7px; height: 7px; margin: 0 6px 0 0; flex: 0 0 auto; }
++.daemon-dot { background: #ef4444; border-color: #ef4444; }
++.daemon-dot.on { background: #22c55e; border-color: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.55); }
++.daemon-row { cursor: pointer; }
+diff -urN a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-04 21:40:11.940221808 +0000
++++ b/resources/ui/app.js	2026-11-04 21:40:11.940941659 +0000
+@@ -768,10 +768,13 @@
+     else if (page === "artifacts") loadArtifacts();
+     else if (page === "schedules") loadSchedules();
+     else if (page === "tools") loadTools();
++    else if (page === "daemons") loadDaemons().then(() => renderPage());
+     else if (page === "search")
+       setTimeout(() => document.getElementById("search-input")?.focus(), 0);
+   }
+   window.quixiNavigate = (page) => navigate(page);
++  // First paint: the Daemons group in the sidebar is drawn from this, so fetch it once and redraw.
++  loadDaemons().then(() => { try { render(); } catch {} });
+   addEventListener("popstate", () => {
+     const path = location.pathname.slice(1);
+     navigate(path, null, { replace: true });
+@@ -829,6 +832,12 @@
+           .map((s) => [s.displayName || s.name, () => navigate("schedules")]);
+         return items.length ? items : [["No cron jobs yet", () => navigate("schedules")]];
+       },
++      daemons: () => {
++        // Each leaf carries its own light: green when the service is answering, red when it is not.
++        const list = (state.daemons || []).slice(0, 8)
++          .map((d) => [d.name, () => navigate("daemons"), d.up ? "on" : "off"]);
++        return list.length ? list : [["No daemons yet", () => navigate("daemons")]];
++      },
+       tools: () => {
+         // Connections exist by the time the sidebar draws; the skill index arrives later.
+         const servers = (toolsData.servers || []).map((s) => [s.name, () => navigate("tools")]);
+@@ -857,7 +866,7 @@
+       }, caret);
+       const items = open
+         ? el("div", { class: "nav-children", role: "group", "aria-label": label },
+-            ...(GROUP_ITEMS[page]?.() || []).map(([name, onPick]) =>
++            ...(GROUP_ITEMS[page]?.() || []).map(([name, onPick, dot]) =>
+               el("button", {
+                 class: "nav-child",
+                 tabindex: "0",
+@@ -869,7 +878,9 @@
+                   const next = event.key === "ArrowDown" ? rows[at + 1] : event.key === "ArrowUp" ? rows[at - 1] : null;
+                   if (next) { next.focus(); event.preventDefault(); }
+                 },
+-              }, String(name).slice(0, 40))))
++              },
++                dot ? el("span", { class: "daemon-dot child" + (dot === "on" ? " on" : ""), "aria-hidden": "true" }) : null,
++                el("span", { class: "grow" }, String(name).slice(0, 40)))))
+         : null;
+       return el("div", { class: "nav-group" + (open ? " is-open" : "") },
+         el("div", { class: "nav-row" },
+@@ -4427,12 +4438,11 @@
+     const rows = data.daemons.map((d) =>
+         el("div", { class: "daemon-row" + (d.up ? " up" : ""), role: "button", tabindex: "0",
+                     onclick: (event) => { if (!event.target.closest("button")) confirmToggle(d); } },
+-          el("button", {
++          el("span", {
+             class: "daemon-dot" + (d.up ? " on" : ""),
+-            title: d.up ? `Stop ${d.name}` : `Start ${d.name}`,
+-            "aria-label": d.up ? `Stop ${d.name}` : `Start ${d.name}`,
+-            "aria-pressed": d.up ? "true" : "false",
+-            onclick: () => confirmToggle(d),
++            title: d.up ? `${d.name} is running` : `${d.name} is not running`,
++            "aria-label": d.up ? `${d.name} is running` : `${d.name} is not running`,
++            role: "img",
+           }),
+           el("div", { class: "grow" },
+             el("strong", {}, d.name),
+@@ -4827,6 +4837,11 @@
+     const modal=dialog(`Folders shared with ${name}`,[el("p",{class:"hint"},"These folders are advertised to this server as workspace roots. Changing roots does not grant permission to execute tools."),list,button("Add folder",async()=>{const path=await rpc("FileSystem","browseFolder",["Choose a folder for this MCP server"]);const value=typeof path==="string"?path:path?.path;if(value&&!paths.includes(value)){paths.push(value);render();}},"quiet"),error,el("div",{class:"dialog-actions"},button("Save folders",async()=>{try{const result=await mcpRequest("setRoots",[name,cwd,paths]);if(result?.ok!==true)throw new Error("Folders could not be updated.");modal.close();await loadTools({poll:true});}catch(problem){error.textContent=problem.message;}},"primary"))]);
+   }
+   let toolsData = { skills: [], servers: [], error: "" };
++  // The sidebar's Daemons group draws before anyone opens the page, so the list is fetched at boot.
++  let daemonsPromise = null;
++  const loadDaemons = () => daemonsPromise || (daemonsPromise = api("/api/quixi/daemons")
++    .then((d) => { state.daemons = (d && d.daemons) || []; return state.daemons; })
++    .catch(() => { state.daemons = state.daemons || []; return state.daemons; }));
+   let toolsPollTimer = null;
+   let toolsLoadInFlight = null;
+   let mcpCatalogDialog = null;
