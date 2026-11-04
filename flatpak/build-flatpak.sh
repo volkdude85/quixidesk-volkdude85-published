@@ -28,6 +28,31 @@ fi
 # from here. Use it when it exists: the Flatpak should package what runs, and the series currently needs
 # re-baselining before it can rebuild that tree from scratch. When it is absent, fall through to the
 # tarball-plus-series path below.
+# --- sign --------------------------------------------------------------------
+# Both build paths end here, so it is a function rather than a trailing step. The prepared-tree path
+# used to `exit 0` right after build-bundle and published an UNSIGNED repository while reporting
+# success — the quiet failure the rest of this comment is about.
+#
+# flatpak-builder writes an UNSIGNED repository. Publishing one unsigned is the quiet failure this step
+# exists to prevent: the ref file, `flatpak remote-ls` and the bundle all look right, and every client
+# that actually verifies gets "BAD signature" and refuses to load the summary.
+#
+# The key lives in its own keyring, not the default one, so GNUPGHOME is set here rather than relied on.
+sign_repo() {
+  SIGN_KEY="${QUIXI_FLATPAK_KEY:-BEA4F4E734ECF3EC}"
+  SIGN_HOME="${QUIXI_FLATPAK_GNUPGHOME:-$HOME/.config/quixidesk-flatpak/gnupg}"
+  if [ -d "$SIGN_HOME" ]; then
+    echo "== signing the repository with $SIGN_KEY"
+    GNUPGHOME="$SIGN_HOME" flatpak build-update-repo \
+      --gpg-sign="$SIGN_KEY" \
+      --generate-static-deltas \
+      "$REPO_DIR"
+  else
+    echo "== NOT SIGNED: no keyring at $SIGN_HOME" >&2
+    echo "   A published repo must be signed. Set QUIXI_FLATPAK_GNUPGHOME or create that keyring." >&2
+  fi
+}
+
 PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
 if [ -d "$PREPARED" ]; then
   echo "== using the prepared tree at $PREPARED"
@@ -86,12 +111,31 @@ PY
 
 echo "== building with flatpak-builder"
 rm -rf "$BUILD" "$REPO_DIR"
-flatpak-builder --user --state-dir="$STATE" --force-clean --repo="$REPO_DIR" \
+# --disable-cache, and it is not a performance choice. The source archive is staged at the same path
+# with the same name on every build, so a cache lookup hit and packaged the PREVIOUS export while the
+# new app.js sat in the archive beside it. The build reported success, the bundle looked right, and the
+# published commit carried the old file — caught only by checking a file out of the exported commit.
+flatpak-builder --user --disable-cache --state-dir="$STATE" --force-clean --repo="$REPO_DIR" \
   "$BUILD" "$STAGE/manifest.yml"
+# Check the export before it is ever signed or published: the file that was just built has to be the
+# file in the commit, or nothing downstream of this line means anything.
+if [ -n "${VERIFY_FILE:-}" ] && [ -n "${VERIFY_TEXT:-}" ]; then
+  COMMIT=$(cat "$REPO_DIR/refs/heads/app/org.quixidesk.QuixiDesk/x86_64/master")
+  CHK="$WORK/verify-out"; rm -rf "$CHK"
+  ostree checkout --repo="$REPO_DIR" --user-mode "$COMMIT" "$CHK" >/dev/null 2>&1 || true
+  if [ -n "$(grep -rl -- "$VERIFY_TEXT" "$CHK" 2>/dev/null | grep -- "$VERIFY_FILE" | head -1)" ]; then
+    echo "  ✓ the exported commit carries $VERIFY_TEXT in $VERIFY_FILE"
+  else
+    echo "  ✗ the exported commit does NOT carry $VERIFY_TEXT in $VERIFY_FILE — stale cache, not publishing" >&2
+    exit 1
+  fi
+fi
 BUNDLE="$WORK/QuixiDesk.flatpak"
 flatpak build-bundle "$REPO_DIR" "$BUNDLE" org.quixidesk.QuixiDesk
-  ls -la "$BUNDLE"
-  exit 0
+ls -la "$BUNDLE"
+
+sign_repo
+exit 0
 fi
 
 # and it has to be the checksum the PKGBUILD pins, or the build is not reproducible
@@ -132,7 +176,7 @@ cp -a "$REPO/flatpak" "$TREE/flatpak"
 echo "== building with flatpak-builder"
 mkdir -p "$WORK"
 rm -rf "$BUILD" "$REPO_DIR"
-flatpak-builder --user \
+flatpak-builder --user --disable-cache \
   --state-dir="$STATE" \
   --force-clean \
   --repo="$REPO_DIR" \
@@ -143,21 +187,4 @@ echo "== exporting $BUNDLE"
 flatpak build-bundle "$REPO_DIR" "$BUNDLE" org.quixidesk.QuixiDesk
 ls -la "$BUNDLE"
 
-# --- sign --------------------------------------------------------------------
-# flatpak-builder writes an UNSIGNED repository. Publishing one unsigned is the quiet failure this step
-# exists to prevent: the ref file, `flatpak remote-ls` and the bundle all look right, and every client
-# that actually verifies gets "BAD signature" and refuses to load the summary.
-#
-# The key lives in its own keyring, not the default one, so GNUPGHOME is set here rather than relied on.
-SIGN_KEY="${QUIXI_FLATPAK_KEY:-BEA4F4E734ECF3EC}"
-SIGN_HOME="${QUIXI_FLATPAK_GNUPGHOME:-$HOME/.config/quixidesk-flatpak/gnupg}"
-if [ -d "$SIGN_HOME" ]; then
-  echo "== signing the repository with $SIGN_KEY"
-  GNUPGHOME="$SIGN_HOME" flatpak build-update-repo \
-    --gpg-sign="$SIGN_KEY" \
-    --generate-static-deltas \
-    "$REPO_DIR"
-else
-  echo "== NOT SIGNED: no keyring at $SIGN_HOME" >&2
-  echo "   A published repo must be signed. Set QUIXI_FLATPAK_GNUPGHOME or create that keyring." >&2
-fi
+sign_repo

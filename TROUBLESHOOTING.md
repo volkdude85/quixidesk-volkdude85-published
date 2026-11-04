@@ -147,6 +147,24 @@ GNUPGHOME=~/.config/quixidesk-flatpak/gnupg flatpak build-update-repo \
 `build-flatpak.sh` does this now and refuses to pretend otherwise if the keyring is missing. Check a
 publish by comparing `md5sum summary.sig` on disk against the served one, not by looking at the ref.
 
+## `flatpak-builder` says "Cache hit" and ships the previous build
+
+**What it looks like:** every step reports success. `flatpak-builder` prints `Cache hit for quixidesk,
+skipping build`, the bundle is exported, the repo is signed, the ref advances — and the published commit
+carries the OLD file, because the cached module was packaged instead of the tree that was just staged.
+
+**What it is:** the staged source archive is written to the same path with the same name on every run
+(`$WORK/stage/quixidesk-src.tar.gz`), so the build cache can satisfy the module without touching the new
+contents. Nothing downstream can see it: the archive on disk has the new file, the exported commit does
+not, and both look healthy.
+
+**Fix:** `--disable-cache` on `flatpak-builder` — it is not a performance setting here, the export is a
+file-copy for a prebuilt binary. `build-flatpak.sh` passes it, and it also verifies the export before
+signing: set `VERIFY_FILE` and `VERIFY_TEXT` and a stale commit aborts the publish instead of shipping.
+
+**Check it by hand:** `ostree checkout --repo=<repo> --user-mode <commit> /tmp/x` and read the file out of
+`/tmp/x/files/`. Reading the staged archive proves nothing.
+
 ## `rsync --delete` against a generated directory deletes what the generator does not know about
 
 **What it looks like:** after refreshing a published flatpak repo, `org.quixidesk.QuixiDesk.flatpakref`
