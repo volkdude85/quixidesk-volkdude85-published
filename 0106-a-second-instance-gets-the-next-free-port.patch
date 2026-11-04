@@ -1,0 +1,94 @@
+diff -urN a/crates/quixi-app/src/main.rs b/crates/quixi-app/src/main.rs
+--- a/crates/quixi-app/src/main.rs	2026-11-04 06:10:48.575305917 -0800
++++ b/crates/quixi-app/src/main.rs	2026-11-04 06:10:48.579053194 -0800
+@@ -414,9 +414,32 @@
+ }
+ 
+ fn start_automation_http_server(proxy: tao::event_loop::EventLoopProxy<UserEvent>) -> anyhow::Result<()> {
+-    let addr = format!("127.0.0.1:{}", quixi_proto::paths::automation_port());
+-    // Fail startup rather than attach to another process's automation bridge.
+-    let listener = std::net::TcpListener::bind(&addr)?;
++    let preferred = quixi_proto::paths::automation_port();
++    // The default port is a convenience, not a requirement. A second instance — a test profile, another
++    // edition, the packaged build beside a dev build — finds it taken, and failing there is how the app
++    // died with `Error: Address already in use (os error 98)` and no window at all. Take a free port
++    // instead and record which one, so the bridge is always reachable by whoever started it.
++    let listener = match std::net::TcpListener::bind(("127.0.0.1", preferred)) {
++        Ok(listener) => listener,
++        Err(err) if err.kind() == std::io::ErrorKind::AddrInUse => {
++            let listener = std::net::TcpListener::bind(("127.0.0.1", 0))?;
++            tracing::warn!("automation port {preferred} is taken — this instance took a free port instead");
++            listener
++        }
++        Err(err) => return Err(err.into()),
++    };
++    let port = listener.local_addr()?.port();
++    quixi_proto::paths::set_automation_port(port);
++    // Written atomically, because a reader must never catch a half-written port and dial nothing.
++    {
++        let path = quixi_proto::paths::automation_port_file();
++        let _ = std::fs::create_dir_all(quixi_proto::paths::data_dir());
++        let tmp = path.with_extension("port.tmp");
++        if std::fs::write(&tmp, format!("{port}\n")).is_ok() {
++            let _ = std::fs::rename(&tmp, &path);
++        }
++    }
++    let addr = format!("127.0.0.1:{port}");
+     std::thread::spawn(move || {
+         use std::io::{Read, Write};
+         use std::time::Duration;
+diff -urN a/crates/quixi-platform/src/lib.rs b/crates/quixi-platform/src/lib.rs
+--- a/crates/quixi-platform/src/lib.rs	2026-11-04 06:10:48.577125573 -0800
++++ b/crates/quixi-platform/src/lib.rs	2026-11-04 06:10:48.580640657 -0800
+@@ -516,7 +516,9 @@
+         use std::net::{SocketAddr, TcpStream};
+         use std::time::Duration;
+ 
+-        let port = quixi_proto::paths::automation_port();
++        // The endpoint, not the preference: this process may have had to take a free port because the
++        // default one belonged to another instance.
++        let port = quixi_proto::paths::automation_endpoint_port();
+         let addr: SocketAddr = format!("127.0.0.1:{port}").parse().ok()?;
+         let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(350)).ok()?;
+         let _ = stream.set_read_timeout(Some(Duration::from_millis(2500)));
+diff -urN a/crates/quixi-proto/src/paths.rs b/crates/quixi-proto/src/paths.rs
+--- a/crates/quixi-proto/src/paths.rs	2026-11-04 06:10:48.576267198 -0800
++++ b/crates/quixi-proto/src/paths.rs	2026-11-04 06:10:48.579751303 -0800
+@@ -57,6 +57,37 @@
+         .unwrap_or(if test_profile().is_some() { 19456 } else { 19455 })
+ }
+ 
++/// The port the bridge actually bound, set once by the server at startup.
++static BOUND_PORT: OnceLock<u16> = OnceLock::new();
++
++/// Record the port the bridge is listening on. The first call wins; a later one is ignored.
++pub fn set_automation_port(port: u16) {
++    let _ = BOUND_PORT.set(port);
++}
++
++/// Where the port in use is written, so anything outside this process can find a bridge that had to move.
++pub fn automation_port_file() -> PathBuf {
++    data_dir().join("automation.port")
++}
++
++/// The port to talk to: what this process bound, else what was recorded in the data folder, else the
++/// preferred default. The distinction exists because the default port is a convenience, not a guarantee —
++/// a second instance (a test profile, another edition, a packaged build beside a dev build) finds it taken
++/// and takes a free one instead, and a bridge nobody can address is not a bridge.
++pub fn automation_endpoint_port() -> u16 {
++    if let Some(port) = BOUND_PORT.get() {
++        return *port;
++    }
++    if let Ok(text) = std::fs::read_to_string(automation_port_file()) {
++        if let Ok(port) = text.trim().parse::<u16>() {
++            if port != 0 {
++                return port;
++            }
++        }
++    }
++    automation_port()
++}
++
+ /// User home directory, honouring `HOME` and falling back to the OS lookup.
+ pub fn home_dir() -> PathBuf {
+     if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
