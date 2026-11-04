@@ -142,3 +142,22 @@ BUNDLE="$WORK/QuixiDesk.flatpak"
 echo "== exporting $BUNDLE"
 flatpak build-bundle "$REPO_DIR" "$BUNDLE" org.quixidesk.QuixiDesk
 ls -la "$BUNDLE"
+
+# --- sign --------------------------------------------------------------------
+# flatpak-builder writes an UNSIGNED repository. Publishing one unsigned is the quiet failure this step
+# exists to prevent: the ref file, `flatpak remote-ls` and the bundle all look right, and every client
+# that actually verifies gets "BAD signature" and refuses to load the summary.
+#
+# The key lives in its own keyring, not the default one, so GNUPGHOME is set here rather than relied on.
+SIGN_KEY="${QUIXI_FLATPAK_KEY:-BEA4F4E734ECF3EC}"
+SIGN_HOME="${QUIXI_FLATPAK_GNUPGHOME:-$HOME/.config/quixidesk-flatpak/gnupg}"
+if [ -d "$SIGN_HOME" ]; then
+  echo "== signing the repository with $SIGN_KEY"
+  GNUPGHOME="$SIGN_HOME" flatpak build-update-repo \
+    --gpg-sign="$SIGN_KEY" \
+    --generate-static-deltas \
+    "$REPO_DIR"
+else
+  echo "== NOT SIGNED: no keyring at $SIGN_HOME" >&2
+  echo "   A published repo must be signed. Set QUIXI_FLATPAK_GNUPGHOME or create that keyring." >&2
+fi

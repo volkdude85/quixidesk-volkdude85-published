@@ -123,6 +123,49 @@ build log is where it is visible: `Hunk #1 succeeded at 936 (offset -7 lines)` a
 before packaging as a belt-and-braces. Worth knowing that one of those backups carried content the
 package deliberately no longer ships, so this is not only tidiness.
 
+## A published flatpak repo that every client refuses: `BAD signature`
+
+**What it looks like:** the ref file points at the new build, `flatpak remote-ls` lists the app, and adding
+the remote fails with
+
+```
+Signature made Wed 31 Dec 1969 04:00:00 PM PST using [unknown name] key ID BEA4F4E734ECF3EC
+BAD signature from "QuixiDesk Flatpak <seanwvolk@gmail.com>"
+```
+
+**What it is:** `build-flatpak.sh` runs `flatpak-builder`, which writes an UNSIGNED repository. Publishing
+that directory next to the PREVIOUS build's `summary.sig` gives you a new summary with an old signature on
+it. Nothing in the local repo looks wrong — there is simply no `summary.sig` to compare against.
+
+**Fix:** sign after the export, with the key's own keyring:
+
+```sh
+GNUPGHOME=~/.config/quixidesk-flatpak/gnupg flatpak build-update-repo \
+  --gpg-sign=BEA4F4E734ECF3EC --generate-static-deltas ~/flatpak-build/repo
+```
+
+`build-flatpak.sh` does this now and refuses to pretend otherwise if the keyring is missing. Check a
+publish by comparing `md5sum summary.sig` on disk against the served one, not by looking at the ref.
+
+## `rsync --delete` against a generated directory deletes what the generator does not know about
+
+**What it looks like:** after refreshing a published flatpak repo, `org.quixidesk.QuixiDesk.flatpakref`
+and `.flatpakrepo` return 404 and the install line is dead.
+
+**What it is:** those two files are not written by `flatpak build-update-repo` and they were never in the
+local repo directory — they had been created by hand and lived only on the `gh-pages` branch. A `--delete`
+sync removes everything absent from the source, which is exactly them.
+
+**Fix:** exclude them on every sync, or better, generate them as part of the publish so they are never
+hand-made:
+
+```sh
+rsync -a --delete --exclude .git --exclude .nojekyll --exclude index.html \
+      --exclude '*.flatpakref' --exclude '*.flatpakrepo' repo/ pages/
+```
+
+Recovery is `git checkout <previous-commit> -- org.quixidesk.QuixiDesk.flatpakref …` on the branch.
+
 ## `makepkg` says a source file failed the validity check
 
 **What it looks like:** every patch passes, and the tarball — the source the whole build starts from —
