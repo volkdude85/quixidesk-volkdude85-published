@@ -1,0 +1,18 @@
+diff -urN a/resources/ui/capability-workflows.js b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js	2026-11-04 20:29:59.082083006 +0000
++++ b/resources/ui/capability-workflows.js	2026-11-04 20:29:59.082317173 +0000
+@@ -426,8 +426,12 @@
+         skillPanel("volkdude85 tools & skills",
+           "What this edition adds on top: the browser and reverse-engineering skills, the field notes, and the eleven work skills taken from a real agent's library — scrubbed of anything identifying. Cards in blue are proposed — staged for merge, not shipped by this build yet.",
+           mine),
+-        skillPanel("Hermes",
+-          "Hermes already maintains a large, established library of tools and procedures. This is a live tap into it — read from the Hermes profiles on this machine and grouped by area — so the agent starts from what has already been proven.",
++        skillPanel("Hermes — by Nous Research",
++          "These tools are not ours. Hermes is Nous Research's work, and this is a live tap into the "
++          + "library they built and maintain — read from the Hermes profiles on this machine and grouped "
++          + "by area, so the agent starts from what has already been proven. Full credit goes to them: "
++          + "thank you for Hermes, and for making a product this good. They are the originals; we are "
++          + "standing on their work.",
+           hers));
+     }
+     // One search across connections, the tools inside them, and skills. Skills had a filter of their

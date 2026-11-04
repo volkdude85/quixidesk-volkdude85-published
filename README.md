@@ -137,9 +137,21 @@ Mutter display state, X11 capture/RandR/pointer via `x11rb`, clipboard, and HTTP
 
 ## Credits
 
-QuixiDesk is by [QuixiAI](https://github.com/QuixiAI/QuixiDesk) (Eric Hartford), MIT. This repository
-is a patch set against it, not a fork — the upstream tree is never modified. Memory is modelled on
-MemPalace by Milla Jovovich (MIT).
+**Hermes, and the tool library inside this app, are [Nous Research](https://nousresearch.com)'s work.**
+The agent that reads skills, the hundreds of tools and procedures that the "Hermes" panel lists, the
+conventions they follow — none of it is ours. We tap it live from the Hermes profiles on the machine,
+we credit it in the app where a reader sees it, and we say so here as plainly as we can: **full credit
+to Nous Research, and thank you.** Hermes is a genuinely good product and it is the reason the tools
+panel in this build has anything worth listing.
+
+* **Hermes / Hermes Agent** — Nous Research (MIT). The agent framework, the skill format, and the
+  majority of the tool instructions this app surfaces.
+* **QuixiDesk** — [QuixiAI](https://github.com/QuixiAI/QuixiDesk), Eric Hartford (MIT). This
+  repository is a patch set against it, not a fork; the upstream tree is never modified.
+* **Memory** — modelled on MemPalace by Milla Jovovich (MIT).
+* Individual skills that came in from elsewhere carry their own author line in the skill itself and
+  are listed one row each in `ATTRIBUTION.md`/`MANIFEST.tsv` where that file exists. If a skill says
+  someone else wrote it, they did, and the mistakes in it are not theirs.
 
 ## Licence
 
