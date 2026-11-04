@@ -1,6 +1,6 @@
 # First run — what the Volkdude Edition says before it does anything
 
-This is the copy and the decisions for the first launch of `quixidesk-volkdude85`. It exists because
+This is the copy and the decisions for the first launch of `quixidesk-volkdude85-published`. It exists because
 a fresh install arrives with none of the context that makes this edition worth having: no persona
 file, no memory, no idea what it is for. Every one of those is a choice the user should make with the
 cost in front of them, not a default they discover later.

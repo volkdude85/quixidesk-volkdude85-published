@@ -3,11 +3,11 @@
 There are two builds of this. They share the same platform layer and the same verification. They are
 not the same product.
 
-|  | [`quixidesk-arch`](https://github.com/volkdude85/quixidesk-arch) | [`quixidesk-volkdude85`](https://github.com/volkdude85/quixidesk-volkdude85) |
+|  | [`quixidesk-arch`](https://github.com/volkdude85/quixidesk-arch) | [`quixidesk-volkdude85-published`](https://github.com/volkdude85/quixidesk-volkdude85-published) |
 |---|---|---|
 | **what it is** | the build made in the spirit of what Eric would want | **PBBBT** — the edition that runs on one specific machine and does cool shit |
 | **who it's for** | anyone on Arch, and Eric first | me. published in case it's useful |
-| **patches** | 14 | 50 |
+| **patches** | 28 | 105 |
 | **memory** ([full comparison](MEMORY-COMPARISON.md)) | upstream: a single `memory/MEMORY.md` read by the UI panel only | MemPalace-shaped: wings → rooms → drawers, searchable, markdown on disk |
 | **voice** | local TTS/STT, **defaults off** | wired to my Kokoro/Whisper setup, `af_heart`, on by default |
 | **credential storage** | local key file, keyring opt-in | same |
@@ -16,13 +16,18 @@ not the same product.
 | **purpose statement** | none — upstream default copy | the **About Nora** panel says what the edition is for, including the ADA framing that lets a person bring their own aid into a courtroom or a doctor's office ([why it is worded that way](ONBOARDING.md#2-the-about-block-and-why-it-is-worded-the-way-it-is)) |
 | **upstream cleanliness** | patches against the release tarball, upstream tree untouched | identical — neither edition is a fork |
 
+Patch counts are a snapshot — `ls *.patch | wc -l` at each repository's root — and both series grow.
+The `-published` suffix on this edition's repository is a rename of what used to be
+`quixidesk-volkdude85`: same repository, same history, and GitHub redirects the old URL, so older
+links still land here.
+
 ## Which one to pick
 
 - **Arch, general use, or you are Eric:** [`quixidesk-arch`](https://github.com/volkdude85/quixidesk-arch).
   It adds the Linux platform layer and the fixes, and otherwise gets out of the way. Nothing personal
   is baked in.
 - **You want to see what a maximally customised local AI desktop looks like, warts included:**
-  [`quixidesk-volkdude85`](https://github.com/volkdude85/quixidesk-volkdude85). It is the same base
+  [`quixidesk-volkdude85-published`](https://github.com/volkdude85/quixidesk-volkdude85-published). It is the same base
   with a memory system that persists everything to disk, a voice stack tuned to one specific host, and
   a lot of opinions. PBBBT.
 

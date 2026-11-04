@@ -1,6 +1,6 @@
 # QuixiDesk for Arch Linux — volkdude85 edition (PBBBT)
 
-[![build](https://github.com/volkdude85/quixidesk-volkdude85/actions/workflows/build.yml/badge.svg)](https://github.com/volkdude85/quixidesk-volkdude85/actions/workflows/build.yml)
+[![build](https://github.com/volkdude85/quixidesk-volkdude85-published/actions/workflows/build.yml/badge.svg)](https://github.com/volkdude85/quixidesk-volkdude85-published/actions/workflows/build.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 > **This is one of two editions.** Neither depends on the other — both patch the upstream
@@ -8,7 +8,7 @@
 >
 > * [`quixidesk-arch`](https://github.com/volkdude85/quixidesk-arch) — the restrained build, made in
 >   the spirit of what Eric would want. Nothing personal baked in.
-> * [`quixidesk-volkdude85`](https://github.com/volkdude85/quixidesk-volkdude85) — **PBBBT.** The extra
+> * [`quixidesk-volkdude85-published`](https://github.com/volkdude85/quixidesk-volkdude85-published) — **PBBBT.** The extra
 >   crazy vibe-coded edition. Wired to one specific machine, does cool shit, has opinions.
 >
 > **On a Steam Deck?** Read [`STEAMDECK.md`](STEAMDECK.md) before you install. It is a desktop
@@ -166,6 +166,24 @@ flatpak install --user --from https://volkdude85.github.io/quixidesk-volkdude85-
 
 That URL is a signed OSTree repository — the key travels in the `.flatpakref`, so `flatpak update`
 keeps working afterwards and every commit it installs is verified.
+
+#### Two Flatpaks, and which one is which
+
+This repository builds and signs **its own** Flatpak, id `io.github.volkdude85.quixidesk`, from the
+patch series in this tree. That is the one the install line above installs, and it always carries this
+edition.
+
+The Flathub submission is a different package with a different id — `io.github.volkdude85.QuixiDesk` —
+and it does not depend on this repository at all. Its manifest and PR branch live in
+[`volkdude85/flathub`](https://github.com/volkdude85/flathub), and it builds from a tagged tarball
+released at [`volkdude85/QuixiDesk`](https://github.com/volkdude85/QuixiDesk): upstream `v3.6556.12`
+with the Linux platform series already applied. That fork exists for one reason — a Flathub app id of
+the form `io.github.<user>.<App>` has to map to a GitHub repository of that name, and the tarball has
+to be a release asset somewhere public.
+
+If Flathub accepts it, `flatpak install flathub io.github.volkdude85.QuixiDesk` becomes the shortest way
+to get QuixiDesk on Linux. Until then this repository's signed remote is the line that works, and the
+Flathub package is not something you can install yet.
 
 #### On a machine that has never had Flatpak
 
