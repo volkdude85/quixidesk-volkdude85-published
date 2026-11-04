@@ -19,7 +19,12 @@ finish-args:
   # workspace they point it at. A sandbox that cannot see those is a demo, not this application.
   - --filesystem=home
   # Screenshots and window control go through the desktop portal, not around the sandbox.
-  - --talk-name=org.freedesktop.portal.Desktop
+  #
+  # No --talk-name for the portal itself: Flatpak's default session-bus policy already allows
+  # every application to talk to org.freedesktop.portal.*, so asking for it was a duplicate
+  # permission that bought nothing. Flathub's linter errors on it for exactly that reason
+  # (finish-args-portal-talk-name). The KWin names below are the real access and are not
+  # granted by default, so they stay.
   - --talk-name=org.kde.KWin
   - --talk-name=org.kde.KWin.Scripting
 modules:
