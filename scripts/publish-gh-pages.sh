@@ -46,6 +46,12 @@ git clone -q --depth 1 --branch gh-pages https://github.com/volkdude85/quixidesk
 rsync -a --exclude '.git' "$WORK/repo/" "$TMP/ghp/"
 
 # 2. the install channel files, generated here so they can never lag the ref
+# The signing key has to be in the REF as well as the REPO file. A flatpakref install on a
+# machine that has never seen this channel adds the remote itself, and without GPGKey here it
+# adds it with gpg-verify=true and no key at all — every pull then dies with "no signatures
+# found" on a commit that is, in fact, signed. That is exactly how the first published channel
+# failed to install anywhere but this box.
+GPGKEY=$(GNUPGHOME="$GNUPGHOME_DIR" gpg --export --armor "$KEY" | base64 -w0)
 cat > "$TMP/ghp/$ID.flatpakref" <<EOF
 [Flatpak Ref]
 Title=QuixiDesk (volkdude85 edition)
@@ -55,9 +61,9 @@ Url=$SITE/
 SuggestRemoteName=quixidesk
 RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo
 IsRuntime=false
+GPGKey=$GPGKEY
 EOF
 
-GPGKEY=$(GNUPGHOME="$GNUPGHOME_DIR" gpg --export --armor "$KEY" | base64 -w0)
 cat > "$TMP/ghp/$ID.flatpakrepo" <<EOF
 [Flatpak Repo]
 Title=QuixiDesk (volkdude85 edition)
