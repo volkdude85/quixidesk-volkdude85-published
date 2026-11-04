@@ -1,0 +1,11 @@
+diff -urN a/resources/ui/capability-workflows.js b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js	2026-11-04 20:54:48.648056183 +0000
++++ b/resources/ui/capability-workflows.js	2026-11-04 20:54:48.648130575 +0000
+@@ -425,6 +425,7 @@
+       return el("section", { class: "skill-library" },
+         el("div", { class: "row" }, el("h2", { class: "grow" }, title), count),
+         el("p", { class: "muted" }, blurb),
++        letterBar,
+         allAreas.length > 1 ? areaBar : null,
+         query, results);
+     }

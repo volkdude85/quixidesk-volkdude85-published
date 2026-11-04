@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=69
+pkgrel=71
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -189,6 +189,8 @@ source=(
   "0106-a-second-instance-gets-the-next-free-port.patch"
   "0107-tools-and-skills-read-like-shipped-tools.patch"
   "0108-credit-hermes-to-nous-research.patch"
+  "0109-navigate-tools-by-letter.patch"
+  "0110-mount-the-letter-strip.patch"
 )
 sha256sums=(
             'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -300,6 +302,8 @@ sha256sums=(
             '9e04af96d844c7348a4c53a503f99419994539c9f990081d47a308d12d576eaf'
             '3b0404bc87c2c69c64024d7d1481262b8c40a9b82cb966aa7dfe8e8d6a0193c7'
             '3b5c0b633e893fd739f7c09effda05caaba4b8b0773ab1f98d6b75ef9c0482ce'
+            'e3469f0c4df809a1d0029381356d9e04422c9f5bc22d5fc6de39443f5bd7fd6a'
+            '93b708cc93ef2750dd72b6d86b1dcf5db94bf4f8c3ffc783f4b6647e0bcb99f8'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -685,6 +689,9 @@ prepare() {
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0107-tools-and-skills-read-like-shipped-tools.patch"
   # Credit where it belongs: the Hermes panel names Nous Research, in the panel itself.
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0108-credit-hermes-to-nous-research.patch"
+  # Browse the tools by letter, the way a ROM site does it.
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0109-navigate-tools-by-letter.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0110-mount-the-letter-strip.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

@@ -1,0 +1,98 @@
+diff -urN a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-04 20:48:25.118852401 +0000
++++ b/resources/ui/app.css	2026-11-04 20:48:25.119159325 +0000
+@@ -3342,3 +3342,18 @@
+ .skill-card p { margin: 0; }
+ .skill-card .hint { margin-top: 2px; }
+ .skill-card .card-actions { margin-top: auto; padding-top: 10px; }
++
++/* The letter strip: monospace, tight, and clearly separate from the category chips above it. */
++.letter-bar {
++  gap: 2px;
++  margin: 2px 0 8px;
++  padding-bottom: 8px;
++  border-bottom: 1px solid var(--line);
++}
++.letter-bar button {
++  min-width: 22px;
++  padding: 1px 6px;
++  font-family: ui-monospace, monospace;
++  font-size: 11px;
++  letter-spacing: .04em;
++}
+diff -urN a/resources/ui/capability-workflows.js b/resources/ui/capability-workflows.js
+--- a/resources/ui/capability-workflows.js	2026-11-04 20:48:25.118622312 +0000
++++ b/resources/ui/capability-workflows.js	2026-11-04 20:48:25.118696624 +0000
+@@ -244,17 +244,25 @@
+     }
+     loadVerdicts();
+     const flagFor = (skill) => FLAGS[String(skill?.skillId || "")] || null;
++    // The tool's own name is the last path segment; the category in front of it is the shelf, not the
++    // name. Alphabetical browsing sorts by this, and the letter strip filters on its first character.
++    const tailName = (skill) => String(skill.displayName || skill.skillId || skill.name || "").split("/").pop();
++    const letterOf = (skill) => {
++      const c = tailName(skill).trim().charAt(0).toUpperCase();
++      return /[A-Z]/.test(c) ? c : "#";
++    };
+     function skillArea(skill) {
+       const id = String(skill.skillId || skill.name || "");
+       const slash = id.indexOf("/");
+       return slash > 0 ? id.slice(0, slash) : "";
+     }
+-    function skillList(skills, query, areas) {
++    function skillList(skills, query, areas, letter) {
+       const needle = query.trim().toLocaleLowerCase();
+       const matched = skills.filter((skill) => {
+         const hay = redact(`${skill.displayName || ""} ${skill.skillId || skill.name || ""} ${skill.description || ""} ${skillArea(skill)}`);
+         if (needle && !hay.toLocaleLowerCase().includes(needle)) return false;
+         if (areas && areas.size && !areas.has(skillArea(skill) || "misc")) return false;
++        if (letter && letterOf(skill) !== letter) return false;
+         return true;
+       });
+       return matched;
+@@ -356,6 +364,9 @@
+     function skillPanel(title, blurb, skills) {
+       const query = el("input", { type: "search", placeholder: `Search ${title}`, "aria-label": `Search ${title}` });
+       const areaBar = el("div", { class: "area-bar" });
++      // Emulator-site navigation: #, then A-Z, then the tools fall under the letter you clicked.
++      const letterBar = el("div", { class: "area-bar letter-bar" });
++      let letter = null;
+       const results = el("div", { class: "cards" });
+       const count = el("p", { class: "hint", role: "status" });
+       const areas = new Set();
+@@ -379,8 +390,25 @@
+         if (v === "approved") return 2;
+         return 3;
+       };
++      const drawLetters = () => {
++        const present = new Set(skills.map(letterOf));
++        const buttons = [];
++        if (present.has("#")) {
++          buttons.push(button("#", () => { letter = letter === "#" ? null : "#"; drawLetters(); draw(); },
++            "quiet" + (letter === "#" ? " active" : "")));
++        }
++        for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
++          if (!present.has(ch)) continue;
++          buttons.push(button(ch, () => { letter = letter === ch ? null : ch; drawLetters(); draw(); },
++            "quiet" + (letter === ch ? " active" : "")));
++        }
++        letterBar.replaceChildren(...buttons);
++      };
++
+       const draw = () => {
+-        const matched = skillList(skills, query.value, areas)
++        const matched = skillList(skills, query.value, areas, letter)
++          .slice()
++          .sort((a, b) => tailName(a).localeCompare(tailName(b), undefined, { sensitivity: "base" }))
+           .map((s, i) => ({ s, i, r: rank(s) }))
+           .sort((a, b) => a.r - b.r || a.i - b.i)
+           .map((x) => x.s);
+@@ -393,7 +421,7 @@
+       };
+       query.addEventListener("input", () => { limit = PAGE; draw(); });
+       verdictListeners.add(() => { limit = Math.max(limit, PAGE); draw(); });
+-      drawAreas(); draw();
++      drawAreas(); drawLetters(); draw();
+       return el("section", { class: "skill-library" },
+         el("div", { class: "row" }, el("h2", { class: "grow" }, title), count),
+         el("p", { class: "muted" }, blurb),
