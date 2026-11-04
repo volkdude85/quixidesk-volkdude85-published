@@ -7,7 +7,7 @@ not the same product.
 |---|---|---|
 | **what it is** | the build made in the spirit of what Eric would want | **PBBBT** — the edition that runs on one specific machine and does cool shit |
 | **who it's for** | anyone on Arch, and Eric first | me. published in case it's useful |
-| **patches** | 28 | 105 |
+| **patches** | 28 | 106 |
 | **memory** ([full comparison](MEMORY-COMPARISON.md)) | upstream: a single `memory/MEMORY.md` read by the UI panel only | MemPalace-shaped: wings → rooms → drawers, searchable, markdown on disk |
 | **voice** | local TTS/STT, **defaults off** | wired to my Kokoro/Whisper setup, `af_heart`, on by default |
 | **credential storage** | local key file, keyring opt-in | same |

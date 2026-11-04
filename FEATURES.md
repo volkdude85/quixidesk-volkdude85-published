@@ -11,7 +11,7 @@ Read the columns as:
 - **arch edition** — [`quixidesk-arch`](https://github.com/volkdude85/quixidesk-arch), 28 patches,
   the restrained build.
 - **volkdude85 edition** — [`quixidesk-volkdude85-published`](https://github.com/volkdude85/quixidesk-volkdude85-published),
-  105 patches, the same base plus a memory system, a wired voice stack, lifted limits, themes, and a
+  106 patches, the same base plus a memory system, a wired voice stack, lifted limits, themes, and a
 reverse-engineering skill.
 
 (Counts are `ls *.patch | wc -l` at each repository's root. The series grows; the number here is a
