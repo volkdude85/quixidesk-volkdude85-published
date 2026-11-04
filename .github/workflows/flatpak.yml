@@ -20,8 +20,14 @@ name: flatpak
 # Nothing goes to Flathub: that submission needs source builds and the org.quixidesk namespace is Eric's.
 on:
   push:
-    branches: [master, publish]
+    branches: [master]
   workflow_dispatch:
+
+# One build per ref. Without this, every push in a burst starts its own full run and the
+# failing ones still burn their full seven minutes before dying.
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -33,6 +39,8 @@ jobs:
     # against a 1.7 GB dependency delta. The action below installs flatpak and the runtime itself, so
     # the job runs where the disk and the toolchain both exist.
     runs-on: ubuntu-latest
+    # A hung flatpak-builder would otherwise sit on the 6-hour default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -61,9 +69,18 @@ jobs:
           # plain runner neither exists until they are put there, and the action runs `flatpak --system
           # install` as the runner user, which the system helper refuses ("Deploy not allowed for user").
           # So the runtime and SDK go in here, as root, before the action looks for them.
+          #
+          # The version comes from the MANIFEST, never a second copy of it here. This step used to say
+          # //50 while the manifest said 51, so the action found 50, asked for 51, tried to install it as
+          # a user, and died on the system helper — 32 red runs in a row, every one of them the same
+          # error, none of them visible without opening the log.
           sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          RUNTIME=$(sed -n 's/^runtime-version:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' \
+            flatpak/org.quixidesk.QuixiDesk.yml)
+          [ -n "$RUNTIME" ] || { echo "could not read runtime-version from the manifest" >&2; exit 1; }
+          echo "runtime branch: $RUNTIME"
           sudo flatpak install -y --noninteractive --system flathub \
-            org.gnome.Platform//50 org.gnome.Sdk//50
+            "org.gnome.Platform//$RUNTIME" "org.gnome.Sdk//$RUNTIME"
           flatpak --version
           flatpak-builder --version
 
@@ -122,7 +139,19 @@ jobs:
         with:
           bundle: quixidesk.flatpak
           manifest-path: flatpak/org.quixidesk.QuixiDesk.yml
-          cache-key: flatpak-org-quixidesk-QuixiDesk-${{ github.sha }}
+          # The action's own cache is OFF, and that is a correctness choice, not a speed one.
+          #
+          # (a) A cache key that contains the commit can never be restored — the action's maintainers
+          #     say so themselves: "It changes with every commit so nothing will get restored ever."
+          #     (upstream PR #261, closing issue #239). Every run logged "No cache was found" and then
+          #     uploaded a cache nothing would read.
+          # (b) A cache key that does NOT contain the commit is worse. The local builder
+          #     (flatpak/build-flatpak.sh) carries the scar: a cache hit packaged the PREVIOUS export
+          #     while the new files sat in the archive beside it, and the build reported success.
+          #
+          # So no cache. The GNOME SDK is installed above anyway; what is being rebuilt here is one
+          # module that installs five files.
+          cache: false
           # Signed with the same key the published repository is signed with, so the bundle and the
           # repository agree and a machine that already trusts the remote will accept the file.
           gpg-sign: ${{ secrets.FLATPAK_GPG_KEY_ID }}
