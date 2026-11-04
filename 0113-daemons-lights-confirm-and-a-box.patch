@@ -1,0 +1,78 @@
+diff -urN a/resources/ui/app.css b/resources/ui/app.css
+--- a/resources/ui/app.css	2026-11-04 21:35:47.149142572 +0000
++++ b/resources/ui/app.css	2026-11-04 21:35:47.149271167 +0000
+@@ -3362,3 +3362,13 @@
+ .first-daemon { margin: 14px 0 20px; }
+ .first-daemon h3 { margin: 0 0 8px; }
+ .first-daemon p { max-width: 78ch; }
++
++/* Green means the thing is answering; red means it is not. No amber, no guessing. */
++.daemon-dot { background: #ef4444; border-color: #ef4444; }
++.daemon-dot.on { background: #22c55e; border-color: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.55); }
++.daemon-row { cursor: pointer; }
++.daemon-row:hover { border-color: var(--accent); }
++.daemon-box { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 6px 0 12px; }
++.daemon-box > summary { cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 4px 0; }
++.daemon-box > summary::-webkit-details-marker { display: none; }
++.daemon-box[open] > summary { margin-bottom: 8px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+diff -urN a/resources/ui/app.js b/resources/ui/app.js
+--- a/resources/ui/app.js	2026-11-04 21:35:47.148458260 +0000
++++ b/resources/ui/app.js	2026-11-04 21:35:47.148652016 +0000
+@@ -4407,15 +4407,32 @@
+       }
+     };
+ 
+-    body.replaceChildren(
+-      ...data.daemons.map((d) =>
+-        el("div", { class: "daemon-row" + (d.up ? " up" : "") },
++    // One question per switch. Toggling a service from a list should never be a single stray click.
++    const confirmToggle = (d) => {
++      const stopping = !!d.up;
++      let answered = false;
++      const dlg = dialog(
++        `${stopping ? "Stop" : "Start"} ${d.name}?`,
++        el("div", {},
++          el("p", {}, stopping
++            ? `${d.name} is running as ${d.unit}. Stopping it ends the process until something starts it again — a reboot with the unit enabled, or this page.`
++            : `${d.name} is not running. Starting it launches ${d.unit} now; it comes back on reboot only if the unit is enabled.`),
++          el("p", { class: "muted" }, d.what || ""),
++          el("div", { class: "browser-chooser-list" },
++            button(stopping ? "Stop it" : "Start it", () => { answered = true; dlg.close(); act(d, stopping ? "stop" : "start"); }, "primary"),
++            button("Leave it", () => { answered = true; dlg.close(); }, "quiet"))));
++      dlg.addEventListener("close", () => { answered = true; });
++    };
++
++    const rows = data.daemons.map((d) =>
++        el("div", { class: "daemon-row" + (d.up ? " up" : ""), role: "button", tabindex: "0",
++                    onclick: (event) => { if (!event.target.closest("button")) confirmToggle(d); } },
+           el("button", {
+             class: "daemon-dot" + (d.up ? " on" : ""),
+             title: d.up ? `Stop ${d.name}` : `Start ${d.name}`,
+             "aria-label": d.up ? `Stop ${d.name}` : `Start ${d.name}`,
+             "aria-pressed": d.up ? "true" : "false",
+-            onclick: () => act(d, d.up ? "stop" : "start"),
++            onclick: () => confirmToggle(d),
+           }),
+           el("div", { class: "grow" },
+             el("strong", {}, d.name),
+@@ -4427,10 +4444,18 @@
+               el("span", { class: "muted small" }, d.state || ""))),
+           d.controllable
+             ? el("div", { class: "daemon-actions" },
+-                button(d.up ? "Stop" : "Start", () => act(d, d.up ? "stop" : "start"), "quiet"),
++                button(d.up ? "Stop" : "Start", () => confirmToggle(d), "quiet"),
+                 button("Remove", () => act(d, "remove"), "quiet danger"))
+             : null,
+-        )),
++        ));
++
++    body.replaceChildren(
++      el("details", { class: "daemon-box", open: true },
++        el("summary", {},
++          el("span", { class: "grow" }, "Daemons on this machine"),
++          el("span", { class: "muted small" },
++            `${data.daemons.filter((d) => d.up).length} up · ${data.daemons.length} known`)),
++        ...rows),
+       el("p", { class: "muted small daemon-note" },
+         "Which services appear here comes from daemons.json in the app's data directory — name, unit and port. This page shows what is running; it does not write units."),
+     );

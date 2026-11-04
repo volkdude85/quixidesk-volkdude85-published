@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=74
+pkgrel=75
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -193,6 +193,7 @@ source=(
   "0110-mount-the-letter-strip.patch"
   "0111-your-first-quixi-daemon.patch"
   "0112-say-cron-job-not-timer.patch"
+  "0113-daemons-lights-confirm-and-a-box.patch"
 )
 sha256sums=(
             'af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
@@ -308,6 +309,7 @@ sha256sums=(
             '93b708cc93ef2750dd72b6d86b1dcf5db94bf4f8c3ffc783f4b6647e0bcb99f8'
             'a5e1b0e1164d36144eb63c6a4178e514657eef3f836eba8016ff6f5d1a7b7d3c'
             'cc49b08bd59d7b346298d2efc4cf4c480d1c7b4aeffc2e356eec9baa9dcb81e0'
+            '93c335df960cdf46c090510161a3038c9e73458fa8f0c762c1aea69adb06ba4d'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -698,6 +700,7 @@ prepare() {
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0110-mount-the-letter-strip.patch"
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0111-your-first-quixi-daemon.patch"
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0112-say-cron-job-not-timer.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0113-daemons-lights-confirm-and-a-box.patch"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 
