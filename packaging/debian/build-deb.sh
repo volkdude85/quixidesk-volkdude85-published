@@ -101,7 +101,7 @@ if [ -n "${QUIXI_REDACT_NAMES:-}" ] && [ -f "${QUIXI_REDACT_NAMES}" ]; then
     /const NAME_MAP = \[$/ { print; while ((getline l < m) > 0) print l; next }
     { print }
   ' "$_js" > "${_js}.tmp" && mv "${_js}.tmp" "$_js"
-  echo "== name map: $(grep -c '/gi' "$_js") entries from ${QUIXI_REDACT_NAMES}"
+  echo "== name map: $(grep -c . "${QUIXI_REDACT_NAMES}") entries from ${QUIXI_REDACT_NAMES}"
 else
   echo "== name map: empty (QUIXI_REDACT_NAMES not set)"
 fi
