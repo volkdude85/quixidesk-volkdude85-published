@@ -82,6 +82,14 @@ done
 [ -n "$ICON" ] || { echo "could not find quixi-mark.svg" >&2; exit 1; }
 rsvg-convert -w 256 -h 256 "$ICON" -o "$TMP/ghp/$ID.png"
 rsync -a "$REPO_DIR/screenshots/" "$TMP/ghp/screenshots/"
+# The recording and its transcript, straight through — the page embeds them.
+rsync -a "$REPO_DIR/voice/" "$TMP/ghp/voice/"
+
+# 4. the page itself comes from site/index.html in this repository, not from the branch.
+# It used to exist only on gh-pages, which meant the only copy of the install page was one
+# force-push away from being lost. scripts/build-site.py regenerates it (current id, current
+# runtime, the transcript reflowed from voice/quixidesk-voice.txt).
+cp "$REPO_DIR/site/index.html" "$TMP/ghp/index.html"
 
 # 4. the install line on the page follows the id, always
 python3 - "$TMP/ghp/index.html" "$ID" "$SITE" <<'PY'

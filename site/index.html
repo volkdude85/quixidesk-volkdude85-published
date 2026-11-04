@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuixiDesk — volkdude85 edition</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { max-width: 46rem; margin: 3rem auto; padding: 0 1.25rem;
+         font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+  p.lede { margin-top: 0; opacity: .75; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: rgba(127,127,127,.12); padding: .9rem 1rem; border-radius: 8px;
+        overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1rem 0; }
+  td { padding: .2rem .9rem .2rem 0; vertical-align: top; }
+  td:first-child { opacity: .65; white-space: nowrap; }
+  hr { border: 0; border-top: 1px solid rgba(127,127,127,.3); margin: 2rem 0; }
+  a { color: inherit; }
+  .transcript p { margin: .85rem 0; }
+  .transcript { border-left: 2px solid rgba(127,127,127,.35); padding-left: 1rem; }
+</style>
+</head>
+<body>
+
+<h1>QuixiDesk — volkdude85 edition</h1>
+<p class="lede">A Flatpak of a native Rust desktop workspace for AI. x86_64, runs in desktop mode on a
+Steam Deck and on any x86_64 Linux box with Flatpak.</p>
+
+<h2>Install</h2>
+<pre>flatpak install --user --from https://volkdude85.github.io/quixidesk-volkdude85-published/io.github.volkdude85.quixidesk.flatpakref</pre>
+<p>Then launch it from your application menu, or:</p>
+<pre>flatpak run io.github.volkdude85.quixidesk</pre>
+
+<h2>Update</h2>
+<pre>flatpak update io.github.volkdude85.quixidesk</pre>
+
+<h2>What is behind that command</h2>
+<table>
+  <tr><td>app id</td><td><code>io.github.volkdude85.quixidesk</code>, branch <code>master</code></td></tr>
+  <tr><td>runtime</td><td><code>org.gnome.Platform//51</code>, from Flathub</td></tr>
+  <tr><td>this repository</td><td>a signed OSTree repository; the signing key came with the
+      <code>.flatpakref</code>, so Flatpak verifies every commit it installs</td></tr>
+  <tr><td>source</td><td><a href="https://github.com/volkdude85/quixidesk-volkdude85-published">github.com/volkdude85/quixidesk-volkdude85-published</a>
+      — the patch series and the manifest that produced this build</td></tr>
+  <tr><td>upstream</td><td><a href="https://github.com/QuixiAI/QuixiDesk">QuixiAI/QuixiDesk</a>, MIT</td></tr>
+</table>
+
+<hr>
+<p>Not on Flathub. A submission there has to be built from source inside the sandbox and opened by the person who maintains it — that is their rule about machine-written manifests, and it is a fair one. This repository is how the edition ships instead: signed, installable, and built from the patch series you can read.</p>
+
+
+<hr>
+
+<h2>In my own words</h2>
+<p>The recording is the description. It was not scripted and it has not been cut — this is the
+transcript, unedited, including where I correct myself in the middle of it. The transcriber's
+spelling of the product name is the transcriber's.</p>
+
+<audio controls preload="metadata" src="voice/quixidesk-voice.webm" style="width:100%"></audio>
+<p><a href="voice/quixidesk-voice.webm">voice/quixidesk-voice.webm</a> — 6 min 37 s ·
+<a href="voice/quixidesk-voice.txt">the raw transcript</a></p>
+
+<div class="transcript">
+  <p>This is Quixy Desk. My edition of it. It&#x27;s a desktop workspace that runs AI models on your own machine, if you want, or over the network, if you&#x27;d rather.</p>
+  <p>It asks you for your home folders. Its memory is a folder of markdown on your disk that you own. And it works on the files you point at.</p>
+  <p>There&#x27;s no server holding that. That&#x27;s the point of it. It asks for the network access because a model can live on your hardware or somewhere else and you pick it.</p>
+  <p>It asks to talk to KWin because it moves, you know, this is a really horrible description of what the software is and why it has talked to KWin because it moves windows and reads what&#x27;s on screen. That&#x27;s what makes it useful as a workspace instead of as a chat box. There is no portal for script.</p>
+  <p>the what? The compositor? If that permission goes, the window control goes with it.</p>
+  <p>I&#x27;m not asking for it to be clever. I&#x27;m asking because it&#x27;s the only way the feature will exist. It asks for both X11 and Wayland, so it runs on whatever your machine gives it instead of making can you pick?</p>
+  <p>I&#x27;m the one maintaining this edition. When a runtime goes end of life, I move it. This is my name on it.</p>
+  <p>It&#x27;s built on Quicksy desk. Eric&#x27;s project is upstream. This is my build of it with my own changes.</p>
+  <p>That&#x27;s a horrible paragraph for the description of this, quite honestly. I&#x27;ve been a fan of Eric Hartford&#x27;s for a while. What my My software is and why it&#x27;s different.</p>
+  <p>I am a disabled person and I have multiple disabilities. And just the process of getting on disability was a nightmare and brought out the worst in the people around me. I&#x27;ve worked around people with disabilities most of my life since I was 17 off and on, and, um, I have a lot of respect for people with disabilities.</p>
+  <p>And one of the things that I think I would like to contribute is my voice and setting up a service and it&#x27;s, it&#x27;s not a service because I don&#x27;t really want anybody to pay for it, but setting up a system where you can just grab it, stick it on your computer and not have to wait for your fucking insurance company to pay for your AAC device or to help you remember things because you&#x27;re losing your mind or to help tell you, hey, you can&#x27;t trust the doctors on doctor&#x27;s notes, man, you got to get that on paper and take pictures and make records and keep folders and like, You cannot trust the staff of doctors to mail your stuff. It needs inside information in the world of disabilities and in order for disability tool to be useful, it needs to work to bring down boundaries, not put them up. And that&#x27;s where I would like my software to be different because my software I want top rate between article two and three or both of title 42 of the Americans with Disabilities Act.</p>
+  <p>I want my software, and I&#x27;ve actually used my software with a judge for courtroom and stuff, but I want people with disabilities to be able to be confident enough about what their software software, and about how they have their information together and set up that they don&#x27;t feel like they have no one in their corner, you know, I want to feel like my software is in their corner. And part of that is honestly, I want to contribute my voice. As part of like an AAC program, I want people to be able to use my voice that don&#x27;t have one.</p>
+  <p>It&#x27;s It&#x27;s kind of important to me because my daughter uses an AAC device. She has severe autism. She doesn&#x27;t talk a lot.</p>
+  <p>And when she does, it&#x27;s mostly songs. I think this is important for a lot of people. A lot, a lot, a lot of people.</p>
+  <p>And that&#x27;s why you should let me make a flat pack out of it. And yeah, I&#x27;m a real person. I&#x27;m using an AI to help me because I really do have disabilities.</p>
+  <p>I&#x27;m dyslexic as fuck. I am a pretty good technician but I was never an engineer please don&#x27;t use that as a boundary to hold against me so I can get my software published I&#x27;m not trying to hurt anybody I&#x27;m not trying to screw anybody I&#x27;m trying to make something useful thank you for your time for anybody that actually listened to this</p>
+</div>
+
+</body>
+</html>
