@@ -86,6 +86,17 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # The source this package was built from, in one line, comparable with the Flatpak build and with
+      # the owner's machine. Compiled binaries differ between machines by definition; what must match is
+      # what the app renders from. See flatpak/source-id.sh for why this is the check and a binary sha
+      # is not.
+      - name: Say which source this package is
+        run: |
+          set -e
+          pkg=$(ls *.pkg.tar.zst | grep -v debug | head -1)
+          ./flatpak/source-id.sh --package "$pkg" | tee "$GITHUB_STEP_SUMMARY"
+          grep -E '^pkgver=|^pkgrel=' PKGBUILD | tee -a "$GITHUB_STEP_SUMMARY"
+
   # On a tag, publish the built package as a GitHub Release so there is a download for a
   # version someone can actually name.
   release:

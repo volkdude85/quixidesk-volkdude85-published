@@ -94,6 +94,11 @@ else
   printf '  (nothing deployed yet — built only)\n'
 fi
 
+# The other half of the check, and the half that survives a different machine. The binary above can only
+# be compared with another build ON THIS BOX; the src id is the one CI can be compared against, because
+# it hashes what the app renders from rather than what the compiler emitted.
+printf '  src id           %s\n' "$(./flatpak/source-id.sh --package "$PKG" | awk '{print $2}')"
+
 COMMIT=$(flatpak info "$APP" 2>/dev/null | awk '/Commit:/{print $2}')
 [ -n "$COMMIT" ] && printf '  flatpak commit   %s\n' "$COMMIT"
 printf '\n  bundle: %s\n' "$BUNDLE"

@@ -180,3 +180,20 @@ jobs:
           name: quixidesk-bundle-${{ github.sha }}
           path: quixidesk.flatpak
           retention-days: 30
+
+      # WHAT THIS BUNDLE IS AND IS NOT, stated by the build instead of by a comment nobody reads.
+      #
+      # The binary in here was compiled on this runner, from the patch series applied to the upstream
+      # tarball. It cannot be byte-identical to the package makepkg produces on the owner's machine, and
+      # comparing executables across machines is a check that can never fail and therefore never catches
+      # anything. What can be compared is the source: every file the app renders from. That id is printed
+      # here and printed again by publish-local.sh, so the local Flatpak and the CI bundle can be held up
+      # against each other in one line.
+      - name: Say which source this bundle is
+        run: |
+          set -e
+          ./flatpak/source-id.sh "$PWD/flatpak-src" | tee "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "This bundle was compiled on the runner. The binary hash is not comparable with the" >> "$GITHUB_STEP_SUMMARY"
+          echo "owner's package; the src id is. The install channel people actually use is gh-pages," >> "$GITHUB_STEP_SUMMARY"
+          echo "which is updated by hand — this artifact is a build gate, not the shipped Flatpak." >> "$GITHUB_STEP_SUMMARY"
