@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=80
+pkgrel=83
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -196,6 +196,7 @@ source=(
   "0113-daemons-lights-confirm-and-a-box.patch"
   "0114-daemons-in-the-sidebar-lamps-not-buttons.patch"
   "0115-do-not-fetch-daemons-at-boot.patch"
+  "0116-the-credits-page.patch"
 )
 sha256sums=('af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
             '0d447af0ebe5a9aa447e45cffe183c077647637994eb71ec22a29a179742484e'
@@ -313,6 +314,7 @@ sha256sums=('af4af51b2a4cc303627587e7c5f28739083ed09f339cd84a896045b4801a01f6'
             '93c335df960cdf46c090510161a3038c9e73458fa8f0c762c1aea69adb06ba4d'
             '7355bb8f8233767a5b0e5aef7ad2035efb58707b1c0badb8561181eb64c63ef9'
             'd07dfd10b952b3f85ce0bd3c47f1a871b277006233106b089e81798973e5e7d2'
+            '762c98301d52b6819be4dacf688f7b7c38db9bac7ff0693edab9fe7e135cba91'
 )
 
 _libdir="/usr/lib/${pkgname}"
@@ -358,6 +360,11 @@ prepare() {
   # or the 1969 epoch stamp `diff -Naur` writes) is cleared here, computed from the patches themselves,
   # so a repeat build in the same tree cannot depend on somebody remembering to update a list.
   for _p in "${srcdir}"/*.patch; do
+    # A dangling symlink left in $srcdir by an earlier build name makes awk exit fatally, and one
+    # failure here would skip the rest of the sweep — leaving a created file in place, so the patch
+    # that creates it reports "already exists" and appends to it instead of replacing it. Skip what
+    # cannot be read rather than letting one stale link disarm the whole clear-out.
+    [ -r "$_p" ] || continue
     awk '/^--- /{prev=$0} /^\+{3} b\//{ if (prev ~ /^--- \/dev\/null/ || prev ~ /1969-12-31/) { sub(/^\+{3} b\//,""); sub(/\t.*/,""); print } }' "$_p"
   done | sort -u | while read -r _f; do if [ -n "$_f" ]; then rm -f -- "$_f"; fi; done
 
@@ -706,6 +713,7 @@ prepare() {
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0113-daemons-lights-confirm-and-a-box.patch"
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0114-daemons-in-the-sidebar-lamps-not-buttons.patch"
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0115-do-not-fetch-daemons-at-boot.patch"
+  patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0116-the-credits-page.patch"
 
   # LAST, over the assembled tree: the persona's personal disclosures appear six times in the final
   # file, introduced by three different patches. Editing them patch by patch is how half of it got

@@ -33,6 +33,16 @@ UI = ROOT / "resources/ui/capability-workflows.js"
 MANIFEST = ROOT / "resources/bundled-skills/manifest.json"
 EXTRACTED = ROOT / "resources/bundled-skills-extracted"
 
+# Credit for the skills upstream ships, so the per-skill table on the Credits page is not empty and
+# a card can name the tool it drives. This lives here rather than in a patch because this script is
+# what decides which entries survive: a credit written by an earlier patch would have to be written
+# against the manifest as it exists mid-chain, and would silently stop matching the moment this list
+# changed. Applied after the filter below, so only entries that actually ship are credited.
+SHIPPED_CREDITS = {
+    "with": "With, the self-hosting systems language, by Eric Hartford",
+}
+
+
 HIS_SKILLS = [
     "browser-driving", "web-research", "post-media-read", "terminal-email", "voice-pipeline",
     "memory-hygiene", "local-inference", "multi-machine-offload", "linux-ops",
@@ -107,6 +117,10 @@ def main() -> int:
         data = json.loads(MANIFEST.read_text(encoding="utf-8"))
         before = len(data.get("skills", []))
         data["skills"] = [s for s in data.get("skills", []) if s.get("owner") != "volkdude85"]
+        for skill in data["skills"]:
+            credit = SHIPPED_CREDITS.get(skill.get("name"))
+            if credit:
+                skill["credit"] = credit
         kept = [s.get("name") for s in data["skills"]]
         MANIFEST.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         print(f"sanitize-tree: manifest {before} -> {len(data['skills'])} entries {kept}")

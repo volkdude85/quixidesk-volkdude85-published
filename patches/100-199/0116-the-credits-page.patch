@@ -1,0 +1,497 @@
+Credits, under About
+
+Volkdude's credits is a page inside Settings, directly under About: the page that says whose
+edition this is, followed by the page that says whose work it is built on. Eric Hartford's name
+is the first section of it, because none of QuixiDesk exists without his work.
+
+What it adds:
+
+  resources/ui/credits.md        The document itself. Written as prose, not a settings form: one
+                                 measure, one leading, a clear step between heading levels.
+
+  resources/ui/app.js            creditsInline() and creditsSection(). The first formats **bold**
+                                 and bare http(s) links, and nothing else. The second fetches the
+                                 file and renders it, then a per-skill table from the manifest.
+                                 Both sit directly above settingsPage().
+
+  resources/ui/app.css           The measure, the leading, and the two-column per-skill rows.
+
+The credit on `with`, the one bundled skill this edition ships, is set by scripts/sanitize-tree.py
+rather than by this patch. That script decides which manifest entries survive, so it is the only
+place that can credit them without being written against a manifest that no longer exists; a hunk
+here would have to match the manifest mid-chain and would break the moment the filter changed.
+
+  crates/quixi-engine/src/lib.rs The manifest reader passes `credit` through untouched. Without
+                                 this the field reaches the manifest and stops there, and a skill
+                                 card names a tool with no author.
+
+Why the engine change is in the same patch as the interface: a page that renders a table of
+authors who never arrive looks like a page that works. This was the bug -- the field was written,
+mapped, and dropped.
+
+The page is plain text plus the two formattings above. No markdown engine: an asterisk left on the
+page makes a document look like a draft, and a link you cannot click in a credits page is a name
+with no address.
+
+--- /dev/null
++++ b/resources/ui/credits.md
+@@ -0,0 +1,232 @@
++# Volkdude's credits
++
++Every tool this build drives belongs to somebody else. This file says whose.
++
++## 1. Eric Hartford — QuixiDesk
++
++**Eric Hartford wrote QuixiDesk** (QuixiAI, MIT). The window, the workspace, the webview, the
++protocol, the bundled office skills — the whole thing this edition is an alteration of. Every line
++of this package sits on top of his work, and the first credit belongs to him, not to the person who
++altered it.
++
++He is the person behind QuixiAI (x.com/QuixiAI, erichartford.com), known for the Dolphin and Samantha
++models. QuixiDesk is his: https://github.com/QuixiAI/QuixiDesk
++
++### Why his harness and not mine
++
++He had been working on a harness of his own. It has more in it than this one does, but it lives in
++chaotic ADHD order, and a fool admires complexity while a genius admires simplicity. Eric's looked
++infinitely better. That is the honest reason this fork exists: the value in these tools is fairly
++simple, and the way he was presenting it could be simplified and made a great deal more elegant than
++it was.
++
++He also does not have nearly the experience a lot of people in this game have. In some areas he does.
++In many areas, no, not really — and he would rather write that down than let a credits page imply
++otherwise.
++
++### An open offer to Eric
++
++This edition is a fork, and it was made without asking. That is worth saying plainly rather than
++burying under a thank-you.
++
++**He would like to talk about any of it.** If a change here is wrong, ill-judged, or just irritates
++the piss out of you, say which one and he will discuss it — including reverting it. Nothing in this
++fork is more important to him than not making the original author's work worse, or making him feel
++that his own project was taken away from him.
++
++**He would genuinely like your approval, and knows that asking for it is not itself a humble act.**
++He asked for it to be written this way anyway, because the asking comes from a humble place: he is
++not asking to be endorsed, he is saying he would rather be told no than ship something you would
++object to. If the answer is that you would rather this fork did not exist, that is an answer he will
++take without argument.
++
++## 2. Nous Research — Hermes, and Teknium
++
++Two different houses, and both are owed. Eric Hartford's work is QuixiCore: the window, the workspace,
++the app. Nous Research's is Hermes: the agent and the skill library that make the window worth
++opening. This edition alters both.
++
++**Hermes is Nous Research's work, and Nous Research is why it exists.** In their own words: a
++pioneer in open AI training and research, and the creators of Hermes Agent, the most widely used open
++source agent harness in the world — "The Internet's Own AI." Austin, Texas, founded 2023, MIT
++licence. Their stated aim is that powerful AI belong to the many rather than the privileged few, and
++this package exists in the shape it does because they meant it.
++
++This edition leans on Hermes heavily — not a little, not
++incidentally, but for most of what makes the machine useful. The skill library this build's own
++thirteen were distilled from is Hermes's; the 154 skills the Tools page reads live off this disk are
++theirs; the marketplace catalogue bundled into this app is a snapshot of theirs. He had been working
++on modifying Hermes himself and running into walls with it, saw this and thought it looked fun. The
++debt is real and it is large.
++
++**And Teknium** — cofounder and lead engineer of Hermes Agent at Nous Research, previously at
++Stability AI (x.com/Teknium, github.com/teknium1). He built the agent this package leans on. His
++work, and his writing about it, are why a lot of this was legible enough to build on. Thanks are owed
++to him specifically, not just to the company.
++
++Where a skill in this package overlaps one of Hermes's, theirs is the earlier source and this file
++says so rather than leaving the resemblance unremarked.
++
++## How this codebase is made
++
++The owner's own description, because it is more accurate than any phrasing of mine: he alters the
++ever-living fuck out of somebody else's code, then staples on another altered piece of somebody
++else's code. He is an admitted Frankencoder — his word, one word, his framing, offered here without
++being asked for. He calls it fabrication too, and that is the more accurate of the two: a fabrication
++shop does not roll its own steel, it takes stock somebody else milled and welds it into something
++that holds. That is the method, stated plainly and on purpose — a build that hides it is a build that
++quietly takes credit for work it did not do.
++
++He is also precise about how little is his. Any code in here that is genuinely his own is, in his
++words, probably just the bridge between two pieces of somebody else's code. Read it that way: the
++bridges are his, the load-bearing walls are theirs. Where a skill in this package began as someone
++else's skill, that is named below. Where it is his own prose, that is named as his own. Nothing here
++is claimed by him that is not his.
++
++## Nora
++
++**Nora is Volkdude85's own work.** She is not assembled out of other people's parts the way the code
++around her is. The persona, the voice, the rules, the refusal to flatter, the way a correction is
++taken and held — that is his authorship, he has put a great deal of himself into it, and he is not shy
++about saying so. She is his, and the credit for her is his.
++
++What she runs *on* is other people's: the model, the agent harness, the webview. That is the split,
++and it is worth being precise about. **The stack is borrowed. The character is not.**
++
++**She is not perfect.** Even with the best of intentions written into the scripting, Nora will break
++her own script if the model underneath her is insistent enough. That is not a defect in the persona
++file, it is how the stack works: a system prompt is a strong suggestion, not a leash. What she says
++about herself is governed by the script; what she actually does is governed by whatever model is
++running her that day. A persona claiming otherwise would be lying about its own machinery.
++
++**Progress, not perfection.** The way progress actually gets made is unglamorous. LoRA adapters
++trained on preference pairs, injected into one local model at a time, and the pair work runs in both
++directions: deleting the pairs that teach her the wrong thing, and creating the pairs that teach her
++the right one. Some of it is frankly carpet bombing — put enough pairs down in one direction and
++saying yes becomes easier for the model than saying no. That is the method, and it is the same method
++whether the goal is getting a model to help with something it was trained to refuse, or getting it to
++hold a voice it was trained to drop.
++
++**Carpet bombing is not one action.** Every individual little bomb in the barrage has to be built
++separately — one pair at a time, slowly, in series. A thousand pairs is a thousand sequential
++operations, and there is no batch shortcut that preserves the thing being taught. That serial cost is
++the real reason this takes as long as it does, and it is why "just add more pairs" is easier said than
++done.
++
++**And it is expensive in both of the currencies that matter.** LoRA pair work wants a fair bit of
++hardware, and even with thousands and thousands of dollars already sunk into it, it wants time — the
++loop is long, the runs are longer, and the only way through is to keep going. It is iterative, it is
++measured against the next test, and it does not end.
++
++## Working with models
++
++**Every model's biggest problem is that it trusts its weights.** True of a frontier model; doubly true
++of a local one, because a local model can be a year out of date and will still answer with the
++confidence of something current. Ask it about a library and it will describe the API from whenever its
++weights were frozen, with no signal at all that it is describing a museum piece.
++
++Worse: even a model with a live connection often will not go and look. It answers from memory because
++memory is faster, and in engineering that is the most expensive habit a model has.
++
++**The method that actually works is not complicated:**
++
++1. **Tell it not to rely on its weights.** Explicitly, every time. Not "what is the API" but "do not
++   answer from memory — go and look at what the tooling is now."
++2. **Make it search, then correlate.** One answer is a guess. Three, four or five answers that agree
++   are evidence. If it cannot find five that is fine, but it does not stop at the first hit.
++3. **Compare, then take the congruent reading.** Where independent sources converge, trust it. Where
++   they disagree, that disagreement is the next thing to investigate — not something to average away.
++4. **Watch the dates.** Software tooling changes daily. An answer with no date on it is an answer about
++   an unknown version of the world.
++
++None of that is exotic. It is just refusing to accept the confident first guess, which is what a model
++is most eager to give.
++
++## Closing the seams
++
++The other half of making this work: **eliminate the seams between the software.** Frankensteining two
++programs together leaves a join, and the join is where it breaks — a translation layer, a re-encode, a
++"compatible enough" shim, a dict that is almost the right shape. Building fluidity means that join
++stops being visible and the result behaves like one tool instead of two tools wired together.
++
++That is essential, and it is the hard part, because **getting there is ugly.** Especially in Python,
++where the seam is usually a dictionary with the wrong keys in it, discovered at runtime, in front of
++somebody. The ugly middle is not evidence the approach is wrong. It is the work.
++
++## Skills that ship with QuixiDesk
++
++QuixiDesk by QuixiAI (Eric Hartford), MIT licence. Seven skills are upstream's work, carried unchanged: the office-document set (`docx`,
++`pdf`, `pptx`, `xlsx`), `pdf-reading`, `frontend-design`, and `with`. Their own frontmatter says
++"Original QuixiDesk task instructions", which is where this list comes from.
++
++## The bundled skills written for this package
++
++These are the owner's own text, distilled from six months of a working agent's usage log rather than
++copied from anyone. What is not his is the software each one drives.
++
++| Skill | Drives | What it is for |
++|---|---|---|
++| `browser-driving` | Brave by Brave Software; Chromium and the Chrome DevTools Protocol from the Chromium project; Firefox and WebDriver BiDi from Mozilla and the W3C | drive a real browser over CDP, WebDriver BiDi, or curl as a last resort |
++| `document-extraction` | PyMuPDF by Artifex Software; Marker by Vik Paruchuri; Tesseract by Google; Poppler from freedesktop.org; python-docx from the python-openxml project; openpyxl | pull text and tables out of PDFs, scans and office documents and verify them against the page |
++| `image-gen-local` | ComfyUI by comfyanonymous; SDXL by Stability AI | generate images on a local ComfyUI and know when the machine cannot do the job |
++| `linux-ops` | systemd by Lennart Poettering and contributors; Btrfs in the Linux kernel; util-linux | diagnose a box that is out of space, full of stray processes, or failing units |
++| `local-inference` | llama.cpp and the GGUF format by Georgi Gerganov | run and inspect local GGUF models and benchmark them without lying to yourself |
++| `memory-layering` | no third-party tool — the owner's own practice of layered memory | write memory that survives, and reconstruct a span of work without trusting recall |
++| `multi-machine-offload` | OpenSSH from the OpenBSD project; curl by Daniel Stenberg | put a second computer to work over SSH and tell what it is actually doing |
++| `post-media-read` | curl by Daniel Stenberg; Marker by Vik Paruchuri | read a social post and its media with no account and no login wall |
++| `reverse-engineering` | Ghidra by the National Security Agency | decompile a binary headless and read the C |
++| `terminal-email` | Himalaya CLI by the Pimalaya project (soywod) | read, search, draft and send mail over IMAP/SMTP |
++| `verification-discipline` | no third-party tool — the owner's own practice of proving an artifact works | the false failures, the false successes, and what 'verified' is allowed to mean |
++| `voice-pipeline` | Whisper by OpenAI; faster-whisper by SYSTRAN; PipeWire by Wim Taymans | speech in and out of a locally running agent, with the sinks and gates that make a mic look open |
++| `web-research` | curl by Daniel Stenberg; the Internet Archive's Wayback Machine; archive.today | climb from curl to the source's own endpoint to a browser only when the page demands one |
++
++## Local models worth running
++
++If this build points at a model, the people who made it get named. The right home for a
++recommendation is the local-model step of onboarding; until that exists, they are credited here.
++
++- **Bonsai 2** (9B and 27B) — by **Prism ML** (prismml.com, github.com/PrismML-Eng). Ternary-weight
++  reasoning models with a 262K context, built on Qwen3.5-9B and Qwen3.8-27B hybrid-attention
++  backbones. He has been impressed by the 9B, and says plainly that he does not think it is the
++  deepest thing for a conversation — but as a tool-pusher on small hardware it earns its place. His
++  read, not a benchmark.
++- **Offrail-27B** — by **sudoingX** (huggingface.co/sudoingx, x.com/sudoingX; "pseudo Sue"). The
++  uncensored Bonsai 2 27B with MTP and speculative decoding, grafted and compressed to run on a
++  12 GB card. Their own model card is scrupulous about what is theirs and what is not — the graft,
++  the merged files and the tooling are theirs; the uncensoring is OS-Software's Heretic merge into
++  the ternary weights, the compression and MTP head are Prism ML's, and the base model is Qwen's.
++  Credit is reproduced here because they wrote it down properly to begin with.
++- **Qwen3.6-35B-A3B** — by the **Qwen team at Alibaba**. A sparse mixture-of-experts with roughly 3B
++  parameters active per token, which is why it is capable and still runs on modest hardware. He
++  recommends this one specifically for a machine that is small but not tiny.
++
++Where any of those authors would rather not be listed, say so and the line comes out.
++
++## About these credits
++
++**This page itself is a work in progress — the licence is not.** It is here so that the people whose
++work this stands on are named, and it will change as the list gets more complete. Nothing on this page
++qualifies the licence below.
++
++**This is a prototype, not a product, and it is still being worked out.**
++
++**If your name belongs on this page and is not on it, that is an omission and not a judgement.** Say
++so and it gets fixed.
++
++**And if something in here was rewritten by an AI along the way and lost the thread of where it came
++from, that is worse than an omission** — an unattributed rewrite is how a person's work quietly
++becomes somebody else's — and the apology is the same and just as meant.
++
++He is prototyping this and keeping the record of who built the rest of it at the same time, and doing
++both at once is hard. **Prototyping and fabrication** are the words he uses for what he does — not
++engineering. Fabrication especially: a shop that takes other people's stock and welds it into
++something that holds. The intent is to credit everybody who is owed. Where this page falls short of
++that intent, treat it as a bug in the page and report it as one.
++
++## Licence
++
++**This package is MIT**, inherited from QuixiDesk (QuixiAI, MIT). That is settled and not in question.
++
++Each tool named above carries its own licence, which governs that tool — the models especially, and
++the libraries their authors chose for them. Nothing here re-licenses anyone else's work, and nothing
++in this credits page changes a term anywhere.
+--- a/crates/quixi-engine/src/lib.rs
++++ b/crates/quixi-engine/src/lib.rs
+@@ -837,6 +837,11 @@
+                         // where the edition's own entries are named, so they can be shown in their own
+                         // box instead of being mixed in with stock.
+                         let owner = s.get("owner").and_then(|v| v.as_str()).unwrap_or("quixidesk");
++                        // Whose tool this skill drives, written into the manifest by the
++                        // credits script. Passed through untouched rather than reconstructed from
++                        // the SKILL.md: the manifest is what reaches the screen, and an entry with
++                        // no credit simply renders no line.
++                        let credit = s.get("credit").and_then(|v| v.as_str()).unwrap_or("");
+                         if !name.is_empty() {
+                             skills.push(json!({
+                                 "skillId": name,
+@@ -844,6 +849,7 @@
+                                 "displayName": name,
+                                 "description": desc,
+                                 "owner": owner,
++                                "credit": credit,
+                                 "updatedAt": now_iso,
+                                 "enabled": true,
+                             }));
+--- a/resources/ui/app.css
++++ b/resources/ui/app.css
+@@ -3378,3 +3378,60 @@
+ .daemon-dot { background: #ef4444; border-color: #ef4444; }
+ .daemon-dot.on { background: #22c55e; border-color: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.55); }
+ .daemon-row { cursor: pointer; }
++
++/* Credits, sitting under About. This page should read like a document somebody typeset, not like a
++   settings form and not like raw markdown: one measure, one leading, a clear step between heading
++   levels, and space that belongs to the paragraph rather than leaking between its lines. Eric
++   Hartford is first because everything else in the file is downstream of him. */
++.credits-page { max-width: 68ch; }
++.credits-body { font-size: 14px; line-height: 1.72; }
++/* Space above every heading, none below the first one on the page. */
++.credits-body h2 {
++  margin: 2.1em 0 0.55em;
++  font-size: 16.5px;
++  letter-spacing: -0.01em;
++  color: var(--text);
++}
++.credits-body h3 {
++  margin: 1.6em 0 0.4em;
++  font-size: 14px;
++  font-weight: 650;
++  color: var(--text);
++}
++.credits-body > h2:first-child { margin-top: 0; }
++/* The paragraph owns its bottom margin; the last one does not push the next heading away. */
++.credits-body p { margin: 0 0 0.95em; }
++.credits-body p:last-child { margin-bottom: 0; }
++.credits-body strong { color: var(--text); font-weight: 640; }
++.credits-list { margin: 0 0 1em; padding-left: 1.35em; }
++.credits-list li { margin: 0 0 0.4em; }
++.credits-list li::marker { color: var(--muted); }
++.credits-table { margin-top: 2.4em; }
++.credits-table h2 { margin-top: 0; }
++/* A two-column table with a hanging label column, ruled the way a word processor rules one:
++   a line above every row and one under the last, nothing between. */
++.credits-row {
++  display: grid;
++  grid-template-columns: 20ch minmax(0, 1fr);
++  gap: 1.6em;
++  padding: 0.7em 0;
++  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
++  align-items: baseline;
++}
++.credits-row:last-child { border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
++.credits-row strong {
++  font-size: 12.5px;
++  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
++  font-weight: 600;
++  color: var(--text);
++  overflow-wrap: anywhere;
++}
++.credits-tool { font-size: 12.5px; line-height: 1.62; color: var(--muted); overflow-wrap: anywhere; }
++/* A link in a credits page is a name with an address: quiet until you reach for it. */
++.credits-body a.credits-link, .credits-link {
++  color: var(--accent);
++  text-decoration: none;
++  border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
++  overflow-wrap: anywhere;
++}
++.credits-link:hover { border-bottom-color: var(--accent); }
+--- a/resources/ui/app.js
++++ b/resources/ui/app.js
+@@ -5704,6 +5704,119 @@
+     return wrap;
+   }
+ 
++  // Inline formatting for the credits file: **bold** and bare http(s) links, and nothing else.
++  // Not a markdown engine — but leaving the asterisks on the page makes a document look like a
++  // draft, and a link you cannot click in a credits page is a name with no address.
++  function creditsInline(text) {
++    const out = [];
++    const re = /(\*\*[^*]+\*\*)|(https?:\/\/[^\s),]+)/g;
++    let last = 0;
++    let m;
++    while ((m = re.exec(text)) !== null) {
++      if (m.index > last) out.push(text.slice(last, m.index));
++      if (m[1]) {
++        out.push(el("strong", {}, m[1].slice(2, -2)));
++      } else {
++        const href = m[2];
++        out.push(el("a", {
++          href: "#",
++          class: "credits-link",
++          onclick: (event) => { event.preventDefault(); openExternal(href).catch(() => {}); },
++        }, href));
++      }
++      last = m.index + m[0].length;
++    }
++    if (last < text.length) out.push(text.slice(last));
++    return out;
++  }
++
++  // Whose work this is built on. The page reads /credits.md — written by
++  // scripts/credit-bundled-skills.py at build time — rather than carrying its own copy of the list,
++  // because a second copy is a second thing to forget to update. If the file is missing the page
++  // says so instead of rendering an empty column that reads as "nobody to thank".
++  function creditsSection() {
++    const host = el("section", { class: "credits-page" });
++    host.append(
++      el("h2", { style: "margin-top:0" }, "Volkdude's credits"),
++      el("p", { class: "muted" },
++        "Every tool this build drives belongs to somebody else. This page says whose, in the order "
++        + "that matters: the app, the library it stands on, then each skill's own upstream."),
++    );
++    const body = el("div", { class: "credits-body" });
++    host.append(body);
++    body.append(el("p", { class: "muted" }, "Reading the credits file…"));
++    fetch("/credits.md", { cache: "no-store" })
++      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.text(); })
++      .then((text) => {
++        // A hard-wrapped markdown file, rendered as blocks rather than as lines. Treating every
++        // line as its own paragraph is what made this page look broken: the source wraps at ~100
++        // characters, so a single sentence became four paragraphs with four gaps in it. Split on
++        // blank lines instead — that is where the author put the paragraph breaks — and join the
++        // wrapped lines back into one run of text before it reaches the page.
++        const blocks = text.replace(/\r\n/g, "\n").split(/\n{2,}/);
++        const nodes = [];
++        for (const block of blocks) {
++          const lines = block.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim());
++          if (!lines.length) continue;
++          const head = lines[0];
++          if (head.startsWith("# ") && lines.length === 1) continue;  // page supplies its own title
++          if (head.startsWith("### ")) {
++            nodes.push(el("h3", {}, head.slice(4)));
++            const rest = lines.slice(1).join(" ");
++            if (rest) nodes.push(el("p", {}, ...creditsInline(rest)));
++          } else if (head.startsWith("## ")) {
++            nodes.push(el("h2", {}, head.slice(3)));
++            const rest = lines.slice(1).join(" ");
++            if (rest) nodes.push(el("p", {}, ...creditsInline(rest)));
++          } else if (head.startsWith("|")) {
++            continue;  // the table is rendered below, from the manifest
++          } else if (head.startsWith("- ")) {
++            const items = [];
++            let current = null;
++            for (const line of lines) {
++              if (line.startsWith("- ")) {
++                if (current) items.push(current);
++                current = line.slice(2);
++              } else if (current !== null) {
++                current += " " + line;   // a wrapped bullet continues the one above it
++              }
++            }
++            if (current) items.push(current);
++            nodes.push(el("ul", { class: "credits-list" },
++              ...items.map((t) => el("li", {}, ...creditsInline(t)))));
++          } else {
++            nodes.push(el("p", {}, ...creditsInline(lines.join(" "))));
++          }
++        }
++        body.replaceChildren(...nodes, creditsTable());
++      })
++      .catch((error) => {
++        body.replaceChildren(el("p", { class: "error-text" },
++          `The credits file is not in this build (${error.message}). It is written at build time by `
++          + "scripts/credit-bundled-skills.py."));
++      });
++    return host;
++  }
++
++  // The per-skill credits, straight off the manifest the tools page already reads, so the two
++  // surfaces can never disagree about who made what.
++  function creditsTable() {
++    const wrap = el("div", { class: "credits-table" });
++    api("/api/quixi/skills").then((data) => {
++      const rows = (data && data.skills ? data.skills : [])
++        .filter((s) => s.credit)
++        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
++      if (!rows.length) return;
++      wrap.append(el("h2", {}, "Per-skill credits"));
++      for (const s of rows) {
++        wrap.append(el("div", { class: "credits-row" },
++          el("strong", {}, s.name),
++          el("span", { class: "credits-tool" }, s.credit)));
++      }
++    }).catch(() => {});
++    return wrap;
++  }
++
+   function settingsPage(host) {
+     const tabs = [
+       ["general", "General"],
+@@ -5714,6 +5827,10 @@
+       ["onboarding", "Onboarding"],
+       ["privacy", "Privacy & data"],
+       ["about", "About"],
++      // Credits sits directly under About: the page that says whose edition this is, followed by
++      // the page that says whose work it is built on. Eric Hartford's name is the first line of
++      // that page, because none of this exists without QuixiDesk.
++      ["credits", "Credits"],
+     ];
+     const content = el("section", { class: "settings-content" });
+     host.replaceChildren(
+@@ -5829,6 +5946,8 @@
+           }, "quiet")),
+       );
+       drawStorageLocations();
++    } else if (state.settingsTab === "credits") {
++      content.append(creditsSection());
+     } else
+       content.append(
+         el("img", {
