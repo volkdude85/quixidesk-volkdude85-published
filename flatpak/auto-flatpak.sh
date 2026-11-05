@@ -72,7 +72,45 @@ if [ "${1:-}" = "--watch" ]; then
   # before it can fail. Left alone that is an attempted build every ten seconds for as long as nobody
   # looks, which is worse than a loud failure: it is a quiet one. Start at a minute and double to fifteen.
   wait_s=5
+  last_fetch=0
   while :; do
+    # THE HUB FOLLOWS GITHUB.
+    #
+    # The only congruence that matters is the hosted hub against the repository on GitHub: people install
+    # from the hub, and the repository is what they can read. So origin/master is checked once a minute,
+    # and a commit that arrived from any machine — this one, the laptop, a pull request — is pulled,
+    # packaged, built and published to gh-pages without anyone asking.
+    #
+    # It refuses to act on a dirty tree. Somebody is mid-edit, and rebuilding over their work would be a
+    # way of losing it, so that case is logged and left alone rather than forced.
+    now=$(date +%s)
+    if [ $((now - last_fetch)) -ge 60 ]; then
+      last_fetch=$now
+      if git -C "$REPO" fetch --quiet origin 2>/dev/null; then
+        local_head=$(git -C "$REPO" rev-parse HEAD 2>/dev/null)
+        remote_head=$(git -C "$REPO" rev-parse origin/master 2>/dev/null)
+        if [ -n "$remote_head" ] && [ "$local_head" != "$remote_head" ]; then
+          if [ -n "$(git -C "$REPO" status --porcelain 2>/dev/null)" ]; then
+            say "origin/master moved to ${remote_head:0:7} but the tree has uncommitted changes — not touching it"
+          elif git -C "$REPO" merge-base --is-ancestor "$local_head" "$remote_head" 2>/dev/null; then
+            say "origin/master moved to ${remote_head:0:7} — pulling and republishing the hub"
+            if git -C "$REPO" pull --ff-only --quiet origin master >>"$LOG" 2>&1; then
+              ( cd "$REPO" && ./publish-local.sh ) 2>&1 | tee -a "$LOG" | tail -8
+              if [ "${PIPESTATUS[0]:-1}" -eq 0 ] && ( cd "$REPO" && ./scripts/publish-gh-pages.sh ) >>"$LOG" 2>&1; then
+                say "hub published from $(git -C "$REPO" rev-parse --short HEAD)"
+              else
+                say "FAILED to publish the hub — see $LOG"
+              fi
+            else
+              say "pull --ff-only failed; the tree has diverged from origin/master"
+            fi
+          else
+            say "origin/master is ahead but local has commits it does not — not fast-forwarding"
+          fi
+        fi
+      fi
+    fi
+
     if check_and_build; then
       wait_s=5
     else
