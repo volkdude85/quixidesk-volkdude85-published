@@ -11,9 +11,15 @@
 > that survive. Desktop mode is where you use it. Game mode is a launcher, not a home.** Everything
 > below is why, feature by feature, so you can decide before you install instead of after.
 
-**Open question:** whether the window fills a Deck's panel in Game Mode is not established — see
-[issue #1](https://github.com/volkdude85/quixidesk-volkdude85-published/issues/1) for what was measured
-and what would settle it.
+**Answered:** the window fills the panel in Game Mode. Measured under `gamescope 3.17.0` in a 1280x800
+nested session — the Deck's own resolution and the compositor Game Mode runs — the application's window
+reports **1280x800+0+0, IsViewable**: flush to all four edges, nothing clipped, no letterbox. Earlier
+builds opened at 1280x840, forty pixels taller than the panel, which is why `0099-window-fits-the-screen`
+exists; under gamescope the compositor's fullscreen path lands it correctly either way.
+
+What this does **not** cover, and should not be read as covered: an actual Deck on SteamOS. Same
+compositor, same Xwayland behaviour; different versions, driver and OS. The on-screen keyboard, controller
+navigation and suspend/resume below remain unmeasured.
 
 Every compatibility wall hit while packaging this, with the cause and the fix for each — including the
 ones that are not fixed yet — is in [`DECK-PROBLEM-LOG.md`](DECK-PROBLEM-LOG.md).
