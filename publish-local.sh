@@ -46,7 +46,11 @@ PKGVER=$(sed -n 's/^pkgver=//p' PKGBUILD)
 # Serialise: two of these at once would fight over $WORK and over the flatpak-builder cache.
 LOCK=/tmp/quixidesk-publish.lock
 exec 9>"$LOCK" || die "cannot open lock $LOCK"
-command -v flock >/dev/null && flock -n 9 || { echo "another publish is already running" >&2; exit 1; }
+if command -v flock >/dev/null; then
+  flock -n 9 || die "another publish is already running"
+fi
+# Without the guard, a missing flock reported "another publish is already running" — a wrong answer that
+# reads like a real one, which is the failure mode this whole script exists to stop.
 
 if [ "$DO_PKG" = 1 ]; then
   say "packaging $PKGVER"

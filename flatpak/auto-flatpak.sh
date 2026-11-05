@@ -67,9 +67,20 @@ check_and_build() {
 
 if [ "${1:-}" = "--watch" ]; then
   say "watching $REPO"
+  # Backoff, because a failure must not become a loop. A broken package leaves the stamp unwritten, so
+  # the watcher sees it as new again on the very next tick — and each attempt spends six seconds settling
+  # before it can fail. Left alone that is an attempted build every ten seconds for as long as nobody
+  # looks, which is worse than a loud failure: it is a quiet one. Start at a minute and double to fifteen.
+  wait_s=5
   while :; do
-    check_and_build
-    sleep 5
+    if check_and_build; then
+      wait_s=5
+    else
+      wait_s=$(( wait_s < 60 ? 60 : wait_s * 2 ))
+      [ "$wait_s" -gt 900 ] && wait_s=900
+      say "retrying in ${wait_s}s — the package on disk is unchanged and still failing"
+    fi
+    sleep "$wait_s"
   done
 fi
 
