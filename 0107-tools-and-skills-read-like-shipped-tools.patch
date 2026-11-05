@@ -91,9 +91,9 @@ diff -urN a/resources/ui/capability-workflows.js b/resources/ui/capability-workf
 -    // is never committed. `prepare()` fills this in from $QUIXI_REDACT_NAMES when it is set; the shape
 -    // expected is one `[/pattern/gi, "replacement"],` per line.
      const NAME_MAP = [
-+      [/\bSean('s)?\b/gi, (m, possessive) => (possessive ? "the user's" : "the user")],
-+      [/\b(Volk)\b/gi, "the user"],
-+      [/\b(Haeligh|Belladonna|Ceili|Lillie|Michelle|Robin|Tiffany|Max)\b/gi, "someone"],
++      [/\/home\/[^\s"'<>]+/g, "~/…"],
++      [/[\w.+-]+@[\w-]+\.[\w.-]+/g, "an address"],
++      [/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "an address"],
      ];
      const redact = (text) => NAME_MAP.reduce((acc, [re, to]) => acc.replace(re, to), String(text ?? ""));
 +    // A proposed tree is mounted beside the real libraries while work is being reviewed. The engine

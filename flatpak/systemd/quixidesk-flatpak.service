@@ -1,16 +1,16 @@
 [Unit]
 Description=Keep the QuixiDesk Flatpak equal to the newest published package
-Documentation=file:///home/volkdude/Projects/quixidesk-published/flatpak/auto-flatpak.sh
+Documentation=file://%h/Projects/quixidesk-published/flatpak/auto-flatpak.sh
 After=default.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/volkdude/Projects/quixidesk-published
-ExecStart=/home/volkdude/Projects/quixidesk-published/flatpak/auto-flatpak.sh --watch
+WorkingDirectory=%h/Projects/quixidesk-published
+ExecStart=%h/Projects/quixidesk-published/flatpak/auto-flatpak.sh --watch
 Restart=always
 RestartSec=10
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=HOME=/home/volkdude
+Environment=HOME=%h
 Nice=10
 
 [Install]

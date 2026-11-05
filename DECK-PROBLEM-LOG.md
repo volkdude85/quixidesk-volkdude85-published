@@ -274,7 +274,7 @@ What the developer edition came back with:
 | no credentials | no keys, tokens, passwords, private keys |
 | commit identity | `volkdude85 <volkdude85@users.noreply.github.com>` only — the GitHub noreply, no personal address |
 | no machine detail | zero hits for `/home/USER`, the hostname, LAN or Tailscale addresses |
-| one surname | `0044-shipped-persona.patch`, the line about the handle never being written "Volk dude" — already public in both editions |
+| one surname | cleared. This row quoted a string from `0044-shipped-persona.patch`; that string is no longer in the patch, so the quote was stale as well as being the only place the name remained. Removed rather than reworded. |
 | one path leak | the `.pyc` above |
 
 Audit source: `doxscan.py` in the session scratch — three passes, severity-ranked, exits non-zero when

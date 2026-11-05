@@ -130,7 +130,7 @@ the remote fails with
 
 ```
 Signature made Wed 31 Dec 1969 04:00:00 PM PST using [unknown name] key ID BEA4F4E734ECF3EC
-BAD signature from "QuixiDesk Flatpak <seanwvolk@gmail.com>"
+BAD signature from "QuixiDesk Flatpak <example@example.invalid>"
 ```
 
 **What it is:** `build-flatpak.sh` runs `flatpak-builder`, which writes an UNSIGNED repository. Publishing
