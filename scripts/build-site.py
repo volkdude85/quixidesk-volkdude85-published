@@ -53,12 +53,23 @@ page = page.replace("runtime</td><td><code>org.gnome.Platform//51</code>",
                     "runtime</td><td><code>org.gnome.Platform//51</code>")
 
 # the note about Flathub, told straight
+#
+# It used to say a submission "has to be built from source and opened by the person who maintains it —
+# that is their rule about machine-written manifests". Three separate objections were collapsed into one
+# sentence and none of them were quoted. The submission was made and turned down; FLATHUB.md has the
+# maintainer's words and this line now matches it, because a page that summarises a rejection differently
+# from the document that records it is a page that costs you the reader's trust at the worst moment.
 page = re.sub(
     r"<p>Not on Flathub\..*?</p>",
-    "<p>Not on Flathub. A submission there has to be built from source inside the sandbox and "
-    "opened by the person who maintains it — that is their rule about machine-written manifests, "
-    "and it is a fair one. This repository is how the edition ships instead: signed, installable, "
-    "and built from the patch series you can read.</p>",
+    "<p>Not on Flathub. That submission was made and turned down, for reasons that hold up: the "
+    "manifest packaged a prebuilt binary where their builders compile from source, and it is a "
+    "downstream edition of an application someone else maintains. The first is fixed — this "
+    "repository now builds the Flatpak from 564 crates inside the sandbox with no network. The "
+    "second needs the Linux platform patches to go upstream, which belongs to the person who owns "
+    "that tree. Both are written out, in the maintainer's own words, in "
+    "<a href=\"https://github.com/volkdude85/quixidesk-volkdude85-published/blob/master/FLATHUB.md\">FLATHUB.md</a>. "
+    "This repository is how the edition ships in the meantime: signed, installable, and built from "
+    "the patch series you can read.</p>",
     page, flags=re.S)
 
 if "</div>\n\n</body>" not in page:

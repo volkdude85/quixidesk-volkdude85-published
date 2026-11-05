@@ -185,21 +185,20 @@ keeps working afterwards and every commit it installs is verified.
 
 #### Two Flatpaks, and which one is which
 
-This repository builds and signs **its own** Flatpak, id `io.github.volkdude85.quixidesk`, from the
-patch series in this tree. That is the one the install line above installs, and it always carries this
-edition.
+This repository builds and signs **its own** Flatpak, id `io.github.volkdude85.quixidesk`, from the patch
+series in this tree. That is the one the install line above installs, and it always carries this edition.
+It is the only one that exists.
 
-The Flathub submission is a different package with a different id — `io.github.volkdude85.QuixiDesk` —
-and it does not depend on this repository at all. Its manifest and PR branch live in
-[`volkdude85/flathub`](https://github.com/volkdude85/flathub), and it builds from a tagged tarball
-released at [`volkdude85/QuixiDesk`](https://github.com/volkdude85/QuixiDesk): upstream `v3.6556.12`
-with the Linux platform series already applied. That fork exists for one reason — a Flathub app id of
-the form `io.github.<user>.<App>` has to map to a GitHub repository of that name, and the tarball has
-to be a release asset somewhere public.
+There was a second: a submission to Flathub under `io.github.volkdude85.QuixiDesk`, built from a tagged
+tarball at [`volkdude85/QuixiDesk`](https://github.com/volkdude85/QuixiDesk). **It was rejected.** The
+manifest packaged a prebuilt binary where Flathub compiles from source, and a downstream edition of a
+maintained application is not the listing Flathub will carry. Both objections, in the maintainer's own
+words, are in [`FLATHUB.md`](FLATHUB.md).
 
-If Flathub accepts it, `flatpak install flathub io.github.volkdude85.QuixiDesk` becomes the shortest way
-to get QuixiDesk on Linux. Until then this repository's signed remote is the line that works, and the
-Flathub package is not something you can install yet.
+The first of those is now fixed: `flatpak/build-from-source.sh` compiles 564 crates inside the sandbox
+with no network, and the result installs and boots. The second is not mine to fix — the Linux platform
+patches have to go upstream first, and [`UPSTREAM.md`](UPSTREAM.md) is what that ask looks like. Until
+then, this repository's signed remote is the line that works.
 
 #### On a machine that has never had Flatpak
 
