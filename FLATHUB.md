@@ -25,9 +25,25 @@ submitter: if the store distributes a binary they did not build, they cannot rep
 it, and cannot answer for it. A prebuilt archive fails that requirement on inspection, before anyone
 reads the rest of the submission.
 
-**This one is mine and it is fixable.** The Rust toolchain is available to Flathub builds through
-`org.freedesktop.Sdk.Extension.rust-stable`; thousands of GNOME-adjacent apps build exactly this way. The
-manifest has to say `cargo build --release`, not "here is a tarball".
+**This one is mine, and it is now fixed.** `flatpak/io.github.volkdude85.quixidesk.sourcebuild.yml`
+compiles the application inside the sandbox: 564 crates from crates.io, unpacked by flatpak-builder from
+`flatpak/cargo-sources.json` (generated from `Cargo.lock`), built with
+`cargo build --release --offline --locked` under `org.freedesktop.Sdk.Extension.rust-stable`. No network
+at build time, no archive of somebody else's binary.
+
+Measured, not asserted — `flatpak/build-from-source.sh`:
+
+```
+564 crates  ·  cargo build --release --offline --locked -p quixi-app  ·  exit 0
+bundle      7.5 MB, installs into a clean FLATPAK_USER_DIR (commit 61352a63)
+src id      5665787cb37c5d15  — identical to the package and to the shipped Flatpak
+binary      27.0 MB, different bytes from the package's 26.4 MB, as it must be across two builds
+```
+
+Two things a first attempt got wrong, both fixed and both worth knowing: `Cargo.toml` line 67 is
+`rmcp = { path = "vendor/rmcp" }`, a patched workspace member rather than a crates.io dependency, so
+`vendor/` cannot be staged away; and `flatpak build-bundle` takes a *repository*, so the repo has to be
+created on every build, not only signed ones.
 
 ## 2. It is a fork of an application that is still maintained upstream
 

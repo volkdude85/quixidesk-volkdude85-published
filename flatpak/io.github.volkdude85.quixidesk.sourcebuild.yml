@@ -1,0 +1,60 @@
+app-id: io.github.volkdude85.quixidesk
+runtime: org.gnome.Platform
+runtime-version: "51"
+sdk: org.gnome.Sdk
+# The Rust toolchain, as an extension rather than a hope. This is the difference between a manifest a
+# store can build and a manifest that hands one over: 564 crates compiled by cargo inside the sandbox,
+# from flatpak/cargo-sources.json, with no network at build time.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: quixidesk-flatpak
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  # The app works on the user's own files: the persona, the memory folder of markdown, and whatever
+  # workspace they point it at. A sandbox that cannot see those is a demo, not this application.
+  - --filesystem=home
+  # Screenshots and window control go through the desktop portal, not around the sandbox.
+  #
+  # No --talk-name for the portal itself: Flatpak's default session-bus policy already allows every
+  # application to talk to org.freedesktop.portal.*, so asking for it was a duplicate permission that
+  # bought nothing. Flathub's linter errors on it for exactly that reason (finish-args-portal-talk-name).
+  # The KWin names below are the real access and are not granted by default, so they stay.
+  - --talk-name=org.kde.KWin
+  - --talk-name=org.kde.KWin.Scripting
+modules:
+  - name: quixidesk
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/quixidesk/cargo
+        CARGO_NET_OFFLINE: "true"
+    build-commands:
+      # Point cargo at the unpacked registry. flatpak-builder puts each crate at cargo/vendor/<name>,
+      # and a source replacement is what makes --offline resolve anything at all; without it the build
+      # fails on the first dependency rather than at the end, which is at least honest.
+      - mkdir -p .cargo && printf '[source.crates-io]\nreplace-with = "vendored-sources"\n\n[source.vendored-sources]\ndirectory = "/run/build/quixidesk/cargo/vendor"\n' > .cargo/config.toml
+      # --offline is the point, not a hazard: every crate is already unpacked beside this module by
+      # flatpak-builder, from the URLs in cargo-sources.json. If one is missing the build fails here
+      # rather than silently reaching for the network that will not be there on Flathub's builders.
+      - cargo build --release --offline --locked -p quixi-app
+      - install -Dm755 target/release/QuixiDesk /app/bin/QuixiDesk
+      - install -Dm755 flatpak/quixidesk-flatpak /app/bin/quixidesk-flatpak
+      - install -Dm644 flatpak/io.github.volkdude85.quixidesk.desktop /app/share/applications/io.github.volkdude85.quixidesk.desktop
+      - install -Dm644 flatpak/io.github.volkdude85.quixidesk.metainfo.xml /app/share/metainfo/io.github.volkdude85.quixidesk.metainfo.xml
+      # appstream refuses a component whose icon it cannot find, so the mark is installed under the name
+      # the metainfo advertises.
+      - install -Dm644 resources/quixi-mark.svg /app/share/icons/hicolor/scalable/apps/io.github.volkdude85.quixidesk.svg
+      - mkdir -p /app/share/quixidesk && cp -a resources /app/share/quixidesk/resources
+    sources:
+      # The application tree. Not the binary: the source, the resources, and the packaging files.
+      # build-from-source.sh stages it here; CI stages it the same way from the patch series.
+      - type: dir
+        path: src
+      # flatpak/cargo-sources.json is merged in here at build time by build-from-source.sh — 564 crate
+      # archives with their sha256s, generated from Cargo.lock by flatpak-cargo-generator.py.
