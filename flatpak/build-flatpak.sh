@@ -128,6 +128,36 @@ fi
 # So the binary is inspected, not trusted: rebuild when the label is missing, and refuse outright when the
 # home directory is still in it.
 EDITION_LABEL_EXPECT="${QUIXI_EDITION_LABEL:-}"
+
+# THE BINARY COMES OUT OF THE PACKAGE, NOT OUT OF WHATEVER THE TREE HAPPENS TO HOLD.
+#
+# Congruence between the two artefacts is not a matter of care, it is a matter of provenance: the
+# Flatpak must ship the same bytes pacman installed in the published edition, or "same version" is a
+# coincidence that a clean rebuild can break. So the newest package for this pkgver is opened and its
+# /usr/lib/QuixiDesk is the one that gets packaged. The pkgrel it came from is printed and recorded, so
+# anyone can check the two artefacts against each other afterwards.
+PKG_FOR_BIN=""
+for candidate in $(ls -t "$REPO"/quixidesk*-"${PKGVER}"-[0-9]*-x86_64.pkg.tar.zst 2>/dev/null); do
+  case "$candidate" in *debug*) continue ;; esac
+  PKG_FOR_BIN="$candidate"; break
+done
+if [ -n "$PKG_FOR_BIN" ]; then
+  PKG_REL=$(basename "$PKG_FOR_BIN" | sed -E "s/.*-${PKGVER}-([0-9]+)-x86_64.*/\1/")
+  echo "== taking the binary out of $(basename "$PKG_FOR_BIN") (pkgrel $PKG_REL)"
+  EXTRACT=$(mktemp -d)
+  tar --zstd -xf "$PKG_FOR_BIN" -C "$EXTRACT" 2>/dev/null || {
+    echo "  ✗ cannot unpack $PKG_FOR_BIN" >&2; exit 1; }
+  FOUND=$(find "$EXTRACT" -type f -name QuixiDesk -path "*/lib/*" | head -1)
+  [ -n "$FOUND" ] || { echo "  ✗ no QuixiDesk binary inside that package" >&2; exit 1; }
+  mkdir -p "$TREE/prebuilt"
+  install -m755 "$FOUND" "$TREE/prebuilt/QuixiDesk"
+  rm -rf "$EXTRACT"
+  echo "  packaged binary: $(sha256sum "$TREE/prebuilt/QuixiDesk" | cut -c1-24)…  (pkgrel $PKG_REL)"
+  printf '%s\n' "$PKG_REL" > "$WORK/pkgrel"
+else
+  echo "== no package for $PKGVER in $REPO — falling back to the tree's own binary"
+fi
+
 if [ ! -x "$TREE/prebuilt/QuixiDesk" ]; then
   echo "== building the binary"
   ( cd "$TREE" && QUIXI_EDITION_LABEL="$EDITION_LABEL_EXPECT" \
