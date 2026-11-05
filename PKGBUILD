@@ -17,7 +17,7 @@
 
 pkgname=quixidesk-custom
 pkgver=3.6556.12
-pkgrel=78
+pkgrel=80
 pkgdesc="Native Rust desktop workspace for AI — pluggable cloud and local providers, MCP tools, projects, schedules"
 arch=('x86_64')
 # GCC LTO must be off. makepkg appends -flto=auto to CFLAGS/LDFLAGS by default;
@@ -707,6 +707,12 @@ prepare() {
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0113-daemons-lights-confirm-and-a-box.patch"
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0114-daemons-in-the-sidebar-lamps-not-buttons.patch"
   patch -Np1 --no-backup-if-mismatch -i "${srcdir}/0115-do-not-fetch-daemons-at-boot.patch"
+
+  # LAST, over the assembled tree: the persona's personal disclosures appear six times in the final
+  # file, introduced by three different patches. Editing them patch by patch is how half of it got
+  # fixed and shipped. This rewrites every copy and then fails the build if anything survived.
+  python3 "${startdir}/scripts/sanitize-persona.py"
+  python3 "${startdir}/scripts/sanitize-tree.py"
   cargo fetch --locked --target x86_64-unknown-linux-gnu
 }
 

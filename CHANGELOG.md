@@ -1,3 +1,16 @@
+## 3.6556.12-80 — the build stops carrying the household
+
+- The 13 skills from the owner's own library are no longer bundled. The published edition ships
+  QuixiDesk's own skills and taps the Hermes catalogue; a person's private tool library is not a
+  product feature.
+- The redaction table in `capability-workflows.js` listed his family by name — the code that hid
+  names was itself the disclosure, in every download. It is now generic patterns plus names read
+  from the user's own machine.
+- The persona no longer publishes his diagnosis or turns his memory into a case example. Asked
+  what the creator's disability is, the answer is that it is his to tell.
+- Sanitization runs as two scripts at the end of `prepare()` and fails the build rather than ship
+  a tree that still contains any of it.
+
 # Changes
 
 What each release changes, and which patch does it. No narrative — the commits carry that.
