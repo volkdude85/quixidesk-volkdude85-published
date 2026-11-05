@@ -23,6 +23,7 @@
 | **every wall hit making it ship, and the fix for each** | [`DECK-PROBLEM-LOG.md`](DECK-PROBLEM-LOG.md) |
 | **why it is not on Flathub, in Flathub's own words** | [`FLATHUB.md`](FLATHUB.md) |
 | **the keyboard in Game Mode — the mechanism, and what this build still needs** | [`ONSCREEN-KEYBOARD.md`](ONSCREEN-KEYBOARD.md) |
+| **what of this belongs in Eric's tree, and what never should** | [`UPSTREAM.md`](UPSTREAM.md) |
 | **setting it up in pictures, for anyone who would rather look than read** | [`docs/SETUP-VISUAL.md`](docs/SETUP-VISUAL.md) |
 > | what is left wide open, and why | [`WAIVER.md`](WAIVER.md) — **read this before installing** |
 | **how it got built, in order** | [`CHANGELOG.md`](CHANGELOG.md) |
