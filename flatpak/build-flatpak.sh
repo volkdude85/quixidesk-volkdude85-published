@@ -85,13 +85,16 @@ sign_repo() {
   rm -rf "$UD"
 }
 
-PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
-# The prepared tree can also be the one a previous run already staged under $WORK/src. That copy is the
-# same patched tree with the compiled binary beside it, and reusing it in place is the difference between
-# this script working on this machine and refusing to package anything. It must be used in place — copying
-# it into $SRC would delete it first, because it lives there.
-if [ ! -d "$PREPARED" ] && [ -d "$WORK/src/QuixiDesk-${PKGVER}" ]; then
+# Which prepared tree. $WORK/src wins when it exists: that is the one this script stages and the one a
+# fresh `makepkg --nobuild` produces, and it is the one whose prebuilt/ binary was just compiled. The
+# repository's src/ tree is a leftover from an earlier run and its prebuilt binary does not get rebuilt by
+# anything here, so preferring it silently shipped a three-patch-old UI beside a months-old binary — the
+# export carried the new app.js because the *tree* was current, and the binary inside it was not. Say which
+# tree is being packaged instead of picking one quietly.
+if [ -d "$WORK/src/QuixiDesk-${PKGVER}" ]; then
   PREPARED="$WORK/src/QuixiDesk-${PKGVER}"
+else
+  PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
 fi
 if [ -d "$PREPARED" ]; then
   if [ "$PREPARED" = "$SRC/QuixiDesk-${PKGVER}" ]; then
@@ -114,13 +117,47 @@ fi
 
 # The manifest packages a prebuilt binary rather than compiling inside the sandbox — the Rust SDK
 # extension does not fit the Flatpak build container, and a packager should not be able to fail on a
-# toolchain. Compile here, hand it in.
+# Compile here, hand it in.
+#
+# Two things can be true of a prebuilt binary that exists and is executable and still wrong, and both
+# shipped from this script once before anyone caught them:
+#   * it was compiled without QUIXI_EDITION_LABEL, so the window title cannot be told apart from a
+#     development build, and the one cheap proof of which artefact is running is gone;
+#   * it was compiled without --remap-path-prefix, so it carries the builder's home directory in 678
+#     strings — registry paths, workspace paths, the username — into every download.
+# So the binary is inspected, not trusted: rebuild when the label is missing, and refuse outright when the
+# home directory is still in it.
+EDITION_LABEL_EXPECT="${QUIXI_EDITION_LABEL:-}"
 if [ ! -x "$TREE/prebuilt/QuixiDesk" ]; then
   echo "== building the binary"
-  ( cd "$TREE" && cargo build --release -p quixi-app )
+  ( cd "$TREE" && QUIXI_EDITION_LABEL="$EDITION_LABEL_EXPECT" \
+      cargo build --release -p quixi-app )
   mkdir -p "$TREE/prebuilt"
   cp "$TREE/target/release/QuixiDesk" "$TREE/prebuilt/QuixiDesk"
 fi
+if [ -n "$EDITION_LABEL_EXPECT" ]; then
+  # Compare on the trimmed label. The literal is compiled in with a trailing space so the title bar reads
+  # "(volkdude85 github) QuixiDesk"; whether that space survives into the string table is up to the
+  # compiler, so requiring it here would fail a binary that is in fact correct.
+  LABEL_NEEDLE="${EDITION_LABEL_EXPECT% }"
+  # grep -c, not grep -q, and capture the count: `strings ... | grep -q` makes grep exit on the first match,
+  # which SIGPIPEs strings, which `set -o pipefail` reports as a failed pipeline — so -q inside an `if !`
+  # says "the label is missing" about a binary that has it. That cost three build attempts.
+  LABEL_HITS=$(strings "$TREE/prebuilt/QuixiDesk" | grep -cF -- "$LABEL_NEEDLE" || true)
+  if [ "${LABEL_HITS:-0}" -eq 0 ]; then
+    echo "  ✗ prebuilt/QuixiDesk was compiled without QUIXI_EDITION_LABEL='$EDITION_LABEL_EXPECT'" >&2
+    echo "    rebuild it with that variable set, or the shipped binary cannot be told from a dev build." >&2
+    exit 1
+  fi
+  echo "  ✓ the binary carries the edition label: $EDITION_LABEL_EXPECT"
+fi
+LEAKS=$(strings "$TREE/prebuilt/QuixiDesk" | grep -c -- "$HOME" || true)
+if [ "${LEAKS:-0}" -gt 0 ]; then
+  echo "  ✗ prebuilt/QuixiDesk carries $LEAKS strings containing $HOME — that ships this machine's paths" >&2
+  echo "    rebuild with RUSTFLAGS='... --remap-path-prefix=$HOME=/build' and a build dir outside $HOME." >&2
+  exit 1
+fi
+echo "  ✓ no build-path leak in the binary"
 
 echo "== staging the source archive"
 # A dir source does not carry dotfiles, and a vendored crate without .cargo-checksum.json cannot build.

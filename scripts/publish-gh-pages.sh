@@ -39,7 +39,9 @@ echo "== publishing $ID at $REF"
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-git clone -q --depth 1 --branch gh-pages https://github.com/volkdude85/quixidesk-volkdude85-published.git "$TMP/ghp" \
+# ssh, not https: this box authenticates to GitHub with a key, and the credential helper is unset,
+# so an https clone can read but the push then blocks on a username prompt that never comes.
+git clone -q --depth 1 --branch gh-pages git@github.com:volkdude85/quixidesk-volkdude85-published.git "$TMP/ghp" \
   || { echo "could not clone gh-pages" >&2; exit 1; }
 
 # 1. the OSTree repo, no deletes
