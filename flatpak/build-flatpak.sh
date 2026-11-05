@@ -85,25 +85,35 @@ sign_repo() {
   rm -rf "$UD"
 }
 
-# Which prepared tree. $WORK/src wins when it exists: that is the one this script stages and the one a
-# fresh `makepkg --nobuild` produces, and it is the one whose prebuilt/ binary was just compiled. The
-# repository's src/ tree is a leftover from an earlier run and its prebuilt binary does not get rebuilt by
-# anything here, so preferring it silently shipped a three-patch-old UI beside a months-old binary — the
-# export carried the new app.js because the *tree* was current, and the binary inside it was not. Say which
-# tree is being packaged instead of picking one quietly.
-if [ -d "$WORK/src/QuixiDesk-${PKGVER}" ]; then
+# WHICH PREPARED TREE. The repository's, always, because that is the one makepkg just built the package
+# from — same directory, same files, same everything the package carries.
+#
+# $WORK/src used to win here, and that preference cost three releases: the copy under ~/flatpak-build was
+# made once and never refreshed, so from pkgrel 80 onward the Flatpak packaged the UI from an old tree
+# while its binary came from the new package. The credits page went missing and nothing said so, because
+# the binary check only ever looked at the binary, and the src id it printed was the PACKAGE's — printed,
+# never compared. The gate below is that comparison, and it exists so this cannot happen quietly again.
+#
+# The old note here argued the repo tree was stale because its prebuilt/ binary was never rebuilt. That
+# stopped being true when the binary started coming out of the package: prebuilt/ is now overwritten from
+# the package on every run, so the tree's own build output no longer matters at all.
+if [ -d "$REPO/src/QuixiDesk-${PKGVER}" ]; then
+  PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
+elif [ -d "$WORK/src/QuixiDesk-${PKGVER}" ]; then
   PREPARED="$WORK/src/QuixiDesk-${PKGVER}"
 else
-  PREPARED="$REPO/src/QuixiDesk-${PKGVER}"
+  PREPARED=""
 fi
-if [ -d "$PREPARED" ]; then
+if [ -n "$PREPARED" ] && [ -d "$PREPARED" ]; then
   if [ "$PREPARED" = "$SRC/QuixiDesk-${PKGVER}" ]; then
     echo "== using the tree already staged at $PREPARED"
     TREE="$PREPARED"
   else
     echo "== using the prepared tree at $PREPARED"
-    rm -rf "$SRC"; mkdir -p "$SRC"
-    cp -a "$PREPARED" "$SRC/"
+    rm -rf "$SRC"; mkdir -p "$SRC/QuixiDesk-${PKGVER}"
+    # A refresh, not a copy-into-a-place-that-may-already-have-files: target/ is 2.3 GB of a previous
+    # build and prebuilt/ is replaced from the package a few lines down.
+    rsync -a --exclude '/target/' --exclude '/prebuilt/' "$PREPARED/" "$SRC/QuixiDesk-${PKGVER}/"
     TREE="$SRC/QuixiDesk-${PKGVER}"
   fi
   cp -a "$REPO/flatpak" "$TREE/flatpak"
@@ -154,6 +164,24 @@ if [ -n "$PKG_FOR_BIN" ]; then
   rm -rf "$EXTRACT"
   echo "  packaged binary: $(sha256sum "$TREE/prebuilt/QuixiDesk" | cut -c1-24)…  (pkgrel $PKG_REL)"
   printf '%s\n' "$PKG_REL" > "$WORK/pkgrel"
+
+  # THE GATE. Same binary is not the same app: the Flatpak carries the binary AND the resources, and it is
+  # the resources that draw the window. Those two can come from different trees — they did, from pkgrel 80
+  # to 83, which is why the credits page vanished and nothing failed. Comparing the resource fingerprint of
+  # the tree being packaged against the one inside the package is the check that would have caught it, and
+  # printing the two ids without comparing them is what made it invisible.
+  if [ -x "$REPO/flatpak/source-id.sh" ]; then
+    TREE_SRC=$(cd "$REPO" && ./flatpak/source-id.sh "$TREE" | awk '/^src/{print $2}')
+    PKG_SRC=$(cd "$REPO" && ./flatpak/source-id.sh --package "$PKG_FOR_BIN" | awk '/^src/{print $2}')
+    echo "  tree src id:      $TREE_SRC"
+    echo "  package src id:   $PKG_SRC"
+    if [ "$TREE_SRC" != "$PKG_SRC" ]; then
+      echo "  ✗ the tree being packaged is not the tree this package was built from" >&2
+      echo "    resources differ — the Flatpak would ship a UI that no package ever had." >&2
+      exit 1
+    fi
+    echo "  ✓ tree and package carry the same resources"
+  fi
 else
   echo "== no package for $PKGVER in $REPO — falling back to the tree's own binary"
 fi
