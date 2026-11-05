@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.volkdude85.quixidesk</id>
+  <name>volkdude85's QuixiCore</name>
+  <!-- The summary starts with a capitalised word, not the handle: appstream wants a capitalised
+       first word, and the handle is lowercase everywhere, so the handle comes out of the summary
+       rather than getting bent to fit a validator. -->
+  <summary>A native Rust desktop workspace for AI</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <url type="homepage">https://github.com/volkdude85/quixidesk-volkdude85-published</url>
+  <developer id="org.quixidesk">
+    <name>The QuixiDesk Edition Maintainers</name>
+  </developer>
+  <description>
+    <p>A desktop workspace that runs AI models locally or over the internet, keeps its memory in a folder of markdown you own, and works on your files.</p>
+    <p>An AI-assisted build, said plainly: the Linux platform layer was written by an agent under my direction. I set the behaviour, read every patch, and test every build on real hardware. Built by a disabled developer who is a good technician and a bad typist.</p>
+  </description>
+  <!-- OARS age rating. Every attribute is "none": this is a text workspace, it ships no media,
+       no gambling and no user-generated content of its own. An empty element satisfies presence
+       but says nothing, and the next person has no idea whether it was assessed. -->
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">none</content_attribute>
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="violence-realistic">none</content_attribute>
+    <content_attribute id="violence-bloodshed">none</content_attribute>
+    <content_attribute id="violence-sexual">none</content_attribute>
+    <content_attribute id="drugs-alcohol">none</content_attribute>
+    <content_attribute id="drugs-narcotics">none</content_attribute>
+    <content_attribute id="drugs-tobacco">none</content_attribute>
+    <content_attribute id="sex-nudity">none</content_attribute>
+    <content_attribute id="sex-themes">none</content_attribute>
+    <content_attribute id="language-profanity">none</content_attribute>
+    <content_attribute id="language-humor">none</content_attribute>
+    <content_attribute id="language-discrimination">none</content_attribute>
+    <content_attribute id="social-chat">none</content_attribute>
+    <content_attribute id="social-info">none</content_attribute>
+    <content_attribute id="social-audio">none</content_attribute>
+    <content_attribute id="social-contacts">none</content_attribute>
+    <content_attribute id="money-purchasing">none</content_attribute>
+    <content_attribute id="money-gambling">none</content_attribute>
+  </content_rating>
+  <icon type="stock">io.github.volkdude85.quixidesk</icon>
+  <launchable type="desktop-id">io.github.volkdude85.quixidesk.desktop</launchable>
+  <!-- Captured from the built Flatpak on a private X display with a fresh profile, so the window
+       is the application and nothing else: no desktop, no taskbar, no session, no paths. The URLs
+       are the published site, which is also where the install line lives. -->
+  <screenshots>
+    <screenshot type="default">
+      <image>https://volkdude85.github.io/quixidesk-volkdude85-published/screenshots/01-first-run.png</image>
+      <caption>A first run asks two questions: where the models run, and where your memory lives.</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://volkdude85.github.io/quixidesk-volkdude85-published/screenshots/02-workspace.png</image>
+      <caption>The workspace: projects, artifacts, cron jobs, daemons and skills in one place.</caption>
+    </screenshot>
+  </screenshots>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <releases>
+    <release version="3.6556.12" date="2026-11-02"/>
+  </releases>
+</component>

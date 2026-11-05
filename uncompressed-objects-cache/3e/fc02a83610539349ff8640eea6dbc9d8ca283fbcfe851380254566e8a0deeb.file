@@ -1,0 +1,23 @@
+[Application]
+name=io.github.volkdude85.quixidesk
+runtime=org.gnome.Platform/x86_64/51
+sdk=org.gnome.Sdk/x86_64/51
+command=quixidesk-flatpak
+
+[Context]
+shared=ipc;network;
+sockets=pulseaudio;wayland;x11;
+devices=dri;
+filesystems=home;
+
+[Session Bus Policy]
+org.kde.KWin=talk
+org.kde.KWin.Scripting=talk
+
+[Extension io.github.volkdude85.quixidesk.Debug]
+directory=lib/debug
+autodelete=true
+no-autodownload=true
+
+[Build]
+built-extensions=io.github.volkdude85.quixidesk.Debug;

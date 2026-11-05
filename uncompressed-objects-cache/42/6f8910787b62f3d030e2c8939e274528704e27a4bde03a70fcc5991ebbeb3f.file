@@ -1,0 +1,10 @@
+{
+  "skills": [
+    {
+      "name": "with",
+      "description": "Build, test and ship software in With, the self-hosting systems language by Eric Hartford, when its compiler is installed.",
+      "tier": "always",
+      "owner": "quixidesk"
+    }
+  ]
+}

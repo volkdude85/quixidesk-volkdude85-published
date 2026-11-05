@@ -1,0 +1,41 @@
+{
+  "id" : "io.github.volkdude85.quixidesk",
+  "runtime" : "org.gnome.Platform",
+  "runtime-version" : "51",
+  "runtime-commit" : "36d7e84ff76b57bc8dd4ccf702bd154e3d15dcad2059d353d69edd10a6f3e3a3",
+  "sdk" : "org.gnome.Sdk",
+  "sdk-commit" : "3bb470fac9f1a83c6629c2cdd9472a444688372bbc362416e4a9b2e4386e9fad",
+  "command" : "quixidesk-flatpak",
+  "modules" : [
+    {
+      "name" : "quixidesk",
+      "buildsystem" : "simple",
+      "sources" : [
+        {
+          "path" : "quixidesk-src.tar.gz",
+          "type" : "archive"
+        }
+      ],
+      "build-commands" : [
+        "install -Dm755 prebuilt/QuixiDesk /app/bin/QuixiDesk",
+        "install -Dm755 flatpak/quixidesk-flatpak /app/bin/quixidesk-flatpak",
+        "install -Dm644 flatpak/io.github.volkdude85.quixidesk.desktop /app/share/applications/io.github.volkdude85.quixidesk.desktop",
+        "install -Dm644 flatpak/io.github.volkdude85.quixidesk.metainfo.xml /app/share/metainfo/io.github.volkdude85.quixidesk.metainfo.xml",
+        "install -Dm644 resources/quixi-mark.svg /app/share/icons/hicolor/scalable/apps/io.github.volkdude85.quixidesk.svg",
+        "mkdir -p /app/share/quixidesk && cp -a resources /app/share/quixidesk/resources"
+      ]
+    }
+  ],
+  "finish-args" : [
+    "--share=ipc",
+    "--share=network",
+    "--socket=x11",
+    "--socket=wayland",
+    "--socket=pulseaudio",
+    "--device=dri",
+    "--filesystem=home",
+    "--talk-name=org.kde.KWin",
+    "--talk-name=org.kde.KWin.Scripting"
+  ],
+  "source-date-epoch" : 1793843871
+}
