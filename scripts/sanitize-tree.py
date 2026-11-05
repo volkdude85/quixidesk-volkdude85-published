@@ -15,6 +15,11 @@ What it does:
   4. hides the "volkdude85 tools & skills" panel when there is nothing in it
 
 Nothing else in the app is touched.
+
+History: the owner's family names were removed from this repository on 2026-11-05, by his
+instruction. Names only — the phrases this gate checks for describe him rather than name anyone,
+and were deliberately left in place. Git history from before that date still carries the old
+strings; nothing was rewritten, and this note is the record that the scrub happened.
 """
 
 import json
@@ -50,10 +55,37 @@ NEW_NAME_MAP = """    // A shipped build must not carry a household with it. The
       }),
     ];"""
 
-FORBIDDEN = [
-    "Haeligh", "Belladonna", "Lillie", "Tiffany", "Robin", "Michelle",
-    "\\bSean\\b", "how he got crazy", "a form of PTSD",
+# Phrases that describe him rather than speak as him. Not names, so they stay here.
+PHRASE_FORBIDDEN = [
+    "how he got crazy",
+    "a form of PTSD",
 ]
+
+# The NAMES are personal, so they are NOT in this file. A list of the names to hide is the
+# disclosure itself — and it sat right here in every download the day it landed. They live outside
+# the tree, in ~/.quixi/redact-needles.txt: one per line, '#' comments allowed, a line beginning
+# with `re:` treated as a regular expression. A build on a machine without that file still runs the
+# structural checks (the NAME_MAP rewrite above is the real one) and says plainly that the name
+# assertion is inactive, rather than passing silently.
+NEEDLES_FILE = Path.home() / ".quixi/redact-needles.txt"
+
+
+def personal_names():
+    if not NEEDLES_FILE.exists():
+        print(
+            f"sanitize-tree: no {NEEDLES_FILE} — name assertion INACTIVE "
+            "(structural checks still ran)",
+            file=sys.stderr,
+        )
+        return []
+    out = []
+    for line in NEEDLES_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        out.append(line[3:].strip() if line.startswith("re:") else re.escape(line))
+    print(f"sanitize-tree: {len(out)} name(s) loaded from {NEEDLES_FILE}")
+    return out
 
 
 def fail(msg: str) -> int:
@@ -100,7 +132,7 @@ def main() -> int:
     UI.write_text(text, encoding="utf-8")
 
     print(f"sanitize-tree: removed {len(removed)} of the owner's skills")
-    problems = [p for p in FORBIDDEN if re.search(p, text)]
+    problems = [p for p in personal_names() + [re.escape(p) for p in PHRASE_FORBIDDEN] if re.search(p, text)]
     if problems:
         return fail(f"still in capability-workflows.js: {problems}")
     print("sanitize-tree: capability-workflows.js is clean")

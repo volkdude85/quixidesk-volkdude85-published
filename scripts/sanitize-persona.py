@@ -15,6 +15,11 @@ one is how half of it got fixed last time.
 It is a gate, not a tidy-up: if anything still matches afterwards it prints what and exits 1, so a
 build can fail rather than publish. Nothing about Nora's character changes — the saints, the
 trauma-informed framework, the register and the voice all stay.
+
+History: the owner's family names were removed from this repository on 2026-11-05, by his
+instruction. Names only — the phrases in PHRASE_FORBIDDEN describe him rather than name anyone, and
+were deliberately left in place. Git history from before that date still carries the old strings;
+nothing was rewritten, and this note is the record that the scrub happened.
 """
 
 import re
@@ -56,17 +61,38 @@ CRAZY = re.compile(
 
 CRAZY_SAFE = '*"That part isn\'t mine to explain. It\'s his."*'
 
-# Anything matching these after the rewrite fails the build.
-FORBIDDEN = [
+# Phrases that describe him rather than speak as him. These are not names, so they stay here where
+# the gate can read them.
+PHRASE_FORBIDDEN = [
     "a form of PTSD",
     "screws with his speech",
     "how he got crazy",
     "do the thing with the guy at the place",
-    "Haeligh",
-    "Belladonna",
-    "Lillie",
-    "Tiffany",
 ]
+
+# The NAMES are personal, so they are NOT in this file — a list of the names to hide is the
+# disclosure. They live outside the tree, in ~/.quixi/redact-needles.txt, shared with
+# sanitize-tree.py. Missing file means the name assertion is inactive and the script says so; the
+# three rewrites above still ran and the phrase checks below still gate.
+NEEDLES_FILE = Path.home() / ".quixi/redact-needles.txt"
+
+
+def personal_names():
+    if not NEEDLES_FILE.exists():
+        print(
+            f"sanitize-persona: no {NEEDLES_FILE} — name assertion INACTIVE "
+            "(the three rewrites and the phrase checks still ran)",
+            file=sys.stderr,
+        )
+        return []
+    out = []
+    for line in NEEDLES_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        out.append(line[3:].strip() if line.startswith("re:") else re.escape(line))
+    print(f"sanitize-persona: {len(out)} name(s) loaded from {NEEDLES_FILE}")
+    return out
 
 
 def main() -> int:
@@ -90,7 +116,9 @@ def main() -> int:
         f"{n_crazy} 'how he got crazy' line(s)"
     )
 
-    leftovers = [(needle, text.count(needle)) for needle in FORBIDDEN if needle in text]
+    needles = [re.escape(p) for p in PHRASE_FORBIDDEN] + personal_names()
+    leftovers = [(n, len(re.findall(n, text))) for n in needles]
+    leftovers = [(n, c) for n, c in leftovers if c]
     for needle, count in leftovers:
         print(f"sanitize-persona: STILL PRESENT ({count}x): {needle!r}", file=sys.stderr)
     if leftovers:
