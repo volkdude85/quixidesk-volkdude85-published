@@ -68,3 +68,6 @@ invisible when you are not on a handheld. Plus the STEAM+X fallback documented r
 
 Recorded 2026-11-05. The window-fill question in `STEAMDECK.md` is settled; this is the one that decides
 whether the Deck is a supported target or a curiosity.
+
+The measurements needed to settle them are listed as five questions in [`DECK-TEST.md`](DECK-TEST.md) —
+ten minutes and four answers from anyone holding the hardware.
